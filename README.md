@@ -8,17 +8,19 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 - Native bottom tabs: Explore, Social, Developer Space and Profile.
 - Live public catalogue query against published MAS listings (falls back to clearly marked sample data if configuration or access is unavailable).
 - Live read-only Social feed query against MAS posts and public profile names (falls back to sample posts when unavailable).
+- Google OAuth sign-in flow, persisted session display and sign-out are implemented in the native profile screen. Supabase redirect allowlisting and a real-device OAuth round-trip still need verification.
 - App cards open the corresponding MAS website listing.
-- Native sign-in, post creation/media upload, reactions/comments, messaging, developer workflows, KYC and payments are **not implemented yet**. No sample balances or financial activity are represented as real.
+- Native post creation/media upload, reactions/comments, messaging, full developer workflows, KYC and payments are **not implemented yet**. No sample balances or financial activity are represented as real.
 
 ## Setup
 
 1. Install Node.js LTS and npm.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env` and fill in the public Supabase URL and publishable/anon key from the existing MAS project.
-4. Never add a Supabase service-role key, Didit secret, PayChangu secret, or other privileged key to this mobile app.
-5. Run `npx expo start` to open the app in Expo Go or a development build.
-6. Run `npm run typecheck` to check TypeScript.
+4. In the existing Supabase Auth URL configuration, allow `mw.wealthgrid.mas://auth/callback` as a redirect URL before testing Google sign-in. The app code does not change Supabase settings automatically.
+5. Never add a Supabase service-role key, Didit secret, PayChangu secret, or other privileged key to this mobile app.
+6. Run `npx expo start` to open the app in Expo Go or a development build.
+7. Run `npm run typecheck` to check TypeScript.
 
 ## Android APK
 
