@@ -179,7 +179,8 @@ export default function App() {
                 ))}
               </ScrollView>
 
-              {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}\n              {filteredApps.length ? filteredApps.map((app) => (
+              {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => app.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(app.slug)}`) : showNotice(`${app.name} is sample content. Add Supabase public credentials to load the live catalogue.`)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}><Text style={styles.appIconText}>{app.mark}</Text></View>
                   <View style={styles.appDetails}>
