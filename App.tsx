@@ -59,6 +59,13 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({});
+  const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
+  const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, { id: string; name: string; body: string; createdAt: string }[]>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [commentLoadingPostId, setCommentLoadingPostId] = useState<string | null>(null);
+  const [commentSendingPostId, setCommentSendingPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -154,6 +161,53 @@ export default function App() {
       .catch(() => { if (active) setFeedLoading(false); });
     return () => { active = false; };
   }, []);
+
+  const toggleLike = async (postId: string) => {
+    if (!isSupabaseConfigured) { showNotice("Live reactions need Supabase configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in from Profile to react to posts."); setTab("Profile"); return; }
+    const alreadyLiked = likedPostIds.includes(postId);
+    if (alreadyLiked) {
+      const { error } = await supabase.from("social_post_reactions").delete().eq("post_id", postId).eq("user_id", authData.user.id);
+      if (error) { showNotice(error.message || "Could not remove reaction."); return; }
+      setLikedPostIds((current) => current.filter((id) => id !== postId));
+      setReactionCounts((current) => ({ ...current, [postId]: Math.max(0, (current[postId] ?? 1) - 1) }));
+      return;
+    }
+    const { error } = await supabase.from("social_post_reactions").insert({ post_id: postId, user_id: authData.user.id });
+    if (error) { showNotice(error.code === "23505" ? "You have already liked this post." : error.message || "Could not react to post."); return; }
+    setLikedPostIds((current) => [...current, postId]);
+    setReactionCounts((current) => ({ ...current, [postId]: (current[postId] ?? 0) + 1 }));
+  };
+
+  const toggleComments = async (postId: string) => {
+    if (openCommentsPostId === postId) { setOpenCommentsPostId(null); return; }
+    setOpenCommentsPostId(postId);
+    if (commentsByPost[postId] || !isSupabaseConfigured) return;
+    setCommentLoadingPostId(postId);
+    const { data, error } = await supabase.from("social_post_comments").select("id,author_id,body,created_at").eq("post_id", postId).order("created_at", { ascending: true }).limit(100);
+    if (error) { showNotice(error.message || "Could not load comments."); setCommentLoadingPostId(null); return; }
+    const authorIds = [...new Set((data ?? []).map((item: any) => item.author_id))];
+    const { data: profiles } = authorIds.length ? await supabase.from("public_profiles").select("id,display_name,developer_name").in("id", authorIds) : { data: [] as any[] };
+    const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
+    setCommentsByPost((current) => ({ ...current, [postId]: (data ?? []).map((item: any) => ({ id: item.id, name: String(names.get(item.author_id) || "MAS member"), body: item.body, createdAt: item.created_at })) }));
+    setCommentLoadingPostId(null);
+  };
+
+  const sendComment = async (postId: string) => {
+    const body = (commentDrafts[postId] ?? "").trim();
+    if (!body) return;
+    if (!isSupabaseConfigured) { showNotice("Live comments need Supabase configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in from Profile to comment."); setTab("Profile"); return; }
+    setCommentSendingPostId(postId);
+    const { data, error } = await supabase.from("social_post_comments").insert({ post_id: postId, author_id: authData.user.id, body }).select("id,created_at").single();
+    if (error || !data) { setCommentSendingPostId(null); showNotice(error?.message || "Your comment could not be sent."); return; }
+    setCommentsByPost((current) => ({ ...current, [postId]: [...(current[postId] ?? []), { id: data.id, name: authData.user.email || "You", body, createdAt: data.created_at }] }));
+    setCommentDrafts((current) => ({ ...current, [postId]: "" }));
+    setCommentSendingPostId(null);
+    showNotice("Comment added.");
+  };
 
   const filteredApps = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -277,7 +331,7 @@ export default function App() {
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                       <Text style={styles.postText}>{post.text}</Text>
-                      <View style={styles.postActions}><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Connect requests are coming next; open MAS Social on the website for now.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View>}
                     </View>
                   ))}
                 </>
@@ -430,6 +484,11 @@ const styles = StyleSheet.create({
   postTag: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
   postText: { color: "#D6DCEC", fontSize: 13, lineHeight: 20, marginTop: 14 },
   postActions: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, paddingTop: 13, borderTopWidth: 1, borderTopColor: COLORS.border },
+  commentsPanel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
+  commentItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  commentAuthor: { color: COLORS.text, fontSize: 11, fontWeight: "800" },
+  commentBody: { color: "#D6DCEC", fontSize: 12, lineHeight: 18, marginTop: 3 },
+  commentInput: { minHeight: 44, maxHeight: 100, marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 12, textAlignVertical: "top" },
   postAction: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
   developerStatus: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderWidth: 1, borderColor: "#275342", backgroundColor: "#102A27", borderRadius: 10, marginBottom: 15 },
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.green },
