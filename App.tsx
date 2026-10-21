@@ -55,6 +55,41 @@ export default function App() {
   const [catalogueSource, setCatalogueSource] = useState<"preview" | "live">("preview");
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setUserEmail(data.session?.user.email ?? null);
+    });
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user.email ?? null);
+    });
+    const handleUrl = async (url: string) => {
+      try {
+        const callback = new URL(url);
+        const code = callback.searchParams.get("code");
+        if (code && callback.protocol === "mw.wealthgrid.mas:") {
+          setAuthLoading(true);
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) showNotice(error.message);
+          else showNotice("You are signed in to MAS.");
+          setAuthLoading(false);
+        }
+      } catch {
+        setAuthLoading(false);
+      }
+    };
+    Linking.getInitialURL().then((url) => { if (url) void handleUrl(url); });
+    const urlSubscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+      urlSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -290,7 +325,7 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>V</Text></View><Text style={styles.profileName}>Welcome to MAS</Text><Text style={styles.profileHint}>Sign-in and profile details will be connected to Supabase next.</Text><TouchableOpacity style={styles.primaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/auth")}><Text style={styles.primaryButtonText}>Connect account</Text></TouchableOpacity></View>
+              <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail ? "You're signed in" : "Your MAS account"}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
               <View style={styles.infoBanner}><Text style={styles.infoTitle}>Built for Malawi</Text><Text style={styles.infoText}>Discover apps, collaborate with builders and grow local technology.</Text></View>
             </>
           )}
