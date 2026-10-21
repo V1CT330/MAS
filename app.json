@@ -3,6 +3,7 @@
     "name": "Malawian App Store",
     "slug": "malawian-app-store",
     "version": "1.0.0",
+    "scheme": "mw.wealthgrid.mas",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": { "package": "mw.wealthgrid.mas", "versionCode": 1 },
