@@ -30,7 +30,7 @@ const COLORS = {
 };
 
 type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
-type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string };
+type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string };
 
 const sampleApps: StoreApp[] = [
   { id: "sample-redbot", name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
@@ -66,6 +66,7 @@ export default function App() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [commentLoadingPostId, setCommentLoadingPostId] = useState<string | null>(null);
   const [commentSendingPostId, setCommentSendingPostId] = useState<string | null>(null);
+  const [connectingPostIds, setConnectingPostIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -150,11 +151,20 @@ export default function App() {
           if (active) setFeedSource("live");
           if (active) setPosts(data.map((post: any) => ({
             id: post.id,
+            authorId: post.author_id,
             name: String(names.get(post.author_id) || "MAS member"),
             tag: new Date(post.created_at).toLocaleDateString(),
             text: post.body,
             createdAt: post.created_at,
           })));
+          const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", data.map((post: any) => post.id));
+          if (active && reactionRows) {
+            const counts: Record<string, number> = {};
+            reactionRows.forEach((reaction: any) => { counts[reaction.post_id] = (counts[reaction.post_id] ?? 0) + 1; });
+            setReactionCounts(counts);
+            const { data: currentUser } = await supabase.auth.getUser();
+            if (currentUser.user) setLikedPostIds(reactionRows.filter((reaction: any) => reaction.user_id === currentUser.user?.id).map((reaction: any) => reaction.post_id));
+          }
         }
         if (active) setFeedLoading(false);
       })
@@ -178,6 +188,19 @@ export default function App() {
     if (error) { showNotice(error.code === "23505" ? "You have already liked this post." : error.message || "Could not react to post."); return; }
     setLikedPostIds((current) => [...current, postId]);
     setReactionCounts((current) => ({ ...current, [postId]: (current[postId] ?? 0) + 1 }));
+  };
+
+  const requestConnection = async (recipientId?: string, postId?: string) => {
+    if (!recipientId || !postId) { showNotice("This preview post has no member profile to connect with yet."); return; }
+    if (!isSupabaseConfigured) { showNotice("Connections need Supabase configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in from Profile to connect with members."); setTab("Profile"); return; }
+    if (authData.user.id === recipientId) { showNotice("That is your own post."); return; }
+    setConnectingPostIds((current) => [...current, postId]);
+    const { error } = await supabase.from("social_connections").insert({ requester_id: authData.user.id, recipient_id: recipientId, status: "pending" });
+    setConnectingPostIds((current) => current.filter((id) => id !== postId));
+    if (error) { showNotice(error.code === "23505" ? "A connection request already exists." : error.message || "Could not send connection request."); return; }
+    showNotice("Connection request sent.");
   };
 
   const toggleComments = async (postId: string) => {
@@ -319,7 +342,7 @@ export default function App() {
                       const body = postDraft.trim();
                       const { data, error } = await supabase.from("social_posts").insert({ body, author_id: authData.user.id }).select("id,created_at").single();
                       if (error || !data) { setPosting(false); showNotice(error?.message || "Your post could not be published."); return; }
-                      setPosts((current) => [{ id: data.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body, createdAt: data.created_at }, ...current]);
+                      setPosts((current) => [{ id: data.id, authorId: authData.user.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body, createdAt: data.created_at }, ...current]);
                       setFeedSource("live");
                       setPostDraft("");
                       setPosting(false);
@@ -331,7 +354,7 @@ export default function App() {
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                       <Text style={styles.postText}>{post.text}</Text>
-                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Connect requests are coming next; open MAS Social on the website for now.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View>}
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View>}
                     </View>
                   ))}
                 </>
