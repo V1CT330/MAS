@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
+  ActivityIndicator,
+  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
 
@@ -25,13 +28,16 @@ const COLORS = {
   green: "#51D6A4",
 };
 
-const sampleApps = [
+type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
+type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string };
+
+const sampleApps: StoreApp[] = [
   { name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
   { name: "Malawi Market", category: "Business", description: "Discover local products and growing businesses.", mark: "M", color: "#2B9D80" },
   { name: "Cloud Pay", category: "Finance", description: "A future-ready digital payments experience.", mark: "C", color: "#4C82E8" },
 ];
 
-const samplePosts = [
+const samplePosts: FeedPost[] = [
   { name: "MAS Community", tag: "Community update", text: "Welcome to the native MAS community. Connect with builders, share ideas and discover projects across Malawi." },
   { name: "Startup Circle Malawi", tag: "Collaboration", text: "What problem in your community would you love to solve with technology? Share your idea and find collaborators." },
 ];
@@ -41,15 +47,77 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [notice, setNotice] = useState("");
+  const [apps, setApps] = useState<StoreApp[]>(sampleApps);
+  const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
+  const [catalogueLoading, setCatalogueLoading] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!isSupabaseConfigured) return () => { active = false; };
+    setCatalogueLoading(true);
+    supabase
+      .from("listings")
+      .select("id,slug,name,tagline,description,category,kind,downloads,rating_avg")
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (!error && data?.length) {
+          setApps(data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category || "Other",
+            description: item.tagline || item.description || "Discover this project on MAS.",
+            mark: String(item.name || "M").slice(0, 1).toUpperCase(),
+            color: COLORS.accent,
+            slug: item.slug,
+            kind: item.kind,
+            downloads: item.downloads ?? 0,
+            rating: item.rating_avg ?? 0,
+          })));
+        }
+        setCatalogueLoading(false);
+      })
+      .catch(() => { if (active) setCatalogueLoading(false); });
+    setFeedLoading(true);
+    supabase
+      .from("social_posts")
+      .select("id,author_id,body,created_at")
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(async ({ data, error }) => {
+        if (!active) return;
+        if (!error && data?.length) {
+          const ids = [...new Set(data.map((post: any) => post.author_id))];
+          const { data: profiles } = await supabase
+            .from("public_profiles")
+            .select("id,display_name,developer_name")
+            .in("id", ids);
+          const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
+          if (active) setPosts(data.map((post: any) => ({
+            id: post.id,
+            name: String(names.get(post.author_id) || "MAS member"),
+            tag: new Date(post.created_at).toLocaleDateString(),
+            text: post.body,
+            createdAt: post.created_at,
+          })));
+        }
+        if (active) setFeedLoading(false);
+      })
+      .catch(() => { if (active) setFeedLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const filteredApps = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return sampleApps.filter((app) => {
+    return apps.filter((app) => {
       const matchesQuery = !q || `${app.name} ${app.category} ${app.description}`.toLowerCase().includes(q);
       const matchesCategory = category === "All" || app.category === category;
       return matchesQuery && matchesCategory;
     });
-  }, [query, category]);
+  }, [apps, query, category]);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -97,7 +165,7 @@ export default function App() {
 
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Explore apps</Text>
-                <Text style={styles.sectionMeta}>SAMPLE PREVIEW</Text>
+                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : isSupabaseConfigured ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", "Education", "Business", "Finance"].map((item) => (
@@ -107,8 +175,8 @@ export default function App() {
                 ))}
               </ScrollView>
 
-              {filteredApps.length ? filteredApps.map((app) => (
-                <TouchableOpacity key={app.name} style={styles.appCard} onPress={() => showNotice(`${app.name}: live catalogue connection is next`)}>
+              {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}\n              {filteredApps.length ? filteredApps.map((app) => (
+                <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => app.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(app.slug)}`) : showNotice(`${app.name} is sample content. Add Supabase public credentials to load the live catalogue.`)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}><Text style={styles.appIconText}>{app.mark}</Text></View>
                   <View style={styles.appDetails}>
                     <Text style={styles.appName}>{app.name}</Text>
@@ -117,7 +185,7 @@ export default function App() {
                   </View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
-              )) : <Text style={styles.emptyText}>No sample apps match that search.</Text>}
+              )) : <Text style={styles.emptyText}>No apps match that search. Try another category or search term.</Text>}
 
               <View style={styles.infoBanner}>
                 <Text style={styles.infoTitle}>Have an app idea?</Text>
@@ -131,16 +199,16 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
-              <TouchableOpacity style={styles.composeCard} onPress={() => showNotice("Posting will be enabled after account and media integration.")}>
+              <TouchableOpacity style={styles.composeCard} onPress={() => showNotice("To publish or message, sign in on the MAS website. Native sign-in and posting are still being connected.")}>
                 <Text style={styles.composePrompt}>Share an idea with the community…</Text>
                 <Text style={styles.composeAction}>＋ Create post</Text>
               </TouchableOpacity>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>SAMPLE PREVIEW</Text></View>
-              {samplePosts.map((post) => (
-                <View key={post.name} style={styles.postCard}>
+              {posts.map((post) => (
+                <View key={post.id || post.name} style={styles.postCard}>
                   <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                   <Text style={styles.postText}>{post.text}</Text>
-                  <View style={styles.postActions}><TouchableOpacity onPress={() => showNotice("Likes will connect to the live Social service.")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Comments will connect to the live Social service.")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Messaging will be connected to MAS accounts.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
+                  <View style={styles.postActions}><TouchableOpacity onPress={() => showNotice("Sign in to MAS to like posts. Native reaction controls are still being connected.")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Sign in to MAS to comment. Native comments are still being connected.")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Messaging will be enabled after native account authentication is complete.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
                 </View>
               ))}
             </>
