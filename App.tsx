@@ -199,16 +199,16 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
-              <TouchableOpacity style={styles.composeCard} onPress={() => showNotice("To publish or message, sign in on the MAS website. Native sign-in and posting are still being connected.")}>
+              <TouchableOpacity style={styles.composeCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
                 <Text style={styles.composePrompt}>Share an idea with the community…</Text>
                 <Text style={styles.composeAction}>＋ Create post</Text>
               </TouchableOpacity>
-              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>SAMPLE PREVIEW</Text></View>
+              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : isSupabaseConfigured ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
               {posts.map((post) => (
                 <View key={post.id || post.name} style={styles.postCard}>
                   <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                   <Text style={styles.postText}>{post.text}</Text>
-                  <View style={styles.postActions}><TouchableOpacity onPress={() => showNotice("Sign in to MAS to like posts. Native reaction controls are still being connected.")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Sign in to MAS to comment. Native comments are still being connected.")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => showNotice("Messaging will be enabled after native account authentication is complete.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
+                  <View style={styles.postActions}><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
                 </View>
               ))}
             </>
@@ -225,7 +225,7 @@ export default function App() {
                 ["◇", "Investors & grants", "Discover funding opportunities and support."],
                 ["▤", "Developer wallet", "A future connected view of verified ledger records."],
               ].map(([icon, title, description]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} onPress={() => showNotice(`${title} will be connected to the live MAS backend.`)}>
+                <TouchableOpacity key={title} style={styles.toolCard} onPress={() => void Linking.openURL(title === "My applications" ? "https://malawian-app-store-j6pm.vercel.app/console/manage" : title === "Developer wallet" ? "https://malawian-app-store-j6pm.vercel.app/console/wallet" : "https://malawian-app-store-j6pm.vercel.app/console/social")}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -239,7 +239,7 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>V</Text></View><Text style={styles.profileName}>Welcome to MAS</Text><Text style={styles.profileHint}>Sign-in and profile details will be connected to Supabase next.</Text><TouchableOpacity style={styles.primaryButton} onPress={() => showNotice("Authentication is the next integration milestone.")}><Text style={styles.primaryButtonText}>Connect account</Text></TouchableOpacity></View>
+              <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>V</Text></View><Text style={styles.profileName}>Welcome to MAS</Text><Text style={styles.profileHint}>Sign-in and profile details will be connected to Supabase next.</Text><TouchableOpacity style={styles.primaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/auth")}><Text style={styles.primaryButtonText}>Connect account</Text></TouchableOpacity></View>
               <View style={styles.infoBanner}><Text style={styles.infoTitle}>Built for Malawi</Text><Text style={styles.infoText}>Discover apps, collaborate with builders and grow local technology.</Text></View>
             </>
           )}
