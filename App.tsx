@@ -58,13 +58,14 @@ export default function App() {
     let active = true;
     if (!isSupabaseConfigured) return () => { active = false; };
     setCatalogueLoading(true);
-    supabase
+    Promise.resolve(
+      supabase
       .from("listings")
       .select("id,slug,name,tagline,description,category,kind,downloads,rating_avg")
       .eq("status", "published")
       .order("created_at", { ascending: false })
-      .limit(100)
-      .then(({ data, error }) => {
+      .limit(100),
+    ).then(({ data, error }) => {
         if (!active) return;
         if (!error && data?.length) {
           setApps(data.map((item: any) => ({
@@ -84,12 +85,13 @@ export default function App() {
       })
       .catch(() => { if (active) setCatalogueLoading(false); });
     setFeedLoading(true);
-    supabase
+    Promise.resolve(
+      supabase
       .from("social_posts")
       .select("id,author_id,body,created_at")
       .order("created_at", { ascending: false })
-      .limit(30)
-      .then(async ({ data, error }) => {
+      .limit(30),
+    ).then(async ({ data, error }) => {
         if (!active) return;
         if (!error && data?.length) {
           const ids = [...new Set(data.map((post: any) => post.author_id))];
