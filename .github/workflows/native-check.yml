@@ -27,3 +27,5 @@ jobs:
         run: npm install
       - name: TypeScript check
         run: npm run typecheck
+      - name: Bundle Android JavaScript
+        run: npx expo export --platform android
