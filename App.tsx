@@ -52,7 +52,9 @@ export default function App() {
   const [apps, setApps] = useState<StoreApp[]>(sampleApps);
   const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
   const [catalogueLoading, setCatalogueLoading] = useState(false);
+  const [catalogueSource, setCatalogueSource] = useState<"preview" | "live">("preview");
   const [feedLoading, setFeedLoading] = useState(false);
+  const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
 
   useEffect(() => {
     let active = true;
@@ -68,6 +70,7 @@ export default function App() {
     ).then(({ data, error }) => {
         if (!active) return;
         if (!error && data?.length) {
+          setCatalogueSource("live");
           setApps(data.map((item: any) => ({
             id: item.id,
             name: item.name,
@@ -100,6 +103,7 @@ export default function App() {
             .select("id,display_name,developer_name")
             .in("id", ids);
           const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
+          if (active) setFeedSource("live");
           if (active) setPosts(data.map((post: any) => ({
             id: post.id,
             name: String(names.get(post.author_id) || "MAS member"),
@@ -169,7 +173,7 @@ export default function App() {
 
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Explore apps</Text>
-                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : isSupabaseConfigured ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
+                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", "Education", "Business", "Finance"].map((item) => (
@@ -217,7 +221,7 @@ export default function App() {
                     <Text style={styles.composePrompt}>Share an idea with the community…</Text>
                     <Text style={styles.composeAction}>＋ Create post</Text>
                   </TouchableOpacity>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : isSupabaseConfigured ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
                   {posts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
