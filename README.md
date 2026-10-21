@@ -7,10 +7,11 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 - Native Expo project and Android APK build profiles.
 - Native bottom tabs: Explore, Social, Developer Space and Profile.
 - Live public catalogue query against published MAS listings (falls back to clearly marked sample data if configuration or access is unavailable).
-- Live read-only Social feed query against MAS posts and public profile names (falls back to sample posts when unavailable).
+- Live Social feed query against MAS posts and public profile names (falls back to sample posts when unavailable).
+- Native text-post publishing, post reactions, comments, and connection requests are implemented against the existing MAS Social tables. Their real-world availability still depends on Supabase configuration, deployed schema, authenticated sessions, and production row-level security.
 - Google OAuth sign-in flow, persisted session display and sign-out are implemented in the native profile screen. Supabase redirect allowlisting and a real-device OAuth round-trip still need verification.
 - App cards open the corresponding MAS website listing.
-- Native post creation/media upload, reactions/comments, messaging, full developer workflows, KYC and payments are **not implemented yet**. No sample balances or financial activity are represented as real.
+- Native photo/video upload, direct messaging, full developer workflows, KYC and payments are **not implemented yet**. The Connect action sends a connection request; a native inbox for accepting/declining requests is still outstanding. No sample balances or financial activity are represented as real.
 
 ## Setup
 
