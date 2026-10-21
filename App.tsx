@@ -57,6 +57,8 @@ export default function App() {
   const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [postDraft, setPostDraft] = useState("");
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -252,10 +254,24 @@ export default function App() {
               </ScrollView>
               {socialSection === "Feed" ? (
                 <>
-                  <TouchableOpacity style={styles.composeCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
+                  <View style={styles.composeCard}>
                     <Text style={styles.composePrompt}>Share an idea with the community…</Text>
-                    <Text style={styles.composeAction}>＋ Create post</Text>
-                  </TouchableOpacity>
+                    <TextInput accessibilityLabel="Write a Social post" placeholder="What are you building or thinking about?" placeholderTextColor={COLORS.muted} value={postDraft} onChangeText={setPostDraft} multiline maxLength={2000} style={styles.postComposerInput} />
+                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{postDraft.length}/2000</Text><TouchableOpacity disabled={posting || !postDraft.trim()} style={[styles.composeButton, (posting || !postDraft.trim()) && { opacity: 0.5 }]} onPress={async () => {
+                      if (!isSupabaseConfigured) { showNotice("Live posting is unavailable until Supabase is configured."); return; }
+                      setPosting(true);
+                      const { data: authData, error: authError } = await supabase.auth.getUser();
+                      if (authError || !authData.user) { setPosting(false); showNotice("Sign in from Profile before publishing a post."); setTab("Profile"); return; }
+                      const body = postDraft.trim();
+                      const { data, error } = await supabase.from("social_posts").insert({ body, author_id: authData.user.id }).select("id,created_at").single();
+                      if (error || !data) { setPosting(false); showNotice(error?.message || "Your post could not be published."); return; }
+                      setPosts((current) => [{ id: data.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body, createdAt: data.created_at }, ...current]);
+                      setFeedSource("live");
+                      setPostDraft("");
+                      setPosting(false);
+                      showNotice("Your post is live on MAS Social.");
+                    }}><Text style={styles.composeButtonText}>{posting ? "Publishing…" : "Publish post"}</Text></TouchableOpacity></View>
+                  </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
                   {posts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
@@ -400,6 +416,11 @@ const styles = StyleSheet.create({
   composeCard: { padding: 16, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   composePrompt: { color: COLORS.muted, fontSize: 13 },
   composeAction: { color: "#DAD5FF", fontSize: 12, fontWeight: "800", marginTop: 14 },
+  postComposerInput: { minHeight: 82, maxHeight: 180, marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13, lineHeight: 19, textAlignVertical: "top" },
+  composeFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
+  composeLimit: { color: COLORS.muted, fontSize: 10 },
+  composeButton: { backgroundColor: COLORS.accent, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8 },
+  composeButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
   postCard: { padding: 15, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 12 },
   postHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   smallAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentSoft, alignItems: "center", justifyContent: "center" },
