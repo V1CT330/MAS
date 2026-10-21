@@ -39,6 +39,26 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
 
+      - name: Install required Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK_VERSION="27.1.12297006"
+          rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+          for attempt in 1 2 3; do
+            if sdkmanager --install "ndk;$NDK_VERSION"; then
+              if [[ -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties" ]]; then
+                echo "NDK $NDK_VERSION installed successfully."
+                exit 0
+              fi
+            fi
+            echo "NDK installation attempt $attempt failed; clearing partial files before retry."
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            sleep 5
+          done
+          echo "Could not install NDK $NDK_VERSION after three attempts."
+          exit 1
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
