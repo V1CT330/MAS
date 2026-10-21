@@ -15,6 +15,7 @@ import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
+type SocialSection = "Feed" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
 
 const COLORS = {
   background: "#0B1020",
@@ -46,6 +47,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const [socialSection, setSocialSection] = useState<SocialSection>("Feed");
   const [notice, setNotice] = useState("");
   const [apps, setApps] = useState<StoreApp[]>(sampleApps);
   const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
@@ -199,18 +201,60 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
-              <TouchableOpacity style={styles.composeCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
-                <Text style={styles.composePrompt}>Share an idea with the community…</Text>
-                <Text style={styles.composeAction}>＋ Create post</Text>
-              </TouchableOpacity>
-              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : isSupabaseConfigured ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
-              {posts.map((post) => (
-                <View key={post.id || post.name} style={styles.postCard}>
-                  <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
-                  <Text style={styles.postText}>{post.text}</Text>
-                  <View style={styles.postActions}><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
-                </View>
-              ))}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {(["Feed", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
+                  <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && styles.chipActive]}>
+                    <Text style={[styles.chipText, socialSection === item && styles.chipTextActive]}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {socialSection === "Feed" ? (
+                <>
+                  <TouchableOpacity style={styles.composeCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
+                    <Text style={styles.composePrompt}>Share an idea with the community…</Text>
+                    <Text style={styles.composeAction}>＋ Create post</Text>
+                  </TouchableOpacity>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : isSupabaseConfigured ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
+                  {posts.map((post) => (
+                    <View key={post.id || post.name} style={styles.postCard}>
+                      <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
+                      <Text style={styles.postText}>{post.text}</Text>
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>♡ Like</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>○ Comment</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity></View>
+                    </View>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>DEMO CONTENT</Text></View>
+                  {({
+                    Collabo: [
+                      ["Build Malawi", "Looking for React Native and backend developers", "Technology · Collaboration"],
+                      ["Campus Innovators", "Seeking a designer and product researcher", "Education · Team building"],
+                      ["Open Source Malawi", "Join a community project solving local problems", "Open source · Community"],
+                    ],
+                    Investors: [
+                      ["Early-stage technology", "Connect with founders building scalable digital products", "Investor network · Preview"],
+                      ["Startup pitch room", "Prepare a short pitch and find potential mentors", "Mentorship · Preview"],
+                    ],
+                    Grants: [
+                      ["Youth innovation funding", "Explore support opportunities for youth-led ideas", "Grant discovery · Preview"],
+                      ["Digital skills initiative", "Find programmes supporting technology education", "Skills · Preview"],
+                    ],
+                    Crowdfund: [
+                      ["Community project", "Showcase a local problem and rally community support", "Crowdfunding · Preview"],
+                      ["Launch your MVP", "Share a project goal and build an early supporter base", "Startup · Preview"],
+                    ],
+                  } as Record<Exclude<SocialSection, "Feed">, string[][]>)[socialSection].map(([title, description, meta]) => (
+                    <TouchableOpacity key={title} style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
+                      <View style={styles.toolIcon}><Text style={styles.toolIconText}>{socialSection === "Collabo" ? "↗" : socialSection === "Investors" ? "◇" : socialSection === "Grants" ? "▤" : "＋"}</Text></View>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text><Text style={styles.postTag}>{meta}</Text></View>
+                      <Text style={styles.chevron}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={styles.disclaimer}>Preview opportunities only. Real applications, funding offers and transactions require verified integrations.</Text>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.secondaryButtonText}>Open full MAS Social →</Text></TouchableOpacity>
+                </>
+              )}
             </>
           )}
 
