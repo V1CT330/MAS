@@ -63,6 +63,23 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Verify APK signature and Android package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -s "$APK"
+          test -n "$APKSIGNER"
+          test -n "$AAPT"
+          test -n "$ZIPALIGN"
+          "$APKSIGNER" verify --verbose "$APK"
+          "$ZIPALIGN" -c -p 4 "$APK"
+          "$AAPT" dump badging "$APK" | grep -E "^(package:|sdkVersion:|targetSdkVersion:|native-code:)"
+          echo "APK file size: $(stat -c%s "$APK") bytes"
+
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
