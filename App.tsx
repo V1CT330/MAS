@@ -508,7 +508,7 @@ export default function App() {
                       ["Community project", "Showcase a local problem and rally community support", "Crowdfunding · Preview"],
                       ["Launch your MVP", "Share a project goal and build an early supporter base", "Startup · Preview"],
                     ],
-                  } as Record<Exclude<SocialSection, "Feed">, string[][]>)[socialSection].map(([title, description, meta]) => (
+                  } as Record<Exclude<SocialSection, "Feed" | "Messages">, string[][]>)[socialSection].map(([title, description, meta]) => (
                     <TouchableOpacity key={title} style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
                       <View style={styles.toolIcon}><Text style={styles.toolIconText}>{socialSection === "Collabo" ? "↗" : socialSection === "Investors" ? "◇" : socialSection === "Grants" ? "▤" : "＋"}</Text></View>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text><Text style={styles.postTag}>{meta}</Text></View>
