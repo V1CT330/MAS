@@ -2,13 +2,13 @@
   "expo": {
     "name": "Malawian App Store",
     "slug": "malawian-app-store",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "scheme": "mw.wealthgrid.mas",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "mw.wealthgrid.mas",
-      "versionCode": 2,
+      "versionCode": 3,
       "minSdkVersion": 24
     },
     "ios": {
