@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   ActivityIndicator,
+  Image,
   Linking,
   ScrollView,
   StatusBar,
@@ -12,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import * as ImagePicker from "expo-image-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
@@ -31,6 +33,7 @@ const COLORS = {
 
 type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
 type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string };
+type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 
 const sampleApps: StoreApp[] = [
   { id: "sample-redbot", name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
@@ -58,6 +61,7 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
+  const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [posting, setPosting] = useState(false);
   const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({});
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
@@ -171,6 +175,41 @@ export default function App() {
       .catch(() => { if (active) setFeedLoading(false); });
     return () => { active = false; };
   }, []);
+
+  const choosePostMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { showNotice("Allow photo and video access to attach media."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images", "videos"],
+      allowsEditing: false,
+      quality: 0.85,
+      videoMaxDuration: 90,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const type = asset.type === "video" ? "video" : "image";
+    const extension = (asset.fileName?.split(".").pop() || (type === "video" ? "mp4" : "jpg")).toLowerCase();
+    setSelectedMedia({
+      uri: asset.uri,
+      type,
+      fileName: asset.fileName || `upload.${extension}`,
+      mimeType: asset.mimeType || (type === "video" ? "video/mp4" : "image/jpeg"),
+    });
+  };
+
+  const uploadPostMedia = async (userId: string) => {
+    if (!selectedMedia) return null;
+    const response = await fetch(selectedMedia.uri);
+    const blob = await response.blob();
+    const path = `${userId}/${Date.now()}-${selectedMedia.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error } = await supabase.storage.from("social-media").upload(path, blob, {
+      contentType: selectedMedia.mimeType,
+      upsert: false,
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from("social-media").getPublicUrl(path);
+    return { url: data.publicUrl, type: selectedMedia.type };
+  };
 
   const toggleLike = async (postId: string) => {
     if (!isSupabaseConfigured) { showNotice("Live reactions need Supabase configuration."); return; }
@@ -333,18 +372,32 @@ export default function App() {
                 <>
                   <View style={styles.composeCard}>
                     <Text style={styles.composePrompt}>Share an idea with the community…</Text>
+                    <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void choosePostMedia()}>
+                      <Text style={styles.mediaAttachText}>{selectedMedia ? (selectedMedia.type === "image" ? "▧ Photo selected · Change" : "▷ Video selected · Change") : "＋ Add photo or video"}</Text>
+                    </TouchableOpacity>
+                    {selectedMedia ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{selectedMedia.fileName}</Text><TouchableOpacity onPress={() => setSelectedMedia(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                     <TextInput accessibilityLabel="Write a Social post" placeholder="What are you building or thinking about?" placeholderTextColor={COLORS.muted} value={postDraft} onChangeText={setPostDraft} multiline maxLength={2000} style={styles.postComposerInput} />
                     <View style={styles.composeFooter}><Text style={styles.composeLimit}>{postDraft.length}/2000</Text><TouchableOpacity disabled={posting || !postDraft.trim()} style={[styles.composeButton, (posting || !postDraft.trim()) && { opacity: 0.5 }]} onPress={async () => {
                       if (!isSupabaseConfigured) { showNotice("Live posting is unavailable until Supabase is configured."); return; }
                       setPosting(true);
                       const { data: authData, error: authError } = await supabase.auth.getUser();
                       if (authError || !authData.user) { setPosting(false); showNotice("Sign in from Profile before publishing a post."); setTab("Profile"); return; }
-                      const body = postDraft.trim();
+                      let body = postDraft.trim();
+                      try {
+                        const uploaded = await uploadPostMedia(authData.user.id);
+                        if (uploaded) body = `${body}${body ? "\\n\\n" : ""}MEDIA:${uploaded.type}:${uploaded.url}`;
+                      } catch (mediaError: any) {
+                        setPosting(false);
+                        showNotice(mediaError?.message || "Media upload failed. Check the social-media Storage bucket and its policies.");
+                        return;
+                      }
+                      if (!body) { setPosting(false); showNotice("Write a message or attach media first."); return; }
                       const { data, error } = await supabase.from("social_posts").insert({ body, author_id: authData.user.id }).select("id,created_at").single();
                       if (error || !data) { setPosting(false); showNotice(error?.message || "Your post could not be published."); return; }
                       setPosts((current) => [{ id: data.id, authorId: authData.user.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body, createdAt: data.created_at }, ...current]);
                       setFeedSource("live");
                       setPostDraft("");
+                      setSelectedMedia(null);
                       setPosting(false);
                       showNotice("Your post is live on MAS Social.");
                     }}><Text style={styles.composeButtonText}>{posting ? "Publishing…" : "Publish post"}</Text></TouchableOpacity></View>
@@ -353,7 +406,14 @@ export default function App() {
                   {posts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
-                      <Text style={styles.postText}>{post.text}</Text>
+                      <Text style={styles.postText}>{post.text.replace(/\n\nMEDIA:(?:image|video):https?:\/\/\S+/g, "").trim()}</Text>
+                      {(() => {
+                        const match = post.text.match(/MEDIA:(image|video):(https?:\/\/\S+)/);
+                        if (!match) return null;
+                        return match[1] === "image"
+                          ? <Image accessibilityLabel="Post attachment" source={{ uri: match[2] }} style={styles.postMediaImage} resizeMode="cover" />
+                          : <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(match[2])}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity>;
+                      })()}
                       <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
                     </View>
                   ))}
@@ -492,6 +552,14 @@ const styles = StyleSheet.create({
   pageIntro: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 7, marginBottom: 20 },
   composeCard: { padding: 16, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   composePrompt: { color: COLORS.muted, fontSize: 13 },
+  mediaAttachButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.background },
+  mediaAttachText: { color: "#DAD5FF", fontSize: 11, fontWeight: "800" },
+  selectedMedia: { marginTop: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 9, backgroundColor: COLORS.background, borderRadius: 8 },
+  selectedMediaText: { color: COLORS.muted, fontSize: 10, flex: 1 },
+  removeMediaText: { color: "#FF8F9B", fontSize: 10, fontWeight: "800", marginLeft: 10 },
+  postMediaImage: { width: "100%", height: 230, marginTop: 12, borderRadius: 10, backgroundColor: COLORS.background },
+  mediaLink: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 },
+  mediaLinkText: { color: "#DAD5FF", fontSize: 12, fontWeight: "800" },
   composeAction: { color: "#DAD5FF", fontSize: 12, fontWeight: "800", marginTop: 14 },
   postComposerInput: { minHeight: 82, maxHeight: 180, marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13, lineHeight: 19, textAlignVertical: "top" },
   composeFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
