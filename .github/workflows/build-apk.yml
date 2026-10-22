@@ -13,6 +13,11 @@ jobs:
     name: Compile installable Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Public client configuration only. Add these as GitHub Actions repository
+    # Variables; never put service-role keys or provider secrets in the mobile app.
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Check out native MAS
         uses: actions/checkout@v4
