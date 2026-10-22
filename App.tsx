@@ -17,7 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
-type SocialSection = "Feed" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
+type SocialSection = "Feed" | "Messages" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
 
 const COLORS = {
   background: "#0B1020",
@@ -51,6 +51,12 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [socialSection, setSocialSection] = useState<SocialSection>("Feed");
+  const [activeConversationUserId, setActiveConversationUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<{ id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null }[]>([]);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messageSending, setMessageSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [apps, setApps] = useState<StoreApp[]>(sampleApps);
   const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
@@ -211,6 +217,41 @@ export default function App() {
     return { url: data.publicUrl, type: selectedMedia.type };
   };
 
+  const openConversation = async (recipientId: string) => {
+    if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in from Profile to message members."); setTab("Profile"); return; }
+    if (recipientId === authData.user.id) { showNotice("You cannot message your own account."); return; }
+    setCurrentUserId(authData.user.id);
+    setActiveConversationUserId(recipientId);
+    setSocialSection("Messages");
+    setMessagesLoading(true);
+    const { data, error } = await supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at")
+      .or(`and(sender_id.eq.${authData.user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${authData.user.id})`)
+      .order("created_at", { ascending: true }).limit(200);
+    if (error) { setMessagesLoading(false); showNotice(error.message || "Could not load this conversation."); return; }
+    const rows = data ?? [];
+    setMessages(rows);
+    const unreadIds = rows.filter((item: any) => item.recipient_id === authData.user.id && !item.read_at).map((item: any) => item.id);
+    if (unreadIds.length) await supabase.from("social_messages").update({ read_at: new Date().toISOString() }).in("id", unreadIds);
+    setMessagesLoading(false);
+  };
+
+  const sendDirectMessage = async () => {
+    const body = messageDraft.trim();
+    if (!body || !activeConversationUserId) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to send messages."); setTab("Profile"); return; }
+    setMessageSending(true);
+    const { data, error } = await supabase.from("social_messages")
+      .insert({ sender_id: authData.user.id, recipient_id: activeConversationUserId, body })
+      .select("id,sender_id,recipient_id,body,created_at,read_at").single();
+    setMessageSending(false);
+    if (error || !data) { showNotice(error?.message || "Message could not be sent."); return; }
+    setMessages((current) => [...current, data]);
+    setMessageDraft("");
+  };
+
   const toggleLike = async (postId: string) => {
     if (!isSupabaseConfigured) { showNotice("Live reactions need Supabase configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -362,7 +403,7 @@ export default function App() {
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {(["Feed", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
+                {(["Feed", "Messages", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
                   <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && styles.chipActive]}>
                     <Text style={[styles.chipText, socialSection === item && styles.chipTextActive]}>{item}</Text>
                   </TouchableOpacity>
@@ -414,9 +455,37 @@ export default function App() {
                           ? <Image accessibilityLabel="Post attachment" source={{ uri: match[2] }} style={styles.postMediaImage} resizeMode="cover" />
                           : <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(match[2])}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity>;
                       })()}
-                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
                     </View>
                   ))}
+                </>
+              ) : socialSection === "Messages" ? (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Messages</Text><Text style={styles.sectionMeta}>PRIVATE CHAT</Text></View>
+                  {!activeConversationUserId ? (
+                    <>
+                      <Text style={styles.disclaimer}>Choose a member from a Social post to open a private conversation.</Text>
+                      {posts.filter((post) => post.authorId).map((post) => (
+                        <TouchableOpacity key={post.authorId} style={styles.toolCard} onPress={() => post.authorId ? void openConversation(post.authorId) : undefined}>
+                          <View style={styles.toolIcon}><Text style={styles.toolIconText}>{post.name.slice(0,1).toUpperCase()}</Text></View>
+                          <View style={styles.toolCopy}><Text style={styles.toolTitle}>{post.name}</Text><Text style={styles.toolDescription}>Open private conversation</Text></View><Text style={styles.chevron}>›</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity style={styles.secondaryButton} onPress={() => { setActiveConversationUserId(null); setMessages([]); }}><Text style={styles.secondaryButtonText}>← All conversations</Text></TouchableOpacity>
+                      <View style={styles.messageThread}>
+                        {messagesLoading ? <ActivityIndicator color={COLORS.accent} /> : messages.length ? messages.map((message) => (
+                          <View key={message.id} style={[styles.messageBubble, message.sender_id === currentUserId ? styles.messageOwn : styles.messageOther]}>
+                            <Text style={styles.messageBody}>{message.body}</Text><Text style={styles.messageTime}>{new Date(message.created_at).toLocaleString()}</Text>
+                          </View>
+                        )) : <Text style={styles.emptyText}>No messages yet. Start the conversation below.</Text>}
+                      </View>
+                      <TextInput accessibilityLabel="Write a direct message" placeholder="Write a private message…" placeholderTextColor={COLORS.muted} value={messageDraft} onChangeText={(value) => setMessageDraft(value.slice(0,4000))} multiline maxLength={4000} style={styles.commentInput}/>
+                      <TouchableOpacity disabled={messageSending || !messageDraft.trim()} style={[styles.composeButton,{alignSelf:"flex-end",marginTop:8},(messageSending || !messageDraft.trim()) && {opacity:0.5}]} onPress={() => void sendDirectMessage()}><Text style={styles.composeButtonText}>{messageSending ? "Sending…" : "Send message"}</Text></TouchableOpacity>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -576,6 +645,12 @@ const styles = StyleSheet.create({
   postText: { color: "#D6DCEC", fontSize: 13, lineHeight: 20, marginTop: 14 },
   postActions: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, paddingTop: 13, borderTopWidth: 1, borderTopColor: COLORS.border },
   commentsPanel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
+  messageThread: { gap: 8, marginVertical: 12 },
+  messageBubble: { maxWidth: "88%", padding: 11, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+  messageOwn: { alignSelf: "flex-end", backgroundColor: COLORS.accentSoft },
+  messageOther: { alignSelf: "flex-start", backgroundColor: COLORS.surface },
+  messageBody: { color: COLORS.text, fontSize: 12, lineHeight: 18 },
+  messageTime: { color: COLORS.muted, fontSize: 9, marginTop: 5 },
   commentItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   commentAuthor: { color: COLORS.text, fontSize: 11, fontWeight: "800" },
   commentBody: { color: "#D6DCEC", fontSize: 12, lineHeight: 18, marginTop: 3 },
