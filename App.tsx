@@ -32,7 +32,7 @@ const COLORS = {
 };
 
 type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
-type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string };
+type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string; mediaUrl?: string | null; mediaType?: "image" | "video" | null };
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 
 const sampleApps: StoreApp[] = [
@@ -146,7 +146,7 @@ export default function App() {
     Promise.resolve(
       supabase
       .from("social_posts")
-      .select("id,author_id,body,created_at")
+      .select("id,author_id,body,created_at,media_url,media_type")
       .order("created_at", { ascending: false })
       .limit(30),
     ).then(async ({ data, error }) => {
@@ -166,6 +166,8 @@ export default function App() {
             tag: new Date(post.created_at).toLocaleDateString(),
             text: post.body,
             createdAt: post.created_at,
+            mediaUrl: post.media_url ?? null,
+            mediaType: post.media_type ?? null,
           })));
           const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", data.map((post: any) => post.id));
           if (active && reactionRows) {
@@ -423,19 +425,24 @@ export default function App() {
                       setPosting(true);
                       const { data: authData, error: authError } = await supabase.auth.getUser();
                       if (authError || !authData.user) { setPosting(false); showNotice("Sign in from Profile before publishing a post."); setTab("Profile"); return; }
-                      let body = postDraft.trim();
+                      const body = postDraft.trim();
+                      let uploaded: { url: string; type: "image" | "video" } | null = null;
                       try {
-                        const uploaded = await uploadPostMedia(authData.user.id);
-                        if (uploaded) body = `${body}${body ? "\\n\\n" : ""}MEDIA:${uploaded.type}:${uploaded.url}`;
+                        uploaded = await uploadPostMedia(authData.user.id);
                       } catch (mediaError: any) {
                         setPosting(false);
                         showNotice(mediaError?.message || "Media upload failed. Check the social-media Storage bucket and its policies.");
                         return;
                       }
-                      if (!body) { setPosting(false); showNotice("Write a message or attach media first."); return; }
-                      const { data, error } = await supabase.from("social_posts").insert({ body, author_id: authData.user.id }).select("id,created_at").single();
+                      if (!body && !uploaded) { setPosting(false); showNotice("Write a message or attach media first."); return; }
+                      const { data, error } = await supabase.from("social_posts").insert({
+                        body: body || (uploaded?.type === "image" ? "Photo" : "Video"),
+                        author_id: authData.user.id,
+                        media_url: uploaded?.url ?? null,
+                        media_type: uploaded?.type ?? null,
+                      }).select("id,created_at,media_url,media_type").single();
                       if (error || !data) { setPosting(false); showNotice(error?.message || "Your post could not be published."); return; }
-                      setPosts((current) => [{ id: data.id, authorId: authData.user.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body, createdAt: data.created_at }, ...current]);
+                      setPosts((current) => [{ id: data.id, authorId: authData.user.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: body || (uploaded?.type === "image" ? "Photo" : "Video"), createdAt: data.created_at, mediaUrl: data.media_url ?? uploaded?.url ?? null, mediaType: data.media_type ?? uploaded?.type ?? null }, ...current]);
                       setFeedSource("live");
                       setPostDraft("");
                       setSelectedMedia(null);
@@ -447,14 +454,9 @@ export default function App() {
                   {posts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
-                      <Text style={styles.postText}>{post.text.replace(/\n\nMEDIA:(?:image|video):https?:\/\/\S+/g, "").trim()}</Text>
-                      {(() => {
-                        const match = post.text.match(/MEDIA:(image|video):(https?:\/\/\S+)/);
-                        if (!match) return null;
-                        return match[1] === "image"
-                          ? <Image accessibilityLabel="Post attachment" source={{ uri: match[2] }} style={styles.postMediaImage} resizeMode="cover" />
-                          : <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(match[2])}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity>;
-                      })()}
+                      <Text style={styles.postText}>{post.text}</Text>
+                      {post.mediaUrl && post.mediaType === "image" ? <Image accessibilityLabel="Post attachment" source={{ uri: post.mediaUrl }} style={styles.postMediaImage} resizeMode="cover" /> : null}
+                      {post.mediaUrl && post.mediaType === "video" ? <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(post.mediaUrl!)}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity> : null}
                       <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
                     </View>
                   ))}
