@@ -1,41 +1,36 @@
 # Malawian App Store — Native Android app
 
-This is a **native React Native + Expo app**, separate from the MAS website. It is not a WebView wrapper. It shares the existing MAS Supabase backend when public client configuration is supplied.
+This is a **native React Native + Expo app**, separate from the MAS website. It is not a WebView wrapper. It is designed to share the existing MAS Supabase backend when public client configuration is supplied.
 
-## Current status
+## Current implementation
 
-- Native Expo project and Android APK build profiles.
 - Native bottom tabs: Explore, Social, Developer Space and Profile.
-- Live public catalogue query against published MAS listings (falls back to clearly marked sample data if configuration or access is unavailable).
-- Live Social feed query against MAS posts and public profile names (falls back to sample posts when unavailable).
-- Native text-post publishing, post reactions, comments, and connection requests are implemented against the existing MAS Social tables. Their real-world availability still depends on Supabase configuration, deployed schema, authenticated sessions, and production row-level security.
-- Google OAuth sign-in flow, persisted session display and sign-out are implemented in the native profile screen. Supabase redirect allowlisting and a real-device OAuth round-trip still need verification.
-- App cards open the corresponding MAS website listing.
-- Native photo/video upload, direct messaging, full developer workflows, KYC and payments are **not implemented yet**. The Connect action sends a connection request; a native inbox for accepting/declining requests is still outstanding. No sample balances or financial activity are represented as real.
+- Explore queries published MAS listings and opens the selected listing on the MAS website. Sample catalogue entries are used only as a fallback.
+- Social queries MAS posts and public profile names; text-post publishing, reactions, comments, connection requests, photo/video selection and Storage upload are implemented in the native client.
+- Direct-message screens query and write the existing `social_messages` table.
+- Google OAuth sign-in, persisted session display and sign-out are implemented. The `mw.wealthgrid.mas://auth/callback` redirect still requires allowlisting in the existing Supabase Auth configuration and real-device verification.
+- Developer Space links into the existing MAS web console for listings, Didit verification, Developer Pro/PayChangu checkout, Social opportunities and wallet information. These are secure web handoffs, not native provider SDK integrations.
+- Media upload and messaging depend on the live Supabase schema, storage bucket/policies, user sessions and row-level security. They have not yet been verified against the production project on a real phone.
+- Investor, grant and crowdfunding links open MAS Social; they are not represented as completed native funding workflows.
 
-## Setup
+## Configure the native build
 
-1. Install Node.js LTS and npm.
-2. Run `npm install`.
-3. Copy `.env.example` to `.env` and fill in the public Supabase URL and publishable/anon key from the existing MAS project.
-4. In the existing Supabase Auth URL configuration, allow `mw.wealthgrid.mas://auth/callback` as a redirect URL before testing Google sign-in. The app code does not change Supabase settings automatically.
-5. Never add a Supabase service-role key, Didit secret, PayChangu secret, or other privileged key to this mobile app.
-6. Run `npx expo start` to open the app in Expo Go or a development build.
-7. Run `npm run typecheck` to check TypeScript.
+1. In GitHub, open **V1CT330/MAS → Settings → Secrets and variables → Actions → Variables**.
+2. Add these **repository variables** using the public client values from the existing MAS Supabase project:
+   - `EXPO_PUBLIC_SUPABASE_URL`
+   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or the project's public anon key if that is what it currently uses)
+3. These are public client values, not privileged secrets. **Never** add a Supabase service-role key, PayChangu secret, Didit secret or webhook secret to the Android app.
+4. The Android build workflow reads these variables at build time. If they are absent, the app intentionally falls back to preview data and Supabase-backed actions will not be live.
+5. For Google OAuth, add `mw.wealthgrid.mas://auth/callback` to the existing Supabase Auth redirect allowlist. Do not change project settings without authorization.
+6. Run `npm install` and `npm run typecheck` to check the project locally.
 
 ## Android APK
 
-Authenticate the EAS CLI, then run:
+Pushes to `native/expo-foundation` trigger the Android APK build and native checks. The workflow verifies the APK signature, zip alignment and Android package metadata before uploading the installable debug APK artifact. A successful build is not a substitute for installing and testing on a real device.
 
-```sh
-npx eas-cli build --platform android --profile preview
-```
+## Security and architecture
 
-The preview profile is configured to produce an installable APK. A successful EAS build, visual checks, and Android device testing are still required before calling this release-ready.
-
-## Architecture
-
-- Native React Native screens and controls.
-- Existing MAS Supabase backend shared with the website.
-- Public client credentials only in the app; privileged actions must stay server-side.
-- Live data reads are subject to the current Supabase schema and row-level security policies.
+- Native React Native screens and controls; no WebView wrapper.
+- Existing MAS Supabase backend, subject to deployed schema and row-level security.
+- Provider credentials and privileged operations remain server-side.
+- Live account data, payment settlement and identity verification must be confirmed through the existing server-side workflows; the native client must never mark a payment as paid or a developer as verified by itself.
