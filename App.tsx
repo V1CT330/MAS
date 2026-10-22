@@ -527,21 +527,22 @@ export default function App() {
           {tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
-              <Text style={styles.pageIntro}>Tools for people building the next generation of Malawian technology.</Text>
-              <View style={styles.developerStatus}><View style={styles.statusDot}/><Text style={styles.statusText}>Native app foundation started</Text></View>
+              <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
+              <View style={styles.developerStatus}><View style={styles.statusDot}/><Text style={styles.statusText}>Secure integration links enabled</Text></View>
               {[
-                ["▣", "My applications", "Prepare listings and manage app releases."],
-                ["↗", "Collaboration", "Find teammates and projects to build together."],
-                ["◇", "Investors & grants", "Discover funding opportunities and support."],
-                ["▤", "Developer wallet", "A future connected view of verified ledger records."],
-              ].map(([icon, title, description]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} onPress={() => void Linking.openURL(title === "My applications" ? "https://malawian-app-store-j6pm.vercel.app/console/manage" : title === "Developer wallet" ? "https://malawian-app-store-j6pm.vercel.app/console/wallet" : "https://malawian-app-store-j6pm.vercel.app/console/social")}>
+                ["▣", "My applications", "Create and manage listings and releases.", "https://malawian-app-store-j6pm.vercel.app/console/products/"],
+                ["✓", "Developer verification", "Start or review your Didit identity verification.", "https://malawian-app-store-j6pm.vercel.app/console/verification"],
+                ["◇", "Developer Pro subscription", "Open the PayChangu checkout flow for Developer Pro.", "https://malawian-app-store-j6pm.vercel.app/console/subscription"],
+                ["↗", "Collaboration, investors & grants", "Open MAS Social opportunities and collaboration tools.", "https://malawian-app-store-j6pm.vercel.app/console/social"],
+                ["▤", "Developer wallet", "View available wallet and earnings information.", "https://malawian-app-store-j6pm.vercel.app/console/wallet"],
+              ].map(([icon, title, description, url]) => (
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again."))}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
               ))}
-              <Text style={styles.disclaimer}>These are native interface previews. Live account data and transactions are not connected yet.</Text>
+              <Text style={styles.disclaimer}>Security note: payment and identity-provider secrets stay on the MAS server. These links hand off to the existing web workflows; they do not claim that PayChangu or Didit checkout runs natively inside this app.</Text>
             </>
           )}
 
