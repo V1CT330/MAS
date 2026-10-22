@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "expo": "~54.0.0",
     "expo-status-bar": "~3.0.9",
+    "expo-image-picker": "~17.0.8",
     "react": "19.1.0",
     "react-native": "0.81.4",
     "react-native-url-polyfill": "^2.0.0"
