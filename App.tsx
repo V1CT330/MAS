@@ -389,7 +389,7 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
-      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
       setDeveloperLoading(false);
