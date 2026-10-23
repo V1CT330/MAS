@@ -18,7 +18,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
-type SocialSection = "Feed" | "Messages" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
+type SocialSection = "Feed" | "Messages" | "Connections" | "Activity" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
 
 const COLORS = {
   background: "#FFFFFF",
@@ -202,6 +202,20 @@ export default function App() {
   const [commentLoadingPostId, setCommentLoadingPostId] = useState<string | null>(null);
   const [commentSendingPostId, setCommentSendingPostId] = useState<string | null>(null);
   const [connectingPostIds, setConnectingPostIds] = useState<string[]>([]);
+  const [socialConnections, setSocialConnections] = useState<any[]>([]);
+  const [socialConnectionsLoading, setSocialConnectionsLoading] = useState(false);
+  const [socialNotifications, setSocialNotifications] = useState<any[]>([]);
+  const [socialNotificationsLoading, setSocialNotificationsLoading] = useState(false);
+  const [investmentOpportunities, setInvestmentOpportunities] = useState<any[]>([]);
+  const [investmentLoading, setInvestmentLoading] = useState(false);
+  const [investmentSaving, setInvestmentSaving] = useState(false);
+  const [investmentTitle, setInvestmentTitle] = useState("");
+  const [investmentDescription, setInvestmentDescription] = useState("");
+  const [investmentIndustry, setInvestmentIndustry] = useState("Technology");
+  const [investmentStage, setInvestmentStage] = useState("idea");
+  const [investmentGoal, setInvestmentGoal] = useState("");
+  const [investmentCurrency, setInvestmentCurrency] = useState("MWK");
+  const [investmentUse, setInvestmentUse] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -561,10 +575,24 @@ export default function App() {
       if (versionError) { showNotice(versionError.message || "Could not verify the release file."); return; }
       if (!(versions || []).some((version: any) => Boolean(version.file_url))) { showNotice("Upload an APK or ZIP release before submitting this app."); return; }
     }
-    const { error } = await supabase.from("listings").update({ status: "pending" }).eq("id", listing.id).eq("developer_id", authData.user.id);
-    if (error) { showNotice(error.message || "Could not submit the listing."); return; }
-    setDeveloperRows((rows) => rows.map((row) => row.id === listing.id ? { ...row, status: "pending" } : row));
-    showNotice("Listing submitted for MAS review.");
+    const { data: checkResult, error: checkError } = await supabase.rpc("attempt_auto_publish", { _listing_id: listing.id });
+    if (checkError) {
+      showNotice(checkError.message || "Publishing checks could not run. No status was changed.");
+      return;
+    }
+    const result = checkResult as { ok?: boolean; status?: string; auto_published?: boolean; review_required?: boolean; reasons?: string[]; message?: string } | null;
+    if (!result) {
+      showNotice("The publishing service returned no result. No status was changed.");
+      return;
+    }
+    if (result.status) {
+      setDeveloperRows((rows) => rows.map((row) => row.id === listing.id ? { ...row, status: result.status } : row));
+    }
+    if (!result.ok && result.reasons?.length) {
+      showNotice((result.message || "Fix these listing issues:") + " " + result.reasons.join(" "));
+      return;
+    }
+    showNotice(result.message || (result.auto_published ? "Website listing published." : result.review_required ? "Checks passed. Your app is awaiting security review." : "Publishing checks completed."));
   };
 
   const deleteNativeDraft = async (listing: any) => {
@@ -870,6 +898,196 @@ export default function App() {
     }
   }, [tab, socialSection, activeConversationUserId]);
 
+  useEffect(() => {
+    if (tab !== "Social" || !["Connections", "Activity", "Investors"].includes(socialSection)) return;
+    let active = true;
+    const loadSection = async () => {
+      if (!isSupabaseConfigured) {
+        setSocialConnections([]);
+        setSocialNotifications([]);
+        setInvestmentOpportunities([]);
+        setSocialConnectionsLoading(false);
+        setSocialNotificationsLoading(false);
+        setInvestmentLoading(false);
+        return;
+      }
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (!active) return;
+      if (authError || !authData.user) {
+        setSocialConnections([]);
+        setSocialNotifications([]);
+        setInvestmentOpportunities([]);
+        setSocialConnectionsLoading(false);
+        setSocialNotificationsLoading(false);
+        setInvestmentLoading(false);
+        return;
+      }
+      const userId = authData.user.id;
+      if (socialSection === "Connections") {
+        setSocialConnectionsLoading(true);
+        const { data, error } = await supabase.from("social_connections")
+          .select("id,requester_id,recipient_id,status,created_at")
+          .or(`requester_id.eq.${userId},recipient_id.eq.${userId}`)
+          .order("created_at", { ascending: false }).limit(200);
+        if (!active) return;
+        if (error) {
+          setSocialConnectionsLoading(false);
+          showNotice(error.message || "Could not load connection requests.");
+          return;
+        }
+        const ids = [...new Set((data ?? []).flatMap((item: any) => [item.requester_id, item.recipient_id]).filter((id: string) => id !== userId))];
+        const { data: profiles } = ids.length
+          ? await supabase.from("public_profiles").select("id,display_name,developer_name").in("id", ids)
+          : { data: [] as any[] };
+        if (!active) return;
+        const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
+        setSocialConnections((data ?? []).map((item: any) => ({
+          ...item,
+          direction: item.requester_id === userId ? "outgoing" : "incoming",
+          otherUserId: item.requester_id === userId ? item.recipient_id : item.requester_id,
+          otherName: String(names.get(item.requester_id === userId ? item.recipient_id : item.requester_id) || "MAS member"),
+        })));
+        setSocialConnectionsLoading(false);
+      } else if (socialSection === "Activity") {
+        setSocialNotificationsLoading(true);
+        const { data, error } = await supabase.from("social_notifications")
+          .select("id,title,body,read,created_at")
+          .eq("user_id", userId).order("created_at", { ascending: false }).limit(100);
+        if (!active) return;
+        setSocialNotifications(data ?? []);
+        setSocialNotificationsLoading(false);
+        if (error) showNotice(error.message || "Could not load Social activity.");
+      } else if (socialSection === "Investors") {
+        setInvestmentLoading(true);
+        const { data, error } = await supabase.from("social_investment_opportunities")
+          .select("id,founder_id,title,description,industry,stage,funding_goal,currency,use_of_funds,status,created_at")
+          .or(`status.eq.open,founder_id.eq.${userId}`)
+          .order("created_at", { ascending: false }).limit(100);
+        if (!active) return;
+        if (error) {
+          setInvestmentOpportunities([]);
+          setInvestmentLoading(false);
+          showNotice(error.message || "Could not load investment opportunities.");
+          return;
+        }
+        const ids = [...new Set((data ?? []).map((item: any) => item.founder_id))];
+        const { data: profiles } = ids.length
+          ? await supabase.from("public_profiles").select("id,display_name,developer_name").in("id", ids)
+          : { data: [] as any[] };
+        if (!active) return;
+        const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS founder"]));
+        setInvestmentOpportunities((data ?? []).map((item: any) => ({
+          ...item,
+          founderName: String(names.get(item.founder_id) || "MAS founder"),
+          isOwner: item.founder_id === userId,
+        })));
+        setInvestmentLoading(false);
+      }
+    };
+    void loadSection().catch(() => {
+      if (!active) return;
+      setSocialConnectionsLoading(false);
+      setSocialNotificationsLoading(false);
+      setInvestmentLoading(false);
+      showNotice("Could not load this Social section. Check your connection and try again.");
+    });
+    return () => { active = false; };
+  }, [tab, socialSection]);
+
+  const respondToConnection = async (connection: any, status: "accepted" | "declined") => {
+    if (!isSupabaseConfigured) { showNotice("Connections need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage connection requests."); setTab("Profile"); return; }
+    if (connection.recipient_id !== authData.user.id || connection.status !== "pending") {
+      showNotice("Only the recipient can respond to a pending request.");
+      return;
+    }
+    const { data, error } = await supabase.from("social_connections")
+      .update({ status })
+      .eq("id", connection.id)
+      .eq("recipient_id", authData.user.id)
+      .eq("status", "pending")
+      .select("id,status").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "This request has changed. Refresh your connections."); return; }
+    setSocialConnections((items) => items.map((item) => item.id === connection.id ? { ...item, status } : item));
+    showNotice(status === "accepted" ? "Connection accepted." : "Connection request declined.");
+  };
+
+  const removeConnection = async (connection: any) => {
+    if (!isSupabaseConfigured) { showNotice("Connections need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage connections."); return; }
+    const { error } = await supabase.from("social_connections")
+      .delete().eq("id", connection.id)
+      .or(`requester_id.eq.${authData.user.id},recipient_id.eq.${authData.user.id}`);
+    if (error) { showNotice(error.message || "Could not remove this connection."); return; }
+    setSocialConnections((items) => items.filter((item) => item.id !== connection.id));
+    showNotice("Connection removed.");
+  };
+
+  const markSocialNotificationRead = async (notification: any) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage Social activity."); return; }
+    const { error } = await supabase.from("social_notifications").update({ read: true })
+      .eq("id", notification.id).eq("user_id", authData.user.id);
+    if (error) { showNotice(error.message || "Could not mark activity as read."); return; }
+    setSocialNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+  };
+
+  const publishInvestmentOpportunity = async () => {
+    const title = investmentTitle.trim();
+    const description = investmentDescription.trim();
+    const industry = investmentIndustry.trim();
+    const goal = investmentGoal.trim() ? Number(investmentGoal) : null;
+    if (title.length < 3 || description.length < 20 || industry.length < 2) {
+      showNotice("Add a title, at least 20 characters of detail, and an industry.");
+      return;
+    }
+    if (goal !== null && (!Number.isFinite(goal) || goal <= 0)) {
+      showNotice("Funding goal must be a positive number.");
+      return;
+    }
+    if (!isSupabaseConfigured) { showNotice("Investment listings need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to publish an opportunity."); setTab("Profile"); return; }
+    setInvestmentSaving(true);
+    const { data, error } = await supabase.from("social_investment_opportunities").insert({
+      founder_id: authData.user.id,
+      title,
+      description,
+      industry,
+      stage: investmentStage,
+      funding_goal: goal,
+      currency: investmentCurrency,
+      use_of_funds: investmentUse.trim() || null,
+      status: "open",
+    }).select("id,founder_id,title,description,industry,stage,funding_goal,currency,use_of_funds,status,created_at").single();
+    setInvestmentSaving(false);
+    if (error || !data) { showNotice(error?.message || "Could not publish this opportunity."); return; }
+    setInvestmentOpportunities((items) => [{ ...data, founderName: authData.user.email || "You", isOwner: true }, ...items]);
+    setInvestmentTitle("");
+    setInvestmentDescription("");
+    setInvestmentIndustry("Technology");
+    setInvestmentStage("idea");
+    setInvestmentGoal("");
+    setInvestmentCurrency("MWK");
+    setInvestmentUse("");
+    showNotice("Your investment opportunity is published. Contact and funding arrangements remain between the parties.");
+  };
+
+  const changeInvestmentStatus = async (opportunity: any, status: "open" | "paused" | "closed") => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage your opportunity."); return; }
+    const { data, error } = await supabase.from("social_investment_opportunities")
+      .update({ status }).eq("id", opportunity.id).eq("founder_id", authData.user.id)
+      .select("id,status").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "Only the owner can change this opportunity."); return; }
+    setInvestmentOpportunities((items) => items.map((item) => item.id === opportunity.id ? { ...item, status } : item));
+    showNotice(status === "open" ? "Opportunity reopened." : status === "paused" ? "Opportunity paused." : "Opportunity closed.");
+  };
+
   const openConversation = async (recipientId: string) => {
     if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1159,7 +1377,7 @@ export default function App() {
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
               {socialSearchOpen ? <View style={[styles.searchBox,{marginBottom:12}]}><Text style={styles.searchIcon}>⌕</Text><TextInput accessibilityLabel="Search Social posts" placeholder="Search posts and members" placeholderTextColor={COLORS.muted} value={socialSearchQuery} onChangeText={setSocialSearchQuery} style={styles.searchInput} returnKeyType="search" /></View> : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {(["Feed", "Messages", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
+                {(["Feed", "Messages", "Connections", "Activity", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
                   <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && styles.chipActive]}>
                     <Text style={[styles.chipText, socialSection === item && styles.chipTextActive]}>{item}</Text>
                   </TouchableOpacity>
@@ -1260,12 +1478,77 @@ export default function App() {
                     </>
                   )}
                 </>
+              ) : socialSection === "Connections" ? (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Connections</Text><Text style={styles.sectionMeta}>MEMBER NETWORK</Text></View>
+                  <Text style={styles.pageIntro}>Review incoming requests and manage the people you have connected with.</Text>
+                  {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Connect the MAS backend to load live connections.</Text> : null}
+                  {socialConnectionsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialConnections.map((connection) => (
+                    <View key={connection.id} style={styles.toolCard}>
+                      <View style={styles.toolIcon}><Text style={styles.toolIconText}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
+                      <View style={styles.toolCopy}>
+                        <Text style={styles.toolTitle}>{connection.otherName}</Text>
+                        <Text style={styles.toolDescription}>{connection.direction === "incoming" ? "Incoming request" : "Request sent"} · {connection.status}</Text>
+                        <Text style={styles.postTag}>{connection.created_at ? new Date(connection.created_at).toLocaleDateString() : ""}</Text>
+                      </View>
+                      {connection.status === "pending" && connection.direction === "incoming" ? <View style={{gap:8,alignItems:"flex-end"}}><TouchableOpacity onPress={() => void respondToConnection(connection,"accepted")}><Text style={styles.secondaryButtonText}>Accept</Text></TouchableOpacity><TouchableOpacity onPress={() => void respondToConnection(connection,"declined")}><Text style={styles.removeMediaText}>Decline</Text></TouchableOpacity></View> : connection.status === "accepted" ? <TouchableOpacity onPress={() => void openConversation(connection.otherUserId)}><Text style={styles.secondaryButtonText}>Message</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void removeConnection(connection)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity>}
+                    </View>
+                  ))}
+                  {!socialConnectionsLoading && !socialConnections.length ? <Text style={styles.emptyText}>No connection requests yet. Visit the Feed and connect with a member.</Text> : null}
+                </>
+              ) : socialSection === "Activity" ? (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Social activity</Text><Text style={styles.sectionMeta}>{socialNotifications.filter((item) => !item.read).length} UNREAD</Text></View>
+                  <Text style={styles.pageIntro}>Reactions, comments, connection requests and messages are separate from store notifications.</Text>
+                  {socialNotificationsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialNotifications.map((item) => (
+                    <TouchableOpacity key={item.id} style={[styles.toolCard,!item.read && {backgroundColor:COLORS.accentSoft}]} onPress={() => !item.read ? void markSocialNotificationRead(item) : undefined}>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "Social activity"}</Text><Text style={styles.toolDescription}>{item.body || ""}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>
+                      <Text style={styles.chevron}>{item.read ? "✓" : "•"}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {!socialNotificationsLoading && !socialNotifications.length ? <Text style={styles.emptyText}>No Social activity yet.</Text> : null}
+                </>
+              ) : socialSection === "Investors" ? (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Invest & Grow</Text><Text style={styles.sectionMeta}>OPPORTUNITIES</Text></View>
+                  <Text style={styles.pageIntro}>Founders can describe a real opportunity; interested members can contact the founder. MAS does not process investments or guarantee offers.</Text>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Opportunity title *</Text>
+                    <TextInput value={investmentTitle} onChangeText={(value) => setInvestmentTitle(value.slice(0,120))} placeholder="e.g. Local logistics platform" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Industry *</Text>
+                    <TextInput value={investmentIndustry} onChangeText={(value) => setInvestmentIndustry(value.slice(0,80))} placeholder="Technology, agriculture…" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Stage</Text>
+                    <View style={styles.chips}>{([["idea","Idea"],["prototype","Prototype"],["early_revenue","Early revenue"],["growth","Growth"],["established","Established"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setInvestmentStage(value)} style={[styles.chip,investmentStage === value && styles.chipActive]}><Text style={[styles.chipText,investmentStage === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>Funding goal (optional)</Text>
+                    <TextInput value={investmentGoal} onChangeText={(value) => setInvestmentGoal(value.replace(/[^0-9.]/g,"").slice(0,18))} keyboardType="decimal-pad" placeholder="Amount requested" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <View style={styles.chips}>{(["MWK","USD","ZAR","GBP","EUR"]).map((value) => <TouchableOpacity key={value} onPress={() => setInvestmentCurrency(value)} style={[styles.chip,investmentCurrency === value && styles.chipActive]}><Text style={[styles.chipText,investmentCurrency === value && styles.chipTextActive]}>{value}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>Description *</Text>
+                    <TextInput value={investmentDescription} onChangeText={(value) => setInvestmentDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="Explain the opportunity, traction and what support you need…" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]}/>
+                    <Text style={styles.fieldLabel}>Use of funds</Text>
+                    <TextInput value={investmentUse} onChangeText={(value) => setInvestmentUse(value.slice(0,1000))} multiline maxLength={1000} placeholder="How would the funds be used?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
+                    <TouchableOpacity disabled={investmentSaving} style={[styles.primaryButton,investmentSaving && {opacity:0.5}]} onPress={() => void publishInvestmentOpportunity()}><Text style={styles.primaryButtonText}>{investmentSaving ? "Publishing…" : "Publish opportunity"}</Text></TouchableOpacity>
+                  </View>
+                  {investmentLoading ? <ActivityIndicator color={COLORS.accent} /> : investmentOpportunities.map((item) => (
+                    <View key={item.id} style={styles.toolCard}>
+                      <View style={styles.toolCopy}>
+                        <Text style={styles.toolTitle}>{item.title}</Text>
+                        <Text style={styles.postTag}>{item.founderName} · {item.industry} · {String(item.stage).replace("_"," ")}</Text>
+                        <Text style={styles.toolDescription}>{item.description}</Text>
+                        {item.funding_goal ? <Text style={styles.postTag}>Goal: {item.currency} {Number(item.funding_goal).toLocaleString()}</Text> : null}
+                        {item.use_of_funds ? <Text style={styles.postTag}>Use of funds: {item.use_of_funds}</Text> : null}
+                        <Text style={styles.postTag}>Status: {item.status}</Text>
+                      </View>
+                      {item.isOwner ? <View style={{gap:8,alignItems:"flex-end"}}>{item.status === "open" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"paused")}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : item.status === "paused" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"open")}><Text style={styles.secondaryButtonText}>Reopen</Text></TouchableOpacity> : null}{item.status !== "closed" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"closed")}><Text style={styles.removeMediaText}>Close</Text></TouchableOpacity> : null}</View> : <TouchableOpacity onPress={() => void openConversation(item.founder_id)}><Text style={styles.secondaryButtonText}>Contact founder</Text></TouchableOpacity>}
+                    </View>
+                  ))}
+                  {!investmentLoading && !investmentOpportunities.length ? <Text style={styles.emptyText}>No open opportunities yet. Publish the first one.</Text> : null}
+                </>
               ) : (
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : "START A CONVERSATION"}</Text></View>
-                  <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Investors" ? "Introduce your startup, investment interests or request a conversation with potential partners." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
+                  <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
                   <View style={styles.composeCard}>
-                    <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : socialSection === "Investors" ? "Startup, investment interests or partnership request…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
+                    <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
                     <View style={styles.composeFooter}><Text style={styles.composeLimit}>{sectionPostDraft.length}/3000</Text><TouchableOpacity disabled={sectionPosting || sectionPostDraft.trim().length < 20} style={[styles.composeButton, (sectionPosting || sectionPostDraft.trim().length < 20) && { opacity: 0.5 }]} onPress={() => void publishSocialSectionPost()}><Text style={styles.composeButtonText}>{sectionPosting ? "Publishing…" : "Publish to " + socialSection}</Text></TouchableOpacity></View>
                   </View>
                   {filteredSocialPosts.filter((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")).map((post) => (
@@ -1275,7 +1558,7 @@ export default function App() {
                       <View style={styles.postActions}><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void requestConnection(post.authorId, post.id) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>
                     </View>
                   ))}
-                  {!filteredSocialPosts.some((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")) ? <Text style={styles.emptyText}>{socialSearchQuery.trim() ? "No posts match your search." : `No ${socialSection.toLowerCase()} posts yet. Publish the first one for the community.`}</Text> : null}
+                  {!filteredSocialPosts.some((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")) ? <Text style={styles.emptyText}>{socialSearchQuery.trim() ? "No posts match your search." : "No " + socialSection.toLowerCase() + " posts yet. Publish the first one for the community."}</Text> : null}
                   <Text style={styles.disclaimer}>MAS connects members but does not verify investment offers, guarantee grants, or process crowdfunding payments here. Never send money based only on a social post.</Text>
                 </>
               )}
