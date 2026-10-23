@@ -5,7 +5,7 @@
     "version": "1.0.2",
     "scheme": "mw.wealthgrid.mas",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "android": {
       "package": "mw.wealthgrid.mas",
       "versionCode": 3,
