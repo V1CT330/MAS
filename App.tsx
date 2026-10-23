@@ -20,15 +20,15 @@ type Tab = "Explore" | "Social" | "Develop" | "Profile";
 type SocialSection = "Feed" | "Messages" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
 
 const COLORS = {
-  background: "#0B1020",
-  surface: "#131B30",
-  surfaceAlt: "#19233D",
-  border: "#263451",
-  text: "#F4F6FC",
-  muted: "#A7B2C9",
-  accent: "#8C7CFF",
-  accentSoft: "#25234C",
-  green: "#51D6A4",
+  background: "#FFFFFF",
+  surface: "#FFFFFF",
+  surfaceAlt: "#F5F7F6",
+  border: "#E5E7EB",
+  text: "#202124",
+  muted: "#6B7280",
+  accent: "#188038",
+  accentSoft: "#E8F5E9",
+  green: "#188038",
 };
 
 type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
@@ -50,6 +50,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const [kindFilter, setKindFilter] = useState<"all" | "app" | "website">("all");
   const [socialSection, setSocialSection] = useState<SocialSection>("Feed");
   const [activeConversationUserId, setActiveConversationUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -319,9 +320,10 @@ export default function App() {
     return apps.filter((app) => {
       const matchesQuery = !q || `${app.name} ${app.category} ${app.description}`.toLowerCase().includes(q);
       const matchesCategory = category === "All" || app.category === category;
-      return matchesQuery && matchesCategory;
+      const matchesKind = kindFilter === "all" || (app.kind || "app") === kindFilter;
+      return matchesQuery && matchesCategory && matchesKind;
     });
-  }, [apps, query, category]);
+  }, [apps, query, category, kindFilter]);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -349,26 +351,38 @@ export default function App() {
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
           {tab === "Explore" && (
             <>
-              <View style={styles.hero}>
-                <Text style={styles.eyebrow}>BUILT FOR WHAT'S NEXT</Text>
-                <Text style={styles.heroTitle}>Discover what's{"\n"}being built in Malawi.</Text>
-                <Text style={styles.heroText}>Find useful apps, meet local builders and bring your next idea to life.</Text>
-                <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>⌕</Text>
-                  <TextInput
-                    accessibilityLabel="Search apps"
-                    placeholder="Search apps and categories"
-                    placeholderTextColor={COLORS.muted}
-                    value={query}
-                    onChangeText={setQuery}
-                    style={styles.searchInput}
-                    returnKeyType="search"
-                  />
-                </View>
+              <View style={styles.searchBox}>
+                <Text style={styles.searchIcon}>⌕</Text>
+                <TextInput
+                  accessibilityLabel="Search apps and websites"
+                  placeholder="Search apps & websites"
+                  placeholderTextColor={COLORS.muted}
+                  value={query}
+                  onChangeText={setQuery}
+                  style={styles.searchInput}
+                  returnKeyType="search"
+                />
+              </View>
+              <View style={styles.storeTabs}>
+                {([
+                  ["all", "For you"],
+                  ["app", "Apps"],
+                  ["website", "Websites"],
+                ] as ["all" | "app" | "website", string][]).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setKindFilter(key)}
+                    style={[styles.storeTab, kindFilter === key && styles.storeTabActive]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: kindFilter === key }}
+                  >
+                    <Text style={[styles.storeTabText, kindFilter === key && styles.storeTabTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
               <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>Explore apps</Text>
+                <Text style={styles.sectionTitle}>{kindFilter === "website" ? "Explore websites" : kindFilter === "app" ? "Explore apps" : "Explore apps & websites"}</Text>
                 <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -581,32 +595,37 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   app: { flex: 1, backgroundColor: COLORS.background },
-  header: { minHeight: 68, paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  header: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandMark: { width: 38, height: 38, borderRadius: 11, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
+  brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
   brandSub: { color: COLORS.muted, fontSize: 8, fontWeight: "700", letterSpacing: 1.3, marginTop: 2 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, alignItems: "center", justifyContent: "center" },
   avatarText: { color: COLORS.text, fontWeight: "800" },
   content: { flex: 1 },
-  contentInner: { paddingHorizontal: 18, paddingTop: 18 },
-  hero: { padding: 20, borderRadius: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  contentInner: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+  hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
   heroText: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 10, marginBottom: 18 },
-  searchBox: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, backgroundColor: COLORS.background, borderRadius: 11, borderWidth: 1, borderColor: COLORS.border },
+  searchBox: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
   searchIcon: { color: COLORS.muted, fontSize: 25, marginRight: 8 },
-  searchInput: { flex: 1, color: COLORS.text, fontSize: 13, paddingVertical: 10 },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 10 },
+  storeTabs: { flexDirection: "row", gap: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 12, marginBottom: 14 },
+  storeTab: { paddingTop: 9, paddingBottom: 11, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  storeTabActive: { borderBottomColor: COLORS.accent },
+  storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "600" },
+  storeTabTextActive: { color: COLORS.accent, fontWeight: "700" },
   sectionHeading: { marginTop: 25, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: "800" },
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
-  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentSoft },
+  chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  chipActive: { borderColor: "#CDE8D2", backgroundColor: "#E8F5E9" },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
-  chipTextActive: { color: "#DAD5FF" },
-  appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
+  chipTextActive: { color: "#188038" },
+  appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 16, borderWidth: 1, borderColor: "#ECEFF1", backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
   appIcon: { width: 53, height: 53, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   appDetails: { flex: 1 },
@@ -615,24 +634,24 @@ const styles = StyleSheet.create({
   appDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
   chevron: { color: COLORS.muted, fontSize: 25, paddingHorizontal: 2 },
   emptyText: { color: COLORS.muted, padding: 18, textAlign: "center" },
-  infoBanner: { padding: 17, marginTop: 15, backgroundColor: COLORS.accentSoft, borderWidth: 1, borderColor: "#3C3970", borderRadius: 15 },
+  infoBanner: { padding: 17, marginTop: 15, backgroundColor: "#F7FBF7", borderWidth: 1, borderColor: "#DDEFE0", borderRadius: 16 },
   infoTitle: { color: COLORS.text, fontWeight: "800", fontSize: 15 },
   infoText: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
   secondaryButton: { alignSelf: "flex-start", marginTop: 13, paddingVertical: 8 },
-  secondaryButtonText: { color: "#DAD5FF", fontSize: 12, fontWeight: "800" },
+  secondaryButtonText: { color: "#188038", fontSize: 12, fontWeight: "800" },
   pageTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900", letterSpacing: -0.5, marginTop: 7 },
   pageIntro: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 7, marginBottom: 20 },
   composeCard: { padding: 16, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   composePrompt: { color: COLORS.muted, fontSize: 13 },
   mediaAttachButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.background },
-  mediaAttachText: { color: "#DAD5FF", fontSize: 11, fontWeight: "800" },
+  mediaAttachText: { color: "#188038", fontSize: 11, fontWeight: "800" },
   selectedMedia: { marginTop: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 9, backgroundColor: COLORS.background, borderRadius: 8 },
   selectedMediaText: { color: COLORS.muted, fontSize: 10, flex: 1 },
-  removeMediaText: { color: "#FF8F9B", fontSize: 10, fontWeight: "800", marginLeft: 10 },
+  removeMediaText: { color: "#D93025", fontSize: 10, fontWeight: "800", marginLeft: 10 },
   postMediaImage: { width: "100%", height: 230, marginTop: 12, borderRadius: 10, backgroundColor: COLORS.background },
   mediaLink: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8 },
-  mediaLinkText: { color: "#DAD5FF", fontSize: 12, fontWeight: "800" },
-  composeAction: { color: "#DAD5FF", fontSize: 12, fontWeight: "800", marginTop: 14 },
+  mediaLinkText: { color: "#188038", fontSize: 12, fontWeight: "800" },
+  composeAction: { color: "#188038", fontSize: 12, fontWeight: "800", marginTop: 14 },
   postComposerInput: { minHeight: 82, maxHeight: 180, marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13, lineHeight: 19, textAlignVertical: "top" },
   composeFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   composeLimit: { color: COLORS.muted, fontSize: 10 },
@@ -641,11 +660,11 @@ const styles = StyleSheet.create({
   postCard: { padding: 15, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 12 },
   postHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   smallAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentSoft, alignItems: "center", justifyContent: "center" },
-  smallAvatarText: { color: "#DAD5FF", fontWeight: "900" },
+  smallAvatarText: { color: "#188038", fontWeight: "900" },
   postIdentity: { flex: 1 },
   postName: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
   postTag: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
-  postText: { color: "#D6DCEC", fontSize: 13, lineHeight: 20, marginTop: 14 },
+  postText: { color: "#374151", fontSize: 13, lineHeight: 20, marginTop: 14 },
   postActions: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, paddingTop: 13, borderTopWidth: 1, borderTopColor: COLORS.border },
   commentsPanel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
   messageThread: { gap: 8, marginVertical: 12 },
@@ -656,15 +675,15 @@ const styles = StyleSheet.create({
   messageTime: { color: COLORS.muted, fontSize: 9, marginTop: 5 },
   commentItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   commentAuthor: { color: COLORS.text, fontSize: 11, fontWeight: "800" },
-  commentBody: { color: "#D6DCEC", fontSize: 12, lineHeight: 18, marginTop: 3 },
+  commentBody: { color: "#374151", fontSize: 12, lineHeight: 18, marginTop: 3 },
   commentInput: { minHeight: 44, maxHeight: 100, marginTop: 10, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 12, textAlignVertical: "top" },
   postAction: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
-  developerStatus: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderWidth: 1, borderColor: "#275342", backgroundColor: "#102A27", borderRadius: 10, marginBottom: 15 },
+  developerStatus: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderWidth: 1, borderColor: "#B7E1CD", backgroundColor: "#E6F4EA", borderRadius: 10, marginBottom: 15 },
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.green },
   statusText: { color: COLORS.green, fontSize: 11, fontWeight: "700" },
   toolCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, borderRadius: 13, marginBottom: 10 },
   toolIcon: { width: 43, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: COLORS.accentSoft },
-  toolIconText: { color: "#DAD5FF", fontSize: 20, fontWeight: "800" },
+  toolIconText: { color: "#188038", fontSize: 20, fontWeight: "800" },
   toolCopy: { flex: 1 },
   toolTitle: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
   toolDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
@@ -677,13 +696,13 @@ const styles = StyleSheet.create({
   primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#0D1426", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8, paddingBottom: 6 },
+  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 6 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 3 },
   tabIcon: { color: COLORS.muted, fontSize: 20, lineHeight: 22 },
-  tabActive: { color: "#DAD5FF" },
+  tabActive: { color: COLORS.accent },
   tabLabel: { color: COLORS.muted, fontSize: 9, fontWeight: "700" },
-  tabLabelActive: { color: "#DAD5FF" },
-  tabIndicator: { position: "absolute", top: -8, width: 22, height: 2, borderRadius: 1, backgroundColor: COLORS.accent },
-  toast: { position: "absolute", bottom: 72, left: 18, right: 18, padding: 13, borderRadius: 10, backgroundColor: "#252E47", borderWidth: 1, borderColor: COLORS.border },
+  tabLabelActive: { color: COLORS.accent },
+  tabIndicator: { position: "absolute", top: -6, width: 22, height: 3, borderRadius: 2, backgroundColor: COLORS.accent },
+  toast: { position: "absolute", bottom: 72, left: 18, right: 18, padding: 13, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: COLORS.border },
   toastText: { color: COLORS.text, fontSize: 12, textAlign: "center" },
 });
