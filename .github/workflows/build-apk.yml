@@ -22,6 +22,28 @@ jobs:
       - name: Check out native MAS
         uses: actions/checkout@v4
 
+      - name: Validate public Supabase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ]]; then
+            echo "::error::Missing GitHub Actions repository variable EXPO_PUBLIC_SUPABASE_URL."
+            exit 1
+          fi
+          if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
+            exit 1
+          fi
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "::error::Missing GitHub Actions repository variable EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
+            exit 1
+          fi
+          if [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
+            echo "::error::A privileged Supabase key was supplied. Use a publishable key only."
+            exit 1
+          fi
+          echo "Public Supabase configuration is present; values are not printed."
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
