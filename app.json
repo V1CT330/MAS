@@ -8,8 +8,7 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "mw.wealthgrid.mas",
-      "versionCode": 3,
-      "minSdkVersion": 24
+      "versionCode": 3
     },
     "ios": {
       "supportsTablet": true,
