@@ -31,7 +31,7 @@ const COLORS = {
   green: "#188038",
 };
 
-type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; };
+type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; iconUrl?: string | null; createdAt?: string; };
 type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string; mediaUrl?: string | null; mediaType?: "image" | "video" | null };
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 
@@ -119,7 +119,7 @@ export default function App() {
     Promise.resolve(
       supabase
       .from("listings")
-      .select("id,slug,name,tagline,description,category,kind,downloads,rating_avg")
+      .select("id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
       .eq("status", "published")
       .order("created_at", { ascending: false })
       .limit(100),
@@ -136,6 +136,8 @@ export default function App() {
             color: COLORS.accent,
             slug: item.slug,
             kind: item.kind,
+            iconUrl: item.icon_url ?? null,
+            createdAt: item.created_at,
             downloads: item.downloads ?? 0,
             rating: item.rating_avg ?? 0,
           })));
@@ -325,6 +327,10 @@ export default function App() {
     });
   }, [apps, query, category, kindFilter]);
 
+  const topCharts = useMemo(() => [...filteredApps].sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0)).slice(0, 8), [filteredApps]);
+  const topRated = useMemo(() => [...filteredApps].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 8), [filteredApps]);
+  const recentApps = useMemo(() => [...filteredApps].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")).slice(0, 8), [filteredApps]);
+
   const showNotice = (message: string) => {
     setNotice(message);
     setTimeout(() => setNotice(""), 2800);
@@ -332,8 +338,8 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ExpoStatusBar style="light" />
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <ExpoStatusBar style="dark" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.app}>
         <View style={styles.header}>
           <View style={styles.brandRow}>
@@ -386,17 +392,36 @@ export default function App() {
                 <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {["All", "Education", "Business", "Finance"].map((item) => (
+                {["All", "Business", "Education", "Entertainment", "Finance", "Health", "News", "Shopping", "Social", "Tools", "Transport", "Other"].map((item) => (
                   <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
                     <Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
+              {!catalogueLoading && filteredApps.length > 0 ? [
+                { title: "Top charts", items: topCharts },
+                { title: "Top rated", items: topRated },
+                { title: "Recently added", items: recentApps },
+              ].map((shelf) => (
+                <View key={shelf.title} style={styles.nativeShelf}>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.sectionMeta}>MAS STORE</Text></View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
+                    {shelf.items.map((item) => (
+                      <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => item.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(item.slug)}`) : showNotice(`${item.name} is sample content.`)}>
+                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
+                        <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
+                        <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.category} · {item.rating ? item.rating.toFixed(1) + " ★" : (item.kind || "app")}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )) : null}
+
               {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => app.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(app.slug)}`) : showNotice(`${app.name} is sample content. Add Supabase public credentials to load the live catalogue.`)}>
-                  <View style={[styles.appIcon, { backgroundColor: app.color }]}><Text style={styles.appIconText}>{app.mark}</Text></View>
+                  <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
                   <View style={styles.appDetails}>
                     <Text style={styles.appName}>{app.name}</Text>
                     <Text style={styles.appCategory}>{app.category}</Text>
@@ -628,6 +653,14 @@ const styles = StyleSheet.create({
   appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 16, borderWidth: 1, borderColor: "#ECEFF1", backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
   appIcon: { width: 53, height: 53, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
+  appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
+  nativeShelf: { marginTop: 2, marginBottom: 5 },
+  nativeShelfRow: { gap: 14, paddingBottom: 8 },
+  nativeShelfItem: { width: 104 },
+  nativeShelfIcon: { width: 92, height: 92, borderRadius: 19, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
+  nativeShelfIconImage: { width: "100%", height: "100%" },
+  nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
+  nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
   appDetails: { flex: 1 },
   appName: { color: COLORS.text, fontWeight: "800", fontSize: 14 },
   appCategory: { color: COLORS.accent, fontSize: 10, fontWeight: "800", marginTop: 3 },
