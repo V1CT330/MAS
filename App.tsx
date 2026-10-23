@@ -47,6 +47,66 @@ const samplePosts: FeedPost[] = [
   { id: "sample-startup-circle", name: "Startup Circle Malawi", tag: "Collaboration", text: "What problem in your community would you love to solve with technology? Share your idea and find collaborators." },
 ];
 
+type NativePreviewCard = { title: string; description: string; status: string; action: string };
+const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
+  "Quality checks": [
+    { title: "Listing information", description: "Product name, category, short description and full description.", status: "Checklist", action: "Review listing fields" },
+    { title: "Release package", description: "Confirm the Android package, version and downloadable release are consistent.", status: "Checklist", action: "Review release requirements" },
+    { title: "Store assets", description: "Prepare an app icon, screenshots and any required promotional media.", status: "Checklist", action: "Review asset requirements" },
+    { title: "Privacy and permissions", description: "Explain data collection, permissions and privacy practices before submission.", status: "Checklist", action: "Review privacy requirements" },
+  ],
+  "Developer resources": [
+    { title: "Publishing guide", description: "Prepare your listing, release package, screenshots and release notes.", status: "Guide", action: "Open publishing checklist" },
+    { title: "Listing quality", description: "Write clear descriptions and use original, readable store assets.", status: "Guide", action: "Open quality checks" },
+    { title: "Security basics", description: "Never ship provider secrets or privileged backend keys inside a mobile app.", status: "Security", action: "Review security notes" },
+    { title: "Malawi developer community", description: "Use Social to share projects, find collaborators and discuss opportunities.", status: "Community", action: "Open Social" },
+  ],
+  "Testing": [
+    { title: "Launch and navigation", description: "Verify the app opens and every tab and back action works on a real Android phone.", status: "Manual test", action: "Record test status" },
+    { title: "Account flows", description: "Check signed-out, signed-in, expired-session and sign-out states.", status: "Integration test", action: "Review account test" },
+    { title: "Store actions", description: "Test listing details, saving, reviews and secure download links.", status: "Integration test", action: "Review store test" },
+    { title: "Social actions", description: "Test posts, media, comments, reactions, connections and direct messages.", status: "Integration test", action: "Review Social test" },
+  ],
+  "Console settings": [
+    { title: "Developer profile", description: "Manage public developer identity and profile information.", status: "Account", action: "Open public profile" },
+    { title: "Publishing preferences", description: "Review default listing and release preferences before publishing.", status: "Preferences", action: "Review publishing checklist" },
+    { title: "Notifications", description: "Review MAS account notifications in the Profile tab.", status: "Available", action: "Open notifications" },
+  ],
+  "Security": [
+    { title: "Mobile client keys", description: "Only public Supabase client configuration belongs in the app. Keep service-role and provider secrets server-side.", status: "Security rule", action: "Review security rule" },
+    { title: "Session handling", description: "Sessions are persisted securely through the configured native storage adapter; verify sign-in and sign-out on device.", status: "Test required", action: "Review account tests" },
+    { title: "Row-level security", description: "Production data access depends on correct Supabase RLS policies and storage permissions.", status: "Backend check", action: "Review backend checks" },
+  ],
+  "Store management": [
+    { title: "Published catalogue", description: "Published listings are shown in Explore when the MAS backend is configured.", status: "Native", action: "Open Explore" },
+    { title: "Product details", description: "Listing pages show descriptions, versions, ratings and reviews where data is available.", status: "Native", action: "Review listing screens" },
+    { title: "Developer listings", description: "Create and review product drafts in the native Developer Space.", status: "Native", action: "Open My applications" },
+  ],
+  "Developer assistant": [
+    { title: "Prepare a listing", description: "Get your product name, category, tagline, description and release information ready.", status: "Workflow", action: "Start a product draft" },
+    { title: "Improve store quality", description: "Use concise descriptions, clear screenshots and accurate feature claims.", status: "Guidance", action: "Open quality checks" },
+    { title: "Plan a release", description: "Check version details, release notes and package readiness before submission.", status: "Workflow", action: "Open publishing checklist" },
+  ],
+  "Team management": [
+    { title: "Team roles", description: "Plan who can manage listings, publish releases and view analytics.", status: "Integration pending", action: "Review team access" },
+    { title: "Access review", description: "Only grant collaborators the permissions they need for their work.", status: "Security", action: "Review access guidance" },
+  ],
+  "Promote a product": [
+    { title: "Product description", description: "Prepare a concise value proposition and the audience your product serves.", status: "Preparation", action: "Review listing" },
+    { title: "Campaign assets", description: "Prepare original screenshots, a logo and promotional copy.", status: "Preparation", action: "Review asset requirements" },
+    { title: "Campaign analytics", description: "Promotion performance requires connected campaign and analytics services.", status: "Integration pending", action: "Review analytics requirements" },
+  ],
+  "Spotlight": [
+    { title: "Featured product readiness", description: "Keep your listing complete, current and easy to understand.", status: "Preparation", action: "Open quality checks" },
+    { title: "Feature submission", description: "Featured placement requires a connected submission and review workflow.", status: "Integration pending", action: "Review publishing checklist" },
+  ],
+  "My public profile": [
+    { title: "Developer identity", description: "Your public profile helps people understand who builds and maintains a product.", status: "Profile", action: "Review profile" },
+    { title: "Published products", description: "Published listings connect your developer identity with your work on MAS.", status: "Catalogue", action: "Open My applications" },
+    { title: "Community presence", description: "Use MAS Social to introduce projects and connect with other builders.", status: "Community", action: "Open Social" },
+  ],
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
@@ -806,7 +866,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist"].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -895,7 +955,35 @@ export default function App() {
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
               ) : null}
-              <Text style={styles.disclaimer}>Only screens marked native are rebuilt in this app. Payment, identity verification, wallet transactions and remaining console tools will not be treated as complete until their native screens and backend workflows are implemented and tested.</Text>
+              {nativeDeveloperPreviews[developerScreen] ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Native workspace preview</Text>
+                    <Text style={styles.infoText}>This screen is now available in the Android app. Items marked integration pending still need their live backend or provider connection before they can perform real account actions.</Text>
+                  </View>
+                  {nativeDeveloperPreviews[developerScreen].map((item) => (
+                    <View key={item.title} style={styles.toolCard}>
+                      <View style={styles.toolCopy}>
+                        <Text style={styles.toolTitle}>{item.title}</Text>
+                        <Text style={styles.toolDescription}>{item.description}</Text>
+                        <Text style={styles.postTag}>{item.status}</Text>
+                      </View>
+                      <TouchableOpacity accessibilityRole="button" onPress={() => {
+                        if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
+                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
+                        else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
+                        else if (item.action === "Open My applications") setDeveloperScreen("My applications");
+                        else if (item.action === "Start a product draft") setDeveloperScreen("Publish a product");
+                        else if (item.action === "Open quality checks") setDeveloperScreen("Quality checks");
+                        else if (item.action === "Open publishing checklist") setDeveloperScreen("Publishing checklist");
+                        else showNotice(item.status === "Integration pending" || item.status === "Backend check" || item.status === "Integration test" ? "This action needs its backend integration and device testing before it can be marked complete." : "Review the checklist above and verify it during native app testing.");
+                      }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
+                    </View>
+                  ))}
+                  <Text style={styles.disclaimer}>These are native preparation and checklist screens, not claims that campaign, team permissions or provider workflows are already connected. Live integrations will be completed in the final integration phase.</Text>
+                </>
+              ) : null}
+              <Text style={styles.disclaimer}>Only screens marked native are rebuilt in this app. Payment, identity verification and wallet transactions remain integration work and will not be treated as complete until their native screens and backend workflows are implemented and tested.</Text>
             </>
           ) : null}
           <View style={styles.bottomSpace}/>
