@@ -128,6 +128,7 @@ export default function App() {
   const [draftKind, setDraftKind] = useState<"app" | "website">("app");
   const [draftWebsiteUrl, setDraftWebsiteUrl] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
+  const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -398,6 +399,58 @@ export default function App() {
     return () => { active = false; };
   }, [developerScreen]);
 
+  const startEditingDraft = (listing: any) => {
+    if (listing.status !== "draft") {
+      showNotice("Only draft listings can be edited here.");
+      return;
+    }
+    setEditingListingId(listing.id);
+    setDraftName(listing.name || "");
+    setDraftTagline(listing.tagline || "");
+    setDraftDescription(listing.description || "");
+    setDraftCategory(listing.category || "Tools");
+    setDraftKind(listing.kind === "website" ? "website" : "app");
+    setDraftWebsiteUrl(listing.website_url || "");
+    setDeveloperScreen("Publish a product");
+    showNotice("Draft loaded for editing.");
+  };
+
+  const deleteNativeDraft = async (listing: any) => {
+    if (listing.status !== "draft") {
+      showNotice("Only unpublished drafts can be deleted from the native app.");
+      return;
+    }
+    if (!isSupabaseConfigured) {
+      showNotice("Draft management needs the MAS backend configuration.");
+      return;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      showNotice("Sign in to manage product drafts.");
+      setDeveloperScreen(null);
+      setTab("Profile");
+      return;
+    }
+    const { error } = await supabase.from("listings")
+      .delete()
+      .eq("id", listing.id)
+      .eq("developer_id", authData.user.id)
+      .eq("status", "draft");
+    if (error) {
+      showNotice(error.message || "Could not delete this draft.");
+      return;
+    }
+    setDeveloperRows((rows) => rows.filter((row) => row.id !== listing.id));
+    if (editingListingId === listing.id) {
+      setEditingListingId(null);
+      setDraftName("");
+      setDraftTagline("");
+      setDraftDescription("");
+      setDraftWebsiteUrl("");
+    }
+    showNotice("Product draft deleted.");
+  };
+
   const createNativeDraft = async () => {
     const name = draftName.trim();
     const description = draftDescription.trim();
@@ -409,12 +462,38 @@ export default function App() {
     if (authError || !authData.user) { showNotice("Sign in to create a product draft."); setDeveloperScreen(null); setTab("Profile"); return; }
     setDraftSaving(true);
     const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "listing";
-    const { data, error } = await supabase.from("listings").insert({ developer_id: authData.user.id, name, slug, kind: draftKind, category: draftCategory, tagline: draftTagline.trim() || null, description, website_url: draftKind === "website" ? draftWebsiteUrl.trim() : null, status: "draft" }).select("id,name,slug,kind,category,tagline,description,status,downloads,rating_avg,rating_count,created_at").single();
+    const payload = {
+      name,
+      slug,
+      kind: draftKind,
+      category: draftCategory,
+      tagline: draftTagline.trim() || null,
+      description,
+      website_url: draftKind === "website" ? draftWebsiteUrl.trim() : null,
+    };
+    const result = editingListingId
+      ? await supabase.from("listings").update(payload)
+          .eq("id", editingListingId)
+          .eq("developer_id", authData.user.id)
+          .eq("status", "draft")
+          .select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").maybeSingle()
+      : await supabase.from("listings").insert({
+          ...payload,
+          developer_id: authData.user.id,
+          status: "draft",
+        }).select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").single();
     setDraftSaving(false);
-    if (error || !data) { showNotice(error?.message || "Could not save the product draft."); return; }
-    setDeveloperRows((rows) => [data, ...rows]);
+    if (result.error || !result.data) {
+      showNotice(result.error?.message || "The draft was not updated. It may no longer be editable.");
+      return;
+    }
+    setDeveloperRows((rows) => editingListingId
+      ? rows.map((row) => row.id === editingListingId ? { ...row, ...result.data } : row)
+      : [result.data, ...rows]);
+    const wasEditing = Boolean(editingListingId);
+    setEditingListingId(null);
     setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl("");
-    showNotice("Product draft saved. Assets and submission checks still need to be completed.");
+    showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Assets and submission checks still need to be completed.");
     setDeveloperScreen("My applications");
   };
 
@@ -1007,16 +1086,17 @@ export default function App() {
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setDeveloperScreen(null)}><Text style={styles.secondaryButtonText}>← Back to developer space</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{developerScreen}</Text>
-              <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? "Create a native product draft. Asset uploads, submission and review workflows remain separate work to complete." : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
+              <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? (editingListingId ? "Edit an unpublished product draft." : "Create a native product draft. Asset uploads, submission and review workflows remain separate work to complete.") : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
               {developerScreen === "Publish a product" ? (
                 <View style={styles.composeCard}>
+                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
                   <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && styles.storeTabActive]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && styles.storeTabTextActive]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && styles.storeTabActive]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && styles.storeTabTextActive]}>Website</Text></TouchableOpacity></View>
                   <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && styles.chipActive]}><Text style={[styles.chipText,draftCategory === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</ScrollView>
                   {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
-                  <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving draft…" : "Save product draft"}</Text></TouchableOpacity>
+                  <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Update product draft" : "Save product draft"}</Text></TouchableOpacity>
                   <Text style={styles.disclaimer}>This saves a draft only. Native icon/APK upload, screenshot management, full readiness checks and submission are still required before the publishing workflow is complete.</Text>
                 </View>
               ) : developerScreen === "Developer dashboard" ? (
@@ -1026,7 +1106,7 @@ export default function App() {
                 </>
               ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Reviews" || developerScreen === "Publishing checklist" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}</View></View>)}
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status === "draft" ? startEditingDraft(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status === "draft" ? <Text style={styles.postTag}>Tap to edit draft</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
