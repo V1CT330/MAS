@@ -14,6 +14,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "mw.wealthgrid.mas"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "229fd641-5313-4f0e-af76-b22b120ee61b"
+      }
     }
   }
 }
