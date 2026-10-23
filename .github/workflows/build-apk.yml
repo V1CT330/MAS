@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest native APK build for this branch running.
+concurrency:
+  group: native-mas-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     name: Compile installable Android APK
