@@ -115,6 +115,7 @@ export default function App() {
   const [sectionPosting, setSectionPosting] = useState(false);
   const [selectedAppDetails, setSelectedAppDetails] = useState<any>(null);
   const [selectedVersions, setSelectedVersions] = useState<any[]>([]);
+  const [selectedScreenshotUrls, setSelectedScreenshotUrls] = useState<string[]>([]);
   const [selectedReviews, setSelectedReviews] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewDraft, setReviewDraft] = useState("");
@@ -336,7 +337,7 @@ export default function App() {
     let active = true;
     const loadListingDetails = async () => {
       if (!selectedApp || selectedApp.id.startsWith("sample-") || !isSupabaseConfigured) {
-        setSelectedAppDetails(null); setSelectedVersions([]); setSelectedReviews([]); setDetailLoading(false); return;
+        setSelectedAppDetails(null); setSelectedVersions([]); setSelectedReviews([]); setSelectedScreenshotUrls([]); setDetailLoading(false); return;
       }
       setDetailLoading(true);
       const [listingResult, versionsResult, reviewsResult] = await Promise.all([
@@ -344,7 +345,10 @@ export default function App() {
         supabase.from("listing_versions").select("id,version,release_notes,changelog,file_url,size_bytes,status,created_at").eq("listing_id", selectedApp.id).order("created_at", { ascending: false }).limit(20),
         supabase.from("reviews").select("id,user_id,rating,body,created_at").eq("listing_id", selectedApp.id).order("created_at", { ascending: false }).limit(30),
       ]);
+      const screenshotPaths: string[] = Array.isArray(listingResult.data?.screenshots) ? listingResult.data.screenshots : [];
+      const signedScreenshotResults = await Promise.all(screenshotPaths.slice(0, 8).map((path: string) => supabase.storage.from("app-assets").createSignedUrl(path, 3600)));
       if (!active) return;
+      setSelectedScreenshotUrls(signedScreenshotResults.map((result: any) => result.data?.signedUrl).filter(Boolean));
       setSelectedAppDetails(listingResult.data ?? null);
       setSelectedVersions(versionsResult.data ?? []);
       setSelectedReviews(reviewsResult.data ?? []);
@@ -929,6 +933,7 @@ export default function App() {
                 <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>About this listing</Text><Text style={styles.sectionMeta}>{selectedAppDetails.price_mwk > 0 ? "MK" + Number(selectedAppDetails.price_mwk).toLocaleString() : "FREE"}</Text></View>
                 <Text style={styles.detailDescription}>{selectedAppDetails.description || selectedAppDetails.tagline || selectedApp.description}</Text>
                 {selectedAppDetails.monetization ? <Text style={styles.disclaimer}>Monetization: {selectedAppDetails.monetization}</Text> : null}
+                {selectedScreenshotUrls.length ? <><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Screenshots</Text><Text style={styles.sectionMeta}>{selectedScreenshotUrls.length}</Text></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>{selectedScreenshotUrls.map((url, index) => <Image key={`${url}-${index}`} accessibilityLabel={`Product screenshot ${index + 1}`} source={{ uri: url }} style={styles.listingScreenshot} resizeMode="cover" />)}</ScrollView></> : null}
               </> : null}
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Versions</Text><Text style={styles.sectionMeta}>{selectedVersions.length}</Text></View>
               {selectedVersions.map((version) => <View key={version.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Version {version.version}{version.status === "published" ? " · Release" : " · " + version.status}</Text><Text style={styles.toolDescription}>{version.release_notes || version.changelog || "No release notes provided."}</Text>{version.size_bytes ? <Text style={styles.postTag}>{(version.size_bytes / 1048576).toFixed(1)} MB · {new Date(version.created_at).toLocaleDateString()}</Text> : null}</View></View>)}
@@ -1401,6 +1406,7 @@ const styles = StyleSheet.create({
   detailIconText: { color: "#FFFFFF", fontSize: 46, fontWeight: "900" },
   detailTitle: { color: COLORS.text, fontSize: 25, fontWeight: "900", marginTop: 16, textAlign: "center" },
   detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
+  listingScreenshot: { width: 220, height: 390, borderRadius: 14, backgroundColor: "#F5F7F6", borderWidth: 1, borderColor: "#E5E7EB", marginRight: 10 },
   detailDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
   detailStats: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-around", gap: 8, marginTop: 22, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
   ratingRow: { flexDirection: "row", gap: 10, marginTop: 10 },
