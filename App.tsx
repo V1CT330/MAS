@@ -139,6 +139,8 @@ export default function App() {
   const [activeConversationUserId, setActiveConversationUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null }[]>([]);
+  const [conversationPreviews, setConversationPreviews] = useState<{ userId: string; name: string; body: string; createdAt: string; unread: number }[]>([]);
+  const [conversationLoading, setConversationLoading] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageSending, setMessageSending] = useState(false);
@@ -450,6 +452,63 @@ export default function App() {
     const { data } = supabase.storage.from("social-media").getPublicUrl(path);
     return { url: data.publicUrl, type: selectedMedia.type };
   };
+
+  const loadConversationPreviews = async () => {
+    if (!isSupabaseConfigured) { setConversationPreviews([]); return; }
+    setConversationLoading(true);
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      setConversationPreviews([]);
+      setConversationLoading(false);
+      return;
+    }
+    const userId = authData.user.id;
+    const { data, error } = await supabase.from("social_messages")
+      .select("id,sender_id,recipient_id,body,created_at,read_at")
+      .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (error) {
+      setConversationLoading(false);
+      showNotice(error.message || "Could not load your conversations.");
+      return;
+    }
+    const grouped = new Map<string, { userId: string; name: string; body: string; createdAt: string; unread: number }>();
+    (data ?? []).forEach((message: any) => {
+      const partnerId = message.sender_id === userId ? message.recipient_id : message.sender_id;
+      if (!partnerId || partnerId === userId) return;
+      const current = grouped.get(partnerId);
+      if (!current) {
+        grouped.set(partnerId, {
+          userId: partnerId,
+          name: "MAS member",
+          body: message.body || "",
+          createdAt: message.created_at,
+          unread: message.recipient_id === userId && !message.read_at ? 1 : 0,
+        });
+      } else if (message.recipient_id === userId && !message.read_at) {
+        current.unread += 1;
+      }
+    });
+    const partnerIds = [...grouped.keys()];
+    if (partnerIds.length) {
+      const { data: profiles } = await supabase.from("public_profiles")
+        .select("id,display_name,developer_name")
+        .in("id", partnerIds);
+      const names = new Map((profiles ?? []).map((profile: any) => [
+        profile.id, profile.developer_name || profile.display_name || "MAS member",
+      ]));
+      grouped.forEach((preview, id) => { preview.name = String(names.get(id) || "MAS member"); });
+    }
+    setConversationPreviews([...grouped.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    setConversationLoading(false);
+  };
+
+  useEffect(() => {
+    if (tab === "Social" && socialSection === "Messages" && !activeConversationUserId) {
+      void loadConversationPreviews();
+    }
+  }, [tab, socialSection, activeConversationUserId]);
 
   const openConversation = async (recipientId: string) => {
     if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
@@ -794,12 +853,29 @@ export default function App() {
                   {!activeConversationUserId ? (
                     <>
                       <Text style={styles.disclaimer}>Choose a member from a Social post to open a private conversation.</Text>
-                      {posts.filter((post) => post.authorId).map((post) => (
-                        <TouchableOpacity key={post.authorId} style={styles.toolCard} onPress={() => post.authorId ? void openConversation(post.authorId) : undefined}>
-                          <View style={styles.toolIcon}><Text style={styles.toolIconText}>{post.name.slice(0,1).toUpperCase()}</Text></View>
-                          <View style={styles.toolCopy}><Text style={styles.toolTitle}>{post.name}</Text><Text style={styles.toolDescription}>Open private conversation</Text></View><Text style={styles.chevron}>›</Text>
+                      {conversationLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 12 }} /> : null}
+                      {conversationPreviews.map((conversation) => (
+                        <TouchableOpacity key={conversation.userId} style={styles.toolCard} onPress={() => void openConversation(conversation.userId)}>
+                          <View style={styles.toolIcon}><Text style={styles.toolIconText}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
+                          <View style={styles.toolCopy}>
+                            <Text style={styles.toolTitle}>{conversation.name}{conversation.unread ? ` · ${conversation.unread} unread` : ""}</Text>
+                            <Text numberOfLines={1} style={styles.toolDescription}>{conversation.body || "Open private conversation"}</Text>
+                            <Text style={styles.postTag}>{conversation.createdAt ? new Date(conversation.createdAt).toLocaleString() : ""}</Text>
+                          </View>
+                          <Text style={styles.chevron}>›</Text>
                         </TouchableOpacity>
                       ))}
+                      {!conversationLoading && !conversationPreviews.length ? (
+                        <>
+                          <Text style={styles.emptyText}>No conversations yet. Start one by selecting Message on a member's Social post.</Text>
+                          {posts.filter((post) => post.authorId).map((post) => (
+                            <TouchableOpacity key={post.authorId} style={styles.toolCard} onPress={() => post.authorId ? void openConversation(post.authorId) : undefined}>
+                              <View style={styles.toolIcon}><Text style={styles.toolIconText}>{post.name.slice(0,1).toUpperCase()}</Text></View>
+                              <View style={styles.toolCopy}><Text style={styles.toolTitle}>{post.name}</Text><Text style={styles.toolDescription}>Start a private conversation</Text></View><Text style={styles.chevron}>›</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </>
+                      ) : null}
                     </>
                   ) : (
                     <>
