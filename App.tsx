@@ -137,6 +137,10 @@ export default function App() {
   const [draftReleaseFile, setDraftReleaseFile] = useState<{ uri: string; name: string; mimeType: string; size: number | null } | null>(null);
   const [draftVersion, setDraftVersion] = useState("1.0.0");
   const [draftChangelog, setDraftChangelog] = useState("First release");
+  const [draftScreenshots, setDraftScreenshots] = useState<{ uri: string; fileName: string; mimeType: string }[]>([]);
+  const [existingScreenshots, setExistingScreenshots] = useState<string[]>([]);
+  const [draftKeywords, setDraftKeywords] = useState("");
+  const [draftTags, setDraftTags] = useState("");
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -397,7 +401,7 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
-      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
       if (developerScreen === "Reviews" && data?.length) {
@@ -435,6 +439,10 @@ export default function App() {
     setDraftReleaseFile(null);
     setDraftVersion("1.0.0");
     setDraftChangelog("First release");
+    setDraftScreenshots([]);
+    setExistingScreenshots(Array.isArray(listing.screenshots) ? listing.screenshots : []);
+    setDraftKeywords(Array.isArray(listing.keywords) ? listing.keywords.join(", ") : "");
+    setDraftTags(Array.isArray(listing.tags) ? listing.tags.join(", ") : "");
     setDeveloperScreen("Publish a product");
     showNotice("Draft loaded for editing.");
   };
@@ -532,6 +540,9 @@ export default function App() {
       tagline: draftTagline.trim() || null,
       description,
       website_url: draftKind === "website" ? draftWebsiteUrl.trim() : null,
+      screenshots: existingScreenshots,
+      keywords: draftKeywords.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 12),
+      tags: draftTags.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 8),
     };
     if (draftIcon) {
       try {
@@ -545,6 +556,25 @@ export default function App() {
       } catch (iconError: any) {
         setDraftSaving(false);
         showNotice(iconError?.message || "Could not upload the product icon.");
+        return;
+      }
+    }
+    if (draftScreenshots.length) {
+      try {
+        const uploadedPaths: string[] = [];
+        for (const screenshot of draftScreenshots) {
+          const response = await fetch(screenshot.uri);
+          const blob = await response.blob();
+          const extension = (screenshot.fileName.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+          const path = `${authData.user.id}/screenshots/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+          const { error: screenshotError } = await supabase.storage.from("app-assets").upload(path, blob, { contentType: screenshot.mimeType, upsert: false });
+          if (screenshotError) throw screenshotError;
+          uploadedPaths.push(path);
+        }
+        payload.screenshots = [...existingScreenshots, ...uploadedPaths].slice(0, 8);
+      } catch (screenshotError: any) {
+        setDraftSaving(false);
+        showNotice(screenshotError?.message || "Could not upload listing screenshots.");
         return;
       }
     }
@@ -588,9 +618,18 @@ export default function App() {
       }
     }
     setEditingListingId(null);
-    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftVersion("1.0.0"); setDraftChangelog("First release");
+    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftVersion("1.0.0"); setDraftChangelog("First release"); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags("");
     showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Complete the checklist before submitting for review.");
     setDeveloperScreen("My applications");
+  };
+
+  const chooseDraftScreenshots = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { showNotice("Allow photo access to choose listing screenshots."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsMultipleSelection: true, selectionLimit: 5, quality: 0.85 });
+    if (result.canceled || !result.assets?.length) return;
+    const selected = result.assets.map((asset) => ({ uri: asset.uri, fileName: asset.fileName || `screenshot-${Date.now()}.jpg`, mimeType: asset.mimeType || "image/jpeg" }));
+    setDraftScreenshots((current) => [...current, ...selected].slice(0, Math.max(0, 8 - existingScreenshots.length)));
   };
 
   const chooseDraftReleaseFile = async () => {
@@ -1224,6 +1263,11 @@ export default function App() {
                   </>}
                   <Text style={styles.fieldLabel}>Product icon</Text>
                   <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftIcon()}><Text style={styles.mediaAttachText}>{draftIcon ? `Icon selected · ${draftIcon.fileName}` : "＋ Choose product icon"}</Text></TouchableOpacity>
+                  <Text style={styles.fieldLabel}>Listing screenshots (up to 8 total)</Text>
+                  <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftScreenshots()}><Text style={styles.mediaAttachText}>＋ Choose screenshots ({existingScreenshots.length + draftScreenshots.length}/8)</Text></TouchableOpacity>
+                  {draftScreenshots.length ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftScreenshots.map((item) => item.fileName).join(", ")}</Text><TouchableOpacity onPress={() => setDraftScreenshots([])}><Text style={styles.removeMediaText}>Clear new screenshots</Text></TouchableOpacity></View> : null}
+                  <Text style={styles.fieldLabel}>Keywords (comma-separated, up to 12)</Text><TextInput value={draftKeywords} onChangeText={(value) => setDraftKeywords(value.slice(0,500))} placeholder="malawi, business, productivity" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                  <Text style={styles.fieldLabel}>Tags (comma-separated, up to 8)</Text><TextInput value={draftTags} onChangeText={(value) => setDraftTags(value.slice(0,300))} placeholder="startup, local, useful" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
                   <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Update product draft" : "Save product draft"}</Text></TouchableOpacity>
