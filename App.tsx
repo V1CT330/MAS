@@ -50,6 +50,8 @@ const samplePosts: FeedPost[] = [
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
+  const [sectionPostDraft, setSectionPostDraft] = useState("");
+  const [sectionPosting, setSectionPosting] = useState(false);
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -340,6 +342,23 @@ export default function App() {
     showNotice("Connection request sent.");
   };
 
+  const publishSocialSectionPost = async () => {
+    const body = sectionPostDraft.trim();
+    if (body.length < 20) { showNotice("Please write at least 20 characters so members understand your post."); return; }
+    if (!isSupabaseConfigured) { showNotice("Publishing needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in from Profile to publish in Social."); setTab("Profile"); return; }
+    setSectionPosting(true);
+    const prefix = "[" + socialSection.toUpperCase() + "] ";
+    const { data, error } = await supabase.from("social_posts").insert({ author_id: authData.user.id, body: prefix + body }).select("id,created_at").single();
+    setSectionPosting(false);
+    if (error || !data) { showNotice(error?.message || "Could not publish your post."); return; }
+    setPosts((current) => [{ id: data.id, authorId: authData.user.id, name: authData.user.email || "You", tag: new Date(data.created_at || Date.now()).toLocaleDateString(), text: prefix + body, createdAt: data.created_at }, ...current]);
+    setSectionPostDraft("");
+    setFeedSource("live");
+    showNotice("Your " + socialSection + " post is live.");
+  };
+
   const toggleComments = async (postId: string) => {
     if (openCommentsPostId === postId) { setOpenCommentsPostId(null); return; }
     setOpenCommentsPostId(postId);
@@ -421,8 +440,16 @@ export default function App() {
                   <View style={styles.detailStat}><Text style={styles.detailStatValue}>{selectedApp.developer || "MAS developer"}</Text><Text style={styles.detailStatLabel}>Developer</Text></View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.primaryButton} onPress={() => selectedApp.slug ? void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/apps/" + encodeURIComponent(selectedApp.slug)).catch(() => showNotice("Could not open the full listing. Check your connection and try again.")) : showNotice("This is sample catalogue content; live actions are unavailable.")}>
-                <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website listing" : "View versions, reviews & install options"}</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={async () => {
+                if (selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be saved. Connect to the live MAS catalogue first."); return; }
+                if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
+                const { data: authData, error: authError } = await supabase.auth.getUser();
+                if (authError || !authData.user) { showNotice("Sign in to save this listing to your library."); setSelectedApp(null); setTab("Profile"); return; }
+                const { error } = await supabase.from("wishlist").insert({ user_id: authData.user.id, listing_id: selectedApp.id });
+                showNotice(error ? (error.code === "23505" ? "This listing is already saved." : error.message || "Could not save listing.") : "Saved to your library.");
+              }}><Text style={styles.primaryButtonText}>＋ Save to my library</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => selectedApp.slug ? void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/apps/" + encodeURIComponent(selectedApp.slug)).catch(() => showNotice("Could not open the full listing. Check your connection and try again.")) : showNotice("This is sample catalogue content; live actions are unavailable.")}>
+                <Text style={styles.secondaryButtonText}>{selectedApp.kind === "website" ? "Open website listing →" : "View versions, reviews & install options →"}</Text>
               </TouchableOpacity>
               <Text style={styles.disclaimer}>This native detail page is a first step toward full parity. Version history, reviews, installation and saved-library actions still need to be rebuilt and verified natively before the feature-complete gate can pass.</Text>
             </>
@@ -603,34 +630,21 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>DEMO CONTENT</Text></View>
-                  {({
-                    Collabo: [
-                      ["Build Malawi", "Looking for React Native and backend developers", "Technology · Collaboration"],
-                      ["Campus Innovators", "Seeking a designer and product researcher", "Education · Team building"],
-                      ["Open Source Malawi", "Join a community project solving local problems", "Open source · Community"],
-                    ],
-                    Investors: [
-                      ["Early-stage technology", "Connect with founders building scalable digital products", "Investor network · Preview"],
-                      ["Startup pitch room", "Prepare a short pitch and find potential mentors", "Mentorship · Preview"],
-                    ],
-                    Grants: [
-                      ["Youth innovation funding", "Explore support opportunities for youth-led ideas", "Grant discovery · Preview"],
-                      ["Digital skills initiative", "Find programmes supporting technology education", "Skills · Preview"],
-                    ],
-                    Crowdfund: [
-                      ["Community project", "Showcase a local problem and rally community support", "Crowdfunding · Preview"],
-                      ["Launch your MVP", "Share a project goal and build an early supporter base", "Startup · Preview"],
-                    ],
-                  } as Record<Exclude<SocialSection, "Feed" | "Messages">, string[][]>)[socialSection].map(([title, description, meta]) => (
-                    <TouchableOpacity key={title} style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}>
-                      <View style={styles.toolIcon}><Text style={styles.toolIconText}>{socialSection === "Collabo" ? "↗" : socialSection === "Investors" ? "◇" : socialSection === "Grants" ? "▤" : "＋"}</Text></View>
-                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text><Text style={styles.postTag}>{meta}</Text></View>
-                      <Text style={styles.chevron}>›</Text>
-                    </TouchableOpacity>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : "START A CONVERSATION"}</Text></View>
+                  <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Investors" ? "Introduce your startup, investment interests or request a conversation with potential partners." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
+                  <View style={styles.composeCard}>
+                    <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : socialSection === "Investors" ? "Startup, investment interests or partnership request…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
+                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{sectionPostDraft.length}/3000</Text><TouchableOpacity disabled={sectionPosting || sectionPostDraft.trim().length < 20} style={[styles.composeButton, (sectionPosting || sectionPostDraft.trim().length < 20) && { opacity: 0.5 }]} onPress={() => void publishSocialSectionPost()}><Text style={styles.composeButtonText}>{sectionPosting ? "Publishing…" : "Publish to " + socialSection}</Text></TouchableOpacity></View>
+                  </View>
+                  {posts.filter((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")).map((post) => (
+                    <View key={post.id} style={styles.postCard}>
+                      <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0).toUpperCase()}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
+                      <Text style={styles.postText}>{post.text.slice(socialSection.length + 3)}</Text>
+                      <View style={styles.postActions}><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void requestConnection(post.authorId, post.id) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>
+                    </View>
                   ))}
-                  <Text style={styles.disclaimer}>Preview opportunities only. Real applications, funding offers and transactions require verified integrations.</Text>
-                  <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/social")}><Text style={styles.secondaryButtonText}>Open full MAS Social →</Text></TouchableOpacity>
+                  {!posts.some((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")) ? <Text style={styles.emptyText}>No {socialSection.toLowerCase()} posts yet. Publish the first one for the community.</Text> : null}
+                  <Text style={styles.disclaimer}>MAS connects members but does not verify investment offers, guarantee grants, or process crowdfunding payments here. Never send money based only on a social post.</Text>
                 </>
               )}
             </>
