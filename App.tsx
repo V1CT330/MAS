@@ -172,6 +172,8 @@ export default function App() {
   const [category, setCategory] = useState("All");
   const [kindFilter, setKindFilter] = useState<"all" | "app" | "website">("all");
   const [socialSection, setSocialSection] = useState<SocialSection>("Feed");
+  const [socialSearchOpen, setSocialSearchOpen] = useState(false);
+  const [socialSearchQuery, setSocialSearchQuery] = useState("");
   const [activeConversationUserId, setActiveConversationUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null }[]>([]);
@@ -980,6 +982,12 @@ export default function App() {
     showNotice("Comment added.");
   };
 
+  const filteredSocialPosts = useMemo(() => {
+    const q = socialSearchQuery.trim().toLowerCase();
+    if (!q) return posts;
+    return posts.filter((post) => `${post.name} ${post.text}`.toLowerCase().includes(q));
+  }, [posts, socialSearchQuery]);
+
   const filteredApps = useMemo(() => {
     const q = query.trim().toLowerCase();
     return apps.filter((app) => {
@@ -1147,8 +1155,9 @@ export default function App() {
 
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Social" && (
             <>
-              <Text style={styles.pageTitle}>Social</Text>
+              <View style={styles.sectionHeading}><Text style={styles.pageTitle}>Social</Text><TouchableOpacity accessibilityRole="button" onPress={() => { setSocialSearchOpen((open) => !open); if (socialSearchOpen) setSocialSearchQuery(""); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{socialSearchOpen ? "Close search" : "⌕ Search"}</Text></TouchableOpacity></View>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
+              {socialSearchOpen ? <View style={[styles.searchBox,{marginBottom:12}]}><Text style={styles.searchIcon}>⌕</Text><TextInput accessibilityLabel="Search Social posts" placeholder="Search posts and members" placeholderTextColor={COLORS.muted} value={socialSearchQuery} onChangeText={setSocialSearchQuery} style={styles.searchInput} returnKeyType="search" /></View> : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {(["Feed", "Messages", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
                   <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && styles.chipActive]}>
@@ -1196,7 +1205,7 @@ export default function App() {
                     }}><Text style={styles.composeButtonText}>{posting ? "Publishing…" : "Publish post"}</Text></TouchableOpacity></View>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
-                  {posts.map((post) => (
+                  {filteredSocialPosts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                       <Text style={styles.postText}>{post.text.replace(/^\[(COLLABO|INVESTORS|GRANTS|CROWDFUND)\]\s*/, "")}</Text>
@@ -1259,14 +1268,14 @@ export default function App() {
                     <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : socialSection === "Investors" ? "Startup, investment interests or partnership request…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
                     <View style={styles.composeFooter}><Text style={styles.composeLimit}>{sectionPostDraft.length}/3000</Text><TouchableOpacity disabled={sectionPosting || sectionPostDraft.trim().length < 20} style={[styles.composeButton, (sectionPosting || sectionPostDraft.trim().length < 20) && { opacity: 0.5 }]} onPress={() => void publishSocialSectionPost()}><Text style={styles.composeButtonText}>{sectionPosting ? "Publishing…" : "Publish to " + socialSection}</Text></TouchableOpacity></View>
                   </View>
-                  {posts.filter((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")).map((post) => (
+                  {filteredSocialPosts.filter((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")).map((post) => (
                     <View key={post.id} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0).toUpperCase()}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
                       <Text style={styles.postText}>{post.text.slice(socialSection.length + 3)}</Text>
                       <View style={styles.postActions}><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void requestConnection(post.authorId, post.id) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>↗ Connect</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This post has no member profile.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>
                     </View>
                   ))}
-                  {!posts.some((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")) ? <Text style={styles.emptyText}>No {socialSection.toLowerCase()} posts yet. Publish the first one for the community.</Text> : null}
+                  {!filteredSocialPosts.some((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")) ? <Text style={styles.emptyText}>{socialSearchQuery.trim() ? "No posts match your search." : `No ${socialSection.toLowerCase()} posts yet. Publish the first one for the community.`}</Text> : null}
                   <Text style={styles.disclaimer}>MAS connects members but does not verify investment offers, guarantee grants, or process crowdfunding payments here. Never send money based only on a social post.</Text>
                 </>
               )}
