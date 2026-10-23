@@ -229,6 +229,13 @@ export default function App() {
   const [spotlightOpportunity, setSpotlightOpportunity] = useState("App Spotlight");
   const [spotlightListingId, setSpotlightListingId] = useState("");
   const [spotlightPitch, setSpotlightPitch] = useState("");
+  const [betaTesters, setBetaTesters] = useState<any[]>([]);
+  const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
+  const [betaLoading, setBetaLoading] = useState(false);
+  const [betaSaving, setBetaSaving] = useState(false);
+  const [betaListingId, setBetaListingId] = useState("");
+  const [betaTesterEmail, setBetaTesterEmail] = useState("");
+  const [betaChannel, setBetaChannel] = useState("private");
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -538,7 +545,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadDeveloperListings = async () => {
-      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks", "My public profile", "Spotlight"].includes(developerScreen)) return;
+      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks", "My public profile", "Spotlight", "Testing"].includes(developerScreen)) return;
       if (!isSupabaseConfigured) { setDeveloperRows([]); setDeveloperLoading(false); return; }
       setDeveloperLoading(true);
       const { data: authData } = await supabase.auth.getUser();
@@ -1037,7 +1044,7 @@ export default function App() {
   }, [tab, socialSection]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !developerScreen || !["Team management", "Spotlight"].includes(developerScreen)) return;
+    if (!isSupabaseConfigured || !developerScreen || !["Team management", "Spotlight", "Testing"].includes(developerScreen)) return;
     let active = true;
     const loadDeveloperWorkspace = async () => {
       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1063,7 +1070,7 @@ export default function App() {
         setTeamLoading(false);
         if (membersResult.error) showNotice(membersResult.error.message || "Could not load team members.");
         if (activityResult.error) showNotice(activityResult.error.message || "Could not load the team activity log.");
-      } else {
+      } else if (developerScreen === "Spotlight") {
         setSpotlightLoading(true);
         const { data, error } = await supabase.from("spotlight_applications")
           .select("id,listing_id,opportunity,pitch,status,created_at")
@@ -1072,6 +1079,18 @@ export default function App() {
         setSpotlightApplications(data ?? []);
         setSpotlightLoading(false);
         if (error) showNotice(error.message || "Could not load spotlight applications.");
+      } else {
+        setBetaLoading(true);
+        const [testersResult, feedbackResult] = await Promise.all([
+          supabase.from("beta_testers").select("id,listing_id,email,channel,status,created_at").eq("owner_id", userId).order("created_at", { ascending: false }).limit(200),
+          supabase.from("beta_feedback").select("id,listing_id,kind,severity,body,status,created_at").eq("owner_id", userId).order("created_at", { ascending: false }).limit(200),
+        ]);
+        if (!active) return;
+        setBetaTesters(testersResult.data ?? []);
+        setBetaFeedback(feedbackResult.data ?? []);
+        setBetaLoading(false);
+        if (testersResult.error) showNotice(testersResult.error.message || "Could not load beta testers.");
+        if (feedbackResult.error) showNotice(feedbackResult.error.message || "Could not load beta feedback.");
       }
     };
     void loadDeveloperWorkspace().catch(() => {
@@ -1137,6 +1156,36 @@ export default function App() {
     setTeamMembers((items) => items.filter((item) => item.id !== member.id));
     await writeTeamActivity(authData.user.id, authData.user.id, "Removed teammate", member.email);
     showNotice("Team member removed.");
+  };
+
+  const addBetaTester = async () => {
+    const email = betaTesterEmail.trim().toLowerCase();
+    if (!betaListingId) { showNotice("Choose a product before adding a tester."); return; }
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { showNotice("Enter a valid tester email address."); return; }
+    if (!isSupabaseConfigured) { showNotice("Beta testing needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage beta testers."); setTab("Profile"); return; }
+    setBetaSaving(true);
+    const { data, error } = await supabase.from("beta_testers")
+      .insert({ listing_id: betaListingId, owner_id: authData.user.id, email, channel: betaChannel, status: "invited" })
+      .select("id,listing_id,email,channel,status,created_at").single();
+    setBetaSaving(false);
+    if (error || !data) { showNotice(error?.code === "23505" ? "This email is already on the tester list for this product." : error?.message || "Could not add this tester."); return; }
+    setBetaTesters((items) => [data, ...items]);
+    await writeTeamActivity(authData.user.id, authData.user.id, "Added beta tester", email);
+    setBetaTesterEmail("");
+    showNotice("Tester added to the release test list. An invitation email is not sent by this native screen.");
+  };
+
+  const updateBetaFeedbackStatus = async (feedback: any, status: "open" | "in_progress" | "resolved") => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage beta feedback."); return; }
+    const { data, error } = await supabase.from("beta_feedback").update({ status })
+      .eq("id", feedback.id).eq("owner_id", authData.user.id).select("id,status").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "Could not update feedback status."); return; }
+    setBetaFeedback((items) => items.map((item) => item.id === feedback.id ? { ...item, status } : item));
+    showNotice("Feedback status updated.");
   };
 
   const submitSpotlightApplication = async () => {
@@ -1892,6 +1941,26 @@ export default function App() {
                     return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
                   })}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No listings to check yet. Create a product draft first.</Text> : null}
+                </>
+              ) : developerScreen === "Testing" ? (
+                <>
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Release testing workspace</Text><Text style={styles.infoText}>Manage tester lists and triage submitted feedback. Email delivery and private release distribution remain separate integration tasks.</Text></View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Product to test *</Text>
+                    <View style={styles.chips}>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setBetaListingId(listing.id)} style={[styles.chip,betaListingId === listing.id && styles.chipActive]}><Text style={[styles.chipText,betaListingId === listing.id && styles.chipTextActive]}>{listing.name}</Text></TouchableOpacity>)}</View>
+                    {!developerRows.length ? <Text style={styles.emptyText}>Create a product listing before adding testers.</Text> : null}
+                    <Text style={styles.fieldLabel}>Tester email</Text>
+                    <TextInput value={betaTesterEmail} onChangeText={(value) => setBetaTesterEmail(value.slice(0,255))} autoCapitalize="none" keyboardType="email-address" placeholder="tester@example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Test channel</Text>
+                    <View style={styles.chips}>{(["private","public"]).map((value) => <TouchableOpacity key={value} onPress={() => setBetaChannel(value)} style={[styles.chip,betaChannel === value && styles.chipActive]}><Text style={[styles.chipText,betaChannel === value && styles.chipTextActive]}>{value === "private" ? "Private test" : "Public test"}</Text></TouchableOpacity>)}</View>
+                    <TouchableOpacity disabled={betaSaving || !developerRows.length} style={[styles.primaryButton,(betaSaving || !developerRows.length) && {opacity:0.5}]} onPress={() => void addBetaTester()}><Text style={styles.primaryButtonText}>{betaSaving ? "Adding tester…" : "Add tester"}</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester list</Text><Text style={styles.sectionMeta}>{betaTesters.length}</Text></View>
+                  {betaLoading ? <ActivityIndicator color={COLORS.accent}/> : betaTesters.map((tester) => <View key={tester.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{tester.email}</Text><Text style={styles.toolDescription}>{developerRows.find((listing) => listing.id === tester.listing_id)?.name || "MAS product"} · {tester.channel} test</Text><Text style={styles.postTag}>{tester.status} · {tester.created_at ? new Date(tester.created_at).toLocaleDateString() : ""}</Text></View><TouchableOpacity onPress={async () => { const next = tester.status === "active" ? "invited" : "active"; const { error } = await supabase.from("beta_testers").update({status:next}).eq("id",tester.id); if (error) showNotice(error.message || "Could not update tester status."); else { setBetaTesters((items) => items.map((item) => item.id === tester.id ? {...item,status:next} : item)); showNotice("Tester status updated."); } }}><Text style={styles.secondaryButtonText}>{tester.status === "active" ? "Set invited" : "Mark active"}</Text></TouchableOpacity></View>)}
+                  {!betaLoading && !betaTesters.length ? <Text style={styles.emptyText}>No beta testers have been added yet.</Text> : null}
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester feedback</Text><Text style={styles.sectionMeta}>{betaFeedback.length}</Text></View>
+                  {betaFeedback.map((feedback) => <View key={feedback.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{feedback.kind} · {feedback.severity}</Text><Text style={styles.toolDescription}>{feedback.body}</Text><Text style={styles.postTag}>{developerRows.find((listing) => listing.id === feedback.listing_id)?.name || "MAS product"} · {feedback.status}</Text></View>{feedback.status !== "resolved" ? <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"resolved")}><Text style={styles.secondaryButtonText}>Resolve</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"open")}><Text style={styles.secondaryButtonText}>Reopen</Text></TouchableOpacity>}</View>)}
+                  {!betaLoading && !betaFeedback.length ? <Text style={styles.emptyText}>No beta feedback has been submitted yet.</Text> : null}
                 </>
               ) : developerScreen === "Team management" ? (
                 <>
