@@ -58,6 +58,16 @@ export default function App() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewDraft, setReviewDraft] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
+  const [developerScreen, setDeveloperScreen] = useState<string | null>(null);
+  const [developerRows, setDeveloperRows] = useState<any[]>([]);
+  const [developerLoading, setDeveloperLoading] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftTagline, setDraftTagline] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [draftCategory, setDraftCategory] = useState("Tools");
+  const [draftKind, setDraftKind] = useState<"app" | "website">("app");
+  const [draftWebsiteUrl, setDraftWebsiteUrl] = useState("");
+  const [draftSaving, setDraftSaving] = useState(false);
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -307,6 +317,45 @@ export default function App() {
     showNotice("Your review has been saved.");
   };
 
+  useEffect(() => {
+    let active = true;
+    const loadDeveloperListings = async () => {
+      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist"].includes(developerScreen)) return;
+      if (!isSupabaseConfigured) { setDeveloperRows([]); setDeveloperLoading(false); return; }
+      setDeveloperLoading(true);
+      const { data: authData } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
+      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+      if (!active) return;
+      setDeveloperRows(data ?? []);
+      setDeveloperLoading(false);
+      if (error) showNotice(error.message || "Could not load developer listings.");
+    };
+    void loadDeveloperListings().catch(() => { if (active) { setDeveloperLoading(false); showNotice("Could not load developer data."); } });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const createNativeDraft = async () => {
+    const name = draftName.trim();
+    const description = draftDescription.trim();
+    if (name.length < 3) { showNotice("Product name must contain at least 3 characters."); return; }
+    if (description.length < 20) { showNotice("Description must contain at least 20 characters."); return; }
+    if (draftKind === "website" && !/^https:\/\//i.test(draftWebsiteUrl.trim())) { showNotice("Enter a valid HTTPS website URL."); return; }
+    if (!isSupabaseConfigured) { showNotice("Draft creation needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to create a product draft."); setDeveloperScreen(null); setTab("Profile"); return; }
+    setDraftSaving(true);
+    const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "listing";
+    const { data, error } = await supabase.from("listings").insert({ developer_id: authData.user.id, name, slug, kind: draftKind, category: draftCategory, tagline: draftTagline.trim() || null, description, website_url: draftKind === "website" ? draftWebsiteUrl.trim() : null, status: "draft" }).select("id,name,slug,kind,category,tagline,description,status,downloads,rating_avg,rating_count,created_at").single();
+    setDraftSaving(false);
+    if (error || !data) { showNotice(error?.message || "Could not save the product draft."); return; }
+    setDeveloperRows((rows) => [data, ...rows]);
+    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl("");
+    showNotice("Product draft saved. Assets and submission checks still need to be completed.");
+    setDeveloperScreen("My applications");
+  };
+
   const choosePostMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { showNotice("Allow photo and video access to attach media."); return; }
@@ -534,7 +583,7 @@ export default function App() {
             </>
           ) : null}
 
-          {!selectedApp && utilityScreen === "none" && tab === "Explore" && (
+          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
             <>
               <View style={styles.searchBox}>
                 <Text style={styles.searchIcon}>⌕</Text>
@@ -618,7 +667,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && tab === "Social" && (
+          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Social" && (
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
@@ -729,7 +778,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && tab === "Develop" && (
+          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
               <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
@@ -757,7 +806,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again."))}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist"].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -767,7 +816,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && tab === "Profile" && (
+          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Profile" && (
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
@@ -816,6 +865,37 @@ export default function App() {
                   <TouchableOpacity style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/settings")}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Full account preferences</Text><Text style={styles.toolDescription}>Open web settings for account controls not yet available natively.</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>
                 </>
               )}
+            </>
+          ) : null}
+          {!selectedApp && utilityScreen === "none" && developerScreen !== null ? (
+            <>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setDeveloperScreen(null)}><Text style={styles.secondaryButtonText}>← Back to developer space</Text></TouchableOpacity>
+              <Text style={styles.pageTitle}>{developerScreen}</Text>
+              <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? "Create a native product draft. Asset uploads, submission and review workflows remain separate work to complete." : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
+              {developerScreen === "Publish a product" ? (
+                <View style={styles.composeCard}>
+                  <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && styles.storeTabActive]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && styles.storeTabTextActive]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && styles.storeTabActive]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && styles.storeTabTextActive]}>Website</Text></TouchableOpacity></View>
+                  <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                  <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                  <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && styles.chipActive]}><Text style={[styles.chipText,draftCategory === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</ScrollView>
+                  {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : null}
+                  <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
+                  <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving draft…" : "Save product draft"}</Text></TouchableOpacity>
+                  <Text style={styles.disclaimer}>This saves a draft only. Native icon/APK upload, screenshot management, full readiness checks and submission are still required before the publishing workflow is complete.</Text>
+                </View>
+              ) : developerScreen === "Developer dashboard" ? (
+                <>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
+                  <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
+                </>
+              ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Reviews" || developerScreen === "Publishing checklist" ? (
+                <>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}</View></View>)}
+                  {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
+                  {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
+                </>
+              ) : null}
+              <Text style={styles.disclaimer}>Only screens marked native are rebuilt in this app. Payment, identity verification, wallet transactions and remaining console tools will not be treated as complete until their native screens and backend workflows are implemented and tested.</Text>
             </>
           ) : null}
           <View style={styles.bottomSpace}/>
@@ -886,6 +966,12 @@ const styles = StyleSheet.create({
   nativeShelfIconImage: { width: "100%", height: "100%" },
   nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
   nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
+  fieldLabel: { color: COLORS.text, fontSize: 11, fontWeight: "800", marginTop: 12, marginBottom: 6 },
+  formInput: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13 },
+  devMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 15 },
+  devMetric: { width: "47%", borderWidth: 1, borderColor: COLORS.border, padding: 16, backgroundColor: COLORS.surface },
+  devMetricValue: { color: COLORS.text, fontSize: 23, fontWeight: "900" },
+  devMetricLabel: { color: COLORS.muted, fontSize: 11, marginTop: 4 },
   detailHero: { alignItems: "center", paddingVertical: 24, paddingHorizontal: 12 },
   detailIcon: { width: 112, height: 112, borderRadius: 26, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   detailIconImage: { width: "100%", height: "100%" },
