@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
@@ -130,6 +131,9 @@ export default function App() {
   const [draftSaving, setDraftSaving] = useState(false);
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [draftIcon, setDraftIcon] = useState<{ uri: string; fileName: string; mimeType: string } | null>(null);
+  const [draftReleaseFile, setDraftReleaseFile] = useState<{ uri: string; name: string; mimeType: string; size: number | null } | null>(null);
+  const [draftVersion, setDraftVersion] = useState("1.0.0");
+  const [draftChangelog, setDraftChangelog] = useState("First release");
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -413,6 +417,9 @@ export default function App() {
     setDraftKind(listing.kind === "website" ? "website" : "app");
     setDraftWebsiteUrl(listing.website_url || "");
     setDraftIcon(null);
+    setDraftReleaseFile(null);
+    setDraftVersion("1.0.0");
+    setDraftChangelog("First release");
     setDeveloperScreen("Publish a product");
     showNotice("Draft loaded for editing.");
   };
@@ -508,10 +515,45 @@ export default function App() {
       ? rows.map((row) => row.id === editingListingId ? { ...row, ...result.data } : row)
       : [result.data, ...rows]);
     const wasEditing = Boolean(editingListingId);
+    if (draftKind === "app" && draftReleaseFile) {
+      try {
+        const response = await fetch(draftReleaseFile.uri);
+        const blob = await response.blob();
+        const extension = (draftReleaseFile.name.split(".").pop() || "apk").toLowerCase();
+        const releasePath = `${authData.user.id}/builds/${Date.now()}-${draftReleaseFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const { error: uploadError } = await supabase.storage.from("app-assets").upload(releasePath, blob, { contentType: draftReleaseFile.mimeType, upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: versionError } = await supabase.from("listing_versions").insert({ listing_id: result.data.id, version: draftVersion.trim() || "1.0.0", changelog: draftChangelog.trim() || "Release upload", file_url: releasePath, size_bytes: draftReleaseFile.size });
+        if (versionError) throw versionError;
+        setDraftReleaseFile(null);
+      } catch (releaseError: any) {
+        setDeveloperRows((rows) => editingListingId ? rows.map((row) => row.id === editingListingId ? { ...row, ...result.data } : row) : [result.data, ...rows]);
+        setEditingListingId(result.data.id);
+        setDraftSaving(false);
+        showNotice(releaseError?.message || "The draft was saved, but the release file could not be uploaded. Retry the release upload.");
+        return;
+      }
+    }
     setEditingListingId(null);
-    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null);
-    showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Assets and submission checks still need to be completed.");
+    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftVersion("1.0.0"); setDraftChangelog("First release");
+    showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Complete the checklist before submitting for review.");
     setDeveloperScreen("My applications");
+  };
+
+  const chooseDraftReleaseFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/vnd.android.package-archive", "application/zip", "application/octet-stream"],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const extension = (asset.name.split(".").pop() || "").toLowerCase();
+    if (!["apk", "zip"].includes(extension)) {
+      showNotice("Choose an Android APK or ZIP release file.");
+      return;
+    }
+    setDraftReleaseFile({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType || (extension === "apk" ? "application/vnd.android.package-archive" : "application/zip"), size: asset.size ?? null });
   };
 
   const chooseDraftIcon = async () => {
@@ -1120,7 +1162,13 @@ export default function App() {
                   <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && styles.chipActive]}><Text style={[styles.chipText,draftCategory === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</ScrollView>
-                  {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : null}
+                  {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : <>
+                    <Text style={styles.fieldLabel}>Android release file (APK or ZIP)</Text>
+                    <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftReleaseFile()}><Text style={styles.mediaAttachText}>{draftReleaseFile ? `Release selected · ${draftReleaseFile.name}` : "＋ Choose APK or ZIP release"}</Text></TouchableOpacity>
+                    {draftReleaseFile ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftReleaseFile.name}{draftReleaseFile.size ? ` · ${(draftReleaseFile.size / 1048576).toFixed(1)} MB` : ""}</Text><TouchableOpacity onPress={() => setDraftReleaseFile(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
+                    <Text style={styles.fieldLabel}>Version</Text><TextInput value={draftVersion} onChangeText={(value) => setDraftVersion(value.slice(0,40))} placeholder="1.0.0" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Release notes</Text><TextInput value={draftChangelog} onChangeText={(value) => setDraftChangelog(value.slice(0,1000))} placeholder="What changed in this release?" placeholderTextColor={COLORS.muted} multiline style={[styles.formInput,{minHeight:80,textAlignVertical:"top"}]} />
+                  </>}
                   <Text style={styles.fieldLabel}>Product icon</Text>
                   <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftIcon()}><Text style={styles.mediaAttachText}>{draftIcon ? `Icon selected · ${draftIcon.fileName}` : "＋ Choose product icon"}</Text></TouchableOpacity>
                   {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
