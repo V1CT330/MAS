@@ -583,12 +583,12 @@ export default function App() {
           .eq("id", editingListingId)
           .eq("developer_id", authData.user.id)
           .eq("status", "draft")
-          .select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").maybeSingle()
+          .select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").maybeSingle()
       : await supabase.from("listings").insert({
           ...payload,
           developer_id: authData.user.id,
           status: "draft",
-        }).select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").single();
+        }).select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").single();
     setDraftSaving(false);
     if (result.error || !result.data) {
       showNotice(result.error?.message || "The draft was not updated. It may no longer be editable.");
@@ -1249,7 +1249,7 @@ export default function App() {
               <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? (editingListingId ? "Edit an unpublished product draft." : "Create a native product draft. Asset uploads, submission and review workflows remain separate work to complete.") : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
               {developerScreen === "Publish a product" ? (
                 <View style={styles.composeCard}>
-                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
+                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags(""); setDraftVersion("1.0.0"); setDraftChangelog("First release"); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
                   <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && styles.storeTabActive]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && styles.storeTabTextActive]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && styles.storeTabActive]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && styles.storeTabTextActive]}>Website</Text></TouchableOpacity></View>
                   <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
