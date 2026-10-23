@@ -48,6 +48,7 @@ const samplePosts: FeedPost[] = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
+  const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [kindFilter, setKindFilter] = useState<"all" | "app" | "website">("all");
@@ -369,7 +370,28 @@ export default function App() {
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
-          {tab === "Explore" && (
+          {selectedApp ? (
+            <>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={styles.secondaryButtonText}>← Back to store</Text></TouchableOpacity>
+              <View style={styles.detailHero}>
+                <View style={[styles.detailIcon, { backgroundColor: selectedApp.color }]}>{selectedApp.iconUrl ? <Image source={{ uri: selectedApp.iconUrl }} style={styles.detailIconImage} resizeMode="cover" /> : <Text style={styles.detailIconText}>{selectedApp.mark}</Text>}</View>
+                <Text style={styles.detailTitle}>{selectedApp.name}</Text>
+                <Text style={styles.detailCategory}>{selectedApp.category} · {selectedApp.kind === "website" ? "Website" : "App"}</Text>
+                <Text style={styles.detailDescription}>{selectedApp.description || "Discover this project from a Malawian developer."}</Text>
+                <View style={styles.detailStats}>
+                  <View style={styles.detailStat}><Text style={styles.detailStatValue}>{(selectedApp.rating ?? 0) > 0 ? (selectedApp.rating ?? 0).toFixed(1) : "New"}</Text><Text style={styles.detailStatLabel}>Rating</Text></View>
+                  <View style={styles.detailStat}><Text style={styles.detailStatValue}>{(selectedApp.downloads ?? 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Downloads</Text></View>
+                  <View style={styles.detailStat}><Text style={styles.detailStatValue}>{selectedApp.developer || "MAS developer"}</Text><Text style={styles.detailStatLabel}>Developer</Text></View>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => selectedApp.slug ? void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/apps/" + encodeURIComponent(selectedApp.slug)).catch(() => showNotice("Could not open the full listing. Check your connection and try again.")) : showNotice("This is sample catalogue content; live actions are unavailable.")}>
+                <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website listing" : "View versions, reviews & install options"}</Text>
+              </TouchableOpacity>
+              <Text style={styles.disclaimer}>This native detail page is a first step toward full parity. Version history, reviews, installation and saved-library actions still need to be rebuilt and verified natively before the feature-complete gate can pass.</Text>
+            </>
+          ) : null}
+
+          {!selectedApp && tab === "Explore" && (
             <>
               <View style={styles.searchBox}>
                 <Text style={styles.searchIcon}>⌕</Text>
@@ -422,7 +444,7 @@ export default function App() {
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.sectionMeta}>MAS STORE</Text></View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
-                      <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => item.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(item.slug)}`) : showNotice(`${item.name} is sample content.`)}>
+                      <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
                         <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.category} · {item.rating ? item.rating.toFixed(1) + " ★" : (item.kind || "app")}</Text>
@@ -434,7 +456,7 @@ export default function App() {
 
               {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
-                <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => app.slug ? void Linking.openURL(`https://malawian-app-store-j6pm.vercel.app/apps/${encodeURIComponent(app.slug)}`) : showNotice(`${app.name} is sample content. Add Supabase public credentials to load the live catalogue.`)}>
+                <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
                   <View style={styles.appDetails}>
                     <Text style={styles.appName}>{app.name}</Text>
@@ -453,7 +475,7 @@ export default function App() {
             </>
           )}
 
-          {tab === "Social" && (
+          {!selectedApp && tab === "Social" && (
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
@@ -577,7 +599,7 @@ export default function App() {
             </>
           )}
 
-          {tab === "Develop" && (
+          {!selectedApp && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
               <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
@@ -615,7 +637,7 @@ export default function App() {
             </>
           )}
 
-          {tab === "Profile" && (
+          {!selectedApp && tab === "Profile" && (
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
@@ -704,6 +726,17 @@ const styles = StyleSheet.create({
   nativeShelfIconImage: { width: "100%", height: "100%" },
   nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
   nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
+  detailHero: { alignItems: "center", paddingVertical: 24, paddingHorizontal: 12 },
+  detailIcon: { width: 112, height: 112, borderRadius: 26, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  detailIconImage: { width: "100%", height: "100%" },
+  detailIconText: { color: "#FFFFFF", fontSize: 46, fontWeight: "900" },
+  detailTitle: { color: COLORS.text, fontSize: 25, fontWeight: "900", marginTop: 16, textAlign: "center" },
+  detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
+  detailDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
+  detailStats: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-around", gap: 8, marginTop: 22, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
+  detailStat: { flex: 1, alignItems: "center" },
+  detailStatValue: { color: COLORS.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
+  detailStatLabel: { color: COLORS.muted, fontSize: 10, marginTop: 5 },
   appDetails: { flex: 1 },
   appName: { color: COLORS.text, fontWeight: "800", fontSize: 14 },
   appCategory: { color: COLORS.accent, fontSize: 10, fontWeight: "800", marginTop: 3 },
