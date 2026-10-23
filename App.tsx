@@ -161,6 +161,10 @@ export default function App() {
   const [draftTags, setDraftTags] = useState("");
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
+  const [accountDisplayName, setAccountDisplayName] = useState("");
+  const [accountDeveloperName, setAccountDeveloperName] = useState("");
+  const [accountBio, setAccountBio] = useState("");
+  const [accountProfileSaving, setAccountProfileSaving] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
   const [notificationItems, setNotificationItems] = useState<any[]>([]);
   const [query, setQuery] = useState("");
@@ -319,6 +323,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (utilityScreen !== "settings") return;
+    let active = true;
+    const loadAccountSettings = async () => {
+      if (!isSupabaseConfigured) { setUtilityLoading(false); return; }
+      setUtilityLoading(true);
+      const { data: authData } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!authData.user) { setUtilityLoading(false); return; }
+      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio").eq("id", authData.user.id).maybeSingle();
+      if (!active) return;
+      setAccountDisplayName(data?.display_name || "");
+      setAccountDeveloperName(data?.developer_name || "");
+      setAccountBio(data?.bio || "");
+      if (error) showNotice(error.message || "Could not load account settings.");
+      setUtilityLoading(false);
+    };
+    void loadAccountSettings().catch(() => { if (active) { setUtilityLoading(false); showNotice("Could not load account settings."); } });
+    return () => { active = false; };
+  }, [utilityScreen]);
+
+  useEffect(() => {
     let active = true;
     const loadUtilityData = async () => {
       if (utilityScreen !== "library" && utilityScreen !== "notifications") return;
@@ -375,6 +400,44 @@ export default function App() {
     void loadListingDetails().catch(() => { if (active) { setDetailLoading(false); showNotice("Could not load listing details. Check your connection and retry."); } });
     return () => { active = false; };
   }, [selectedApp]);
+
+  const saveAccountProfile = async () => {
+    if (!isSupabaseConfigured) { showNotice("Account settings need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to update your profile."); setUtilityScreen("none"); setTab("Profile"); return; }
+    const displayName = accountDisplayName.trim();
+    const developerName = accountDeveloperName.trim();
+    const bio = accountBio.trim();
+    if (displayName.length > 80 || developerName.length > 100 || bio.length > 300) { showNotice("Display name: max 80 characters; developer name: max 100; bio: max 300."); return; }
+    setAccountProfileSaving(true);
+    const { error } = await supabase.from("profiles").update({ display_name: displayName || null, developer_name: developerName || null, bio: bio || null }).eq("id", authData.user.id);
+    setAccountProfileSaving(false);
+    if (error) { showNotice(error.message || "Could not save your profile."); return; }
+    showNotice("Profile saved.");
+  };
+
+  const chooseAccountAvatar = async () => {
+    if (!isSupabaseConfigured) { showNotice("Profile photo upload needs the MAS backend configuration."); return; }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { showNotice("Allow photo access to choose a profile picture."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to update your profile photo."); return; }
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const path = `${authData.user.id}/avatars/${Date.now()}-${(asset.fileName || "avatar.jpg").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: uploadError } = await supabase.storage.from("app-assets").upload(path, blob, { contentType: asset.mimeType || "image/jpeg", upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: profileError } = await supabase.from("profiles").update({ avatar_url: path }).eq("id", authData.user.id);
+      if (profileError) throw profileError;
+      showNotice("Profile photo updated.");
+    } catch (error: any) {
+      showNotice(error?.message || "Could not upload the profile photo.");
+    }
+  };
 
   const installSelectedApp = async () => {
     if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be installed."); return; }
@@ -1286,8 +1349,16 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail || "Not signed in"}</Text><Text style={styles.profileHint}>Default appearance: white. Your account and security controls are kept in the MAS account service.</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}</View>
-                  <TouchableOpacity style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/settings")}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Full account preferences</Text><Text style={styles.toolDescription}>Open web settings for account controls not yet available natively.</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>
+                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : isSupabaseConfigured ? (
+                    <View style={styles.composeCard}>
+                      <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{accountDisplayName ? accountDisplayName.charAt(0).toUpperCase() : userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={styles.secondaryButtonText}>Change profile photo</Text></TouchableOpacity></View>
+                      <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Developer name (max 100 characters)</Text><TextInput value={accountDeveloperName} onChangeText={(value) => setAccountDeveloperName(value.slice(0,100))} placeholder="Your developer or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Bio (max 300 characters)</Text><TextInput value={accountBio} onChangeText={(value) => setAccountBio(value.slice(0,300))} placeholder="A short introduction" placeholderTextColor={COLORS.muted} multiline maxLength={300} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]} />
+                      <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
+                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
+                    </View>
+                  ) : <Text style={styles.disclaimer}>Account settings are unavailable until the public MAS backend configuration is added to this build.</Text>}
                 </>
               )}
             </>
