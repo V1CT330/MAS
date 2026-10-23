@@ -48,6 +48,20 @@ const samplePosts: FeedPost[] = [
   { id: "sample-startup-circle", name: "Startup Circle Malawi", tag: "Collaboration", text: "What problem in your community would you love to solve with technology? Share your idea and find collaborators." },
 ];
 
+const getListingQualityReport = (listing: any) => {
+  const checks = [
+    { label: "Name between 3 and 30 characters", ok: (listing.name?.length ?? 0) >= 3 && (listing.name?.length ?? 0) <= 30, weight: 10 },
+    { label: "Tagline written (40+ characters)", ok: (listing.tagline?.length ?? 0) >= 40, weight: 10 },
+    { label: "Description of 200+ characters", ok: (listing.description?.length ?? 0) >= 200, weight: 20 },
+    { label: "Icon uploaded", ok: Boolean(listing.icon_url), weight: 15 },
+    { label: "At least 3 screenshots", ok: (listing.screenshots?.length ?? 0) >= 3, weight: 15 },
+    { label: "Feature banner uploaded", ok: Boolean(listing.banner_url), weight: 5 },
+    { label: "5 or more keywords", ok: (listing.keywords?.length ?? 0) >= 5, weight: 15 },
+    { label: "3 or more tags", ok: (listing.tags?.length ?? 0) >= 3, weight: 10 },
+  ];
+  return { checks, score: checks.reduce((sum, check) => sum + (check.ok ? check.weight : 0), 0) };
+};
+
 type NativePreviewCard = { title: string; description: string; status: string; action: string };
 const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   "Quality checks": [
@@ -136,6 +150,8 @@ export default function App() {
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [editingListingStatus, setEditingListingStatus] = useState<string | null>(null);
   const [draftIcon, setDraftIcon] = useState<{ uri: string; fileName: string; mimeType: string } | null>(null);
+  const [draftBanner, setDraftBanner] = useState<{ uri: string; fileName: string; mimeType: string } | null>(null);
+  const [existingBannerUrl, setExistingBannerUrl] = useState<string | null>(null);
   const [draftReleaseFile, setDraftReleaseFile] = useState<{ uri: string; name: string; mimeType: string; size: number | null } | null>(null);
   const [draftVersion, setDraftVersion] = useState("1.0.0");
   const [draftChangelog, setDraftChangelog] = useState("First release");
@@ -406,7 +422,7 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
-      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,banner_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
       if (developerScreen === "Reviews" && data?.length) {
@@ -442,6 +458,8 @@ export default function App() {
     setDraftKind(listing.kind === "website" ? "website" : "app");
     setDraftWebsiteUrl(listing.website_url || "");
     setDraftIcon(null);
+    setDraftBanner(null);
+    setExistingBannerUrl(listing.banner_url || null);
     setDraftReleaseFile(null);
     setDraftVersion("1.0.0");
     setDraftChangelog("First release");
@@ -565,6 +583,21 @@ export default function App() {
         return;
       }
     }
+    if (draftBanner) {
+      try {
+        const response = await fetch(draftBanner.uri);
+        const blob = await response.blob();
+        const extension = (draftBanner.fileName.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `${authData.user.id}/banners/${Date.now()}.${extension}`;
+        const { error: bannerError } = await supabase.storage.from("app-assets").upload(path, blob, { contentType: draftBanner.mimeType, upsert: false });
+        if (bannerError) throw bannerError;
+        payload.banner_url = path;
+      } catch (bannerError: any) {
+        setDraftSaving(false);
+        showNotice(bannerError?.message || "Could not upload the feature banner.");
+        return;
+      }
+    }
     if (draftScreenshots.length) {
       try {
         const uploadedPaths: string[] = [];
@@ -589,12 +622,12 @@ export default function App() {
            .eq("id", editingListingId)
           .eq("developer_id", authData.user.id)
           .eq("status", editingListingStatus || "draft")
-          .select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").maybeSingle()
+          .select("id,name,slug,kind,category,tagline,description,website_url,icon_url,banner_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").maybeSingle()
       : await supabase.from("listings").insert({
           ...payload,
           developer_id: authData.user.id,
           status: "draft",
-        }).select("id,name,slug,kind,category,tagline,description,website_url,icon_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").single();
+        }).select("id,name,slug,kind,category,tagline,description,website_url,icon_url,banner_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").single();
     setDraftSaving(false);
     if (result.error || !result.data) {
       showNotice(result.error?.message || "The draft was not updated. It may no longer be editable.");
@@ -625,9 +658,18 @@ export default function App() {
     }
     setEditingListingId(null);
     setEditingListingStatus(null);
-    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftVersion("1.0.0"); setDraftChangelog("First release"); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags("");
+    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftBanner(null); setExistingBannerUrl(null); setDraftReleaseFile(null); setDraftVersion("1.0.0"); setDraftChangelog("First release"); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags("");
     showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Complete the checklist before submitting for review.");
     setDeveloperScreen("My applications");
+  };
+
+  const chooseDraftBanner = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { showNotice("Allow photo access to choose a feature banner."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [16, 9], quality: 0.85 });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setDraftBanner({ uri: asset.uri, fileName: asset.fileName || `banner-${Date.now()}.jpg`, mimeType: asset.mimeType || "image/jpeg" });
   };
 
   const chooseDraftScreenshots = async () => {
@@ -1257,7 +1299,7 @@ export default function App() {
               <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? (editingListingId ? "Edit your product listing and save the changes." : "Create a native product draft. Complete the listing details and release assets before review.") : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
               {developerScreen === "Publish a product" ? (
                 <View style={styles.composeCard}>
-                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setEditingListingStatus(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftReleaseFile(null); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags(""); setDraftVersion("1.0.0"); setDraftChangelog("First release"); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
+                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setEditingListingStatus(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftBanner(null); setExistingBannerUrl(null); setDraftReleaseFile(null); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags(""); setDraftVersion("1.0.0"); setDraftChangelog("First release"); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
                   <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && styles.storeTabActive]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && styles.storeTabTextActive]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && styles.storeTabActive]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && styles.storeTabTextActive]}>Website</Text></TouchableOpacity></View>
                   <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
@@ -1271,6 +1313,9 @@ export default function App() {
                   </>}
                   <Text style={styles.fieldLabel}>Product icon</Text>
                   <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftIcon()}><Text style={styles.mediaAttachText}>{draftIcon ? `Icon selected · ${draftIcon.fileName}` : "＋ Choose product icon"}</Text></TouchableOpacity>
+                  <Text style={styles.fieldLabel}>Feature banner (16:9)</Text>
+                  <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftBanner()}><Text style={styles.mediaAttachText}>{draftBanner ? `Banner selected · ${draftBanner.fileName}` : existingBannerUrl ? "Replace existing feature banner" : "＋ Choose feature banner"}</Text></TouchableOpacity>
+                  {draftBanner ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftBanner.fileName}</Text><TouchableOpacity onPress={() => setDraftBanner(null)}><Text style={styles.removeMediaText}>Remove new banner</Text></TouchableOpacity></View> : existingBannerUrl ? <Text style={styles.postTag}>A feature banner is already uploaded.</Text> : null}
                   <Text style={styles.fieldLabel}>Listing screenshots (up to 8 total)</Text>
                   <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftScreenshots()}><Text style={styles.mediaAttachText}>＋ Choose screenshots ({existingScreenshots.length + draftScreenshots.length}/8)</Text></TouchableOpacity>
                   {draftScreenshots.length ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftScreenshots.map((item) => item.fileName).join(", ")}</Text><TouchableOpacity onPress={() => setDraftScreenshots([])}><Text style={styles.removeMediaText}>Clear new screenshots</Text></TouchableOpacity></View> : null}
