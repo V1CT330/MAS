@@ -34,6 +34,7 @@ const COLORS = {
 type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; iconUrl?: string | null; createdAt?: string; };
 type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string; mediaUrl?: string | null; mediaType?: "image" | "video" | null };
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
+type UtilityScreen = "none" | "library" | "notifications" | "settings";
 
 const sampleApps: StoreApp[] = [
   { id: "sample-redbot", name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
@@ -49,6 +50,10 @@ const samplePosts: FeedPost[] = [
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
+  const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
+  const [utilityLoading, setUtilityLoading] = useState(false);
+  const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
+  const [notificationItems, setNotificationItems] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [kindFilter, setKindFilter] = useState<"all" | "app" | "website">("all");
@@ -201,6 +206,38 @@ export default function App() {
       .catch(() => { if (active) setFeedLoading(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadUtilityData = async () => {
+      if (utilityScreen !== "library" && utilityScreen !== "notifications") return;
+      if (!isSupabaseConfigured) { setUtilityLoading(false); return; }
+      setUtilityLoading(true);
+      const { data: authData } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!authData.user) { setUtilityLoading(false); return; }
+      if (utilityScreen === "library") {
+        const [savedResult, installedResult] = await Promise.all([
+          supabase.from("wishlist").select("listing_id,created_at,listings(id,name,category,description,slug,kind)").eq("user_id", authData.user.id).order("created_at", { ascending: false }),
+          supabase.from("installed_apps").select("id,installed_at,listings(id,name,category,description,slug,kind)").eq("user_id", authData.user.id).order("installed_at", { ascending: false }),
+        ]);
+        if (active) {
+          setLibraryData({ saved: savedResult.data ?? [], installed: installedResult.data ?? [] });
+          if (savedResult.error || installedResult.error) showNotice("Some library items could not be loaded.");
+          setUtilityLoading(false);
+        }
+      } else {
+        const { data, error } = await supabase.from("notifications").select("id,title,body,read,created_at").eq("user_id", authData.user.id).order("created_at", { ascending: false }).limit(50);
+        if (active) {
+          setNotificationItems(data ?? []);
+          if (error) showNotice("Notifications could not be loaded.");
+          setUtilityLoading(false);
+        }
+      }
+    };
+    void loadUtilityData().catch(() => { if (active) { setUtilityLoading(false); showNotice("Could not load this section. Check your connection and retry."); } });
+    return () => { active = false; };
+  }, [utilityScreen]);
 
   const choosePostMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -391,7 +428,7 @@ export default function App() {
             </>
           ) : null}
 
-          {!selectedApp && tab === "Explore" && (
+          {!selectedApp && utilityScreen === "none" && tab === "Explore" && (
             <>
               <View style={styles.searchBox}>
                 <Text style={styles.searchIcon}>⌕</Text>
@@ -475,7 +512,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && tab === "Social" && (
+          {!selectedApp && utilityScreen === "none" && tab === "Social" && (
             <>
               <Text style={styles.pageTitle}>Social</Text>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
@@ -599,7 +636,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && tab === "Develop" && (
+          {!selectedApp && utilityScreen === "none" && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
               <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
@@ -637,19 +674,19 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && tab === "Profile" && (
+          {!selectedApp && utilityScreen === "none" && tab === "Profile" && (
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
               <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail ? "You're signed in" : "Your MAS account"}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
-                ["▤", "My library", "Your saved apps and library.", "https://malawian-app-store-j6pm.vercel.app/library"],
-                ["♧", "Notifications", "Account and platform alerts.", "https://malawian-app-store-j6pm.vercel.app/notifications"],
-                ["⚙", "Account settings", "Manage your account preferences.", "https://malawian-app-store-j6pm.vercel.app/settings"],
+                ["▤", "My library", "Your saved apps and library.", "native:library"],
+                ["♧", "Notifications", "Account and platform alerts.", "native:notifications"],
+                ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again."))}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -658,6 +695,36 @@ export default function App() {
               <View style={styles.infoBanner}><Text style={styles.infoTitle}>Built for Malawi</Text><Text style={styles.infoText}>Discover apps, collaborate with builders and grow local technology.</Text></View>
             </>
           )}
+          {!selectedApp && utilityScreen !== "none" ? (
+            <>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setUtilityScreen("none")}><Text style={styles.secondaryButtonText}>← Back</Text></TouchableOpacity>
+              <Text style={styles.pageTitle}>{utilityScreen === "library" ? "My library" : utilityScreen === "notifications" ? "Notifications" : "Account settings"}</Text>
+              <Text style={styles.pageIntro}>{utilityScreen === "library" ? "Your saved listings and installed-app history." : utilityScreen === "notifications" ? "Updates for your MAS account and activity." : "Manage your MAS account on this device."}</Text>
+              {utilityScreen === "library" ? (
+                <>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Saved listings</Text><Text style={styles.sectionMeta}>{libraryData.saved.length}</Text></View>
+                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : libraryData.saved.map((entry, index) => <TouchableOpacity key={entry.listing_id || index} style={styles.toolCard} onPress={() => { const l = entry.listings; if (l) { setSelectedApp({ id: l.id, name: l.name, category: l.category || "Other", description: l.description || "", mark: (l.name || "M").slice(0,1), color: COLORS.accent, slug: l.slug, kind: l.kind }); setUtilityScreen("none"); } }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{entry.listings?.name || "Saved listing"}</Text><Text style={styles.toolDescription}>{entry.listings?.category || "MAS Store listing"}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
+                  {!utilityLoading && !libraryData.saved.length ? <Text style={styles.emptyText}>You have no saved listings yet.</Text> : null}
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Installed apps</Text><Text style={styles.sectionMeta}>{libraryData.installed.length}</Text></View>
+                  {libraryData.installed.map((entry, index) => <View key={entry.id || index} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{entry.listings?.name || "Installed listing"}</Text><Text style={styles.toolDescription}>Added {entry.installed_at ? new Date(entry.installed_at).toLocaleDateString() : "to your library"}</Text></View></View>)}
+                  {!utilityLoading && !libraryData.installed.length ? <Text style={styles.emptyText}>Your installed-app list is empty.</Text> : null}
+                  {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Library data needs the public MAS backend configuration.</Text> : null}
+                </>
+              ) : utilityScreen === "notifications" ? (
+                <>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={async () => { const { data } = await supabase.auth.getUser(); if (!data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", data.user.id).eq("read", false); if (error) showNotice("Could not mark notifications as read."); else { setNotificationItems((items) => items.map((item) => ({ ...item, read: true }))); showNotice("All notifications marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark all as read</Text></TouchableOpacity>
+                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : notificationItems.map((item) => <View key={item.id} style={[styles.toolCard, !item.read && { backgroundColor: COLORS.accentSoft }]}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "MAS notification"}</Text><Text style={styles.toolDescription}>{item.body || "Platform update"}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View><Text style={styles.chevron}>{item.read ? "✓" : "•"}</Text></View>)}
+                  {!utilityLoading && !notificationItems.length ? <Text style={styles.emptyText}>You have no notifications yet.</Text> : null}
+                  {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Notifications need the public MAS backend configuration.</Text> : null}
+                </>
+              ) : (
+                <>
+                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail || "Not signed in"}</Text><Text style={styles.profileHint}>Default appearance: white. Your account and security controls are kept in the MAS account service.</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}</View>
+                  <TouchableOpacity style={styles.toolCard} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/settings")}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Full account preferences</Text><Text style={styles.toolDescription}>Open web settings for account controls not yet available natively.</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>
+                </>
+              )}
+            </>
+          ) : null}
           <View style={styles.bottomSpace}/>
         </ScrollView>
 
@@ -670,7 +737,7 @@ export default function App() {
             ["Develop", "▦"],
             ["Profile", "○"],
           ] as [Tab, string][]).map(([name, icon]) => (
-            <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => setTab(name)}>
+            <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => { setUtilityScreen("none"); setSelectedApp(null); setTab(name); }}>
               <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
               <Text style={[styles.tabLabel, tab === name && styles.tabLabelActive]}>{name}</Text>
               {tab === name ? <View style={styles.tabIndicator}/> : null}
