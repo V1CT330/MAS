@@ -116,31 +116,45 @@ export default function App() {
     let active = true;
     if (!isSupabaseConfigured) return () => { active = false; };
     setCatalogueLoading(true);
-    Promise.resolve(
-      supabase
+    supabase
       .from("listings")
-      .select("id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
+      .select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
       .eq("status", "published")
       .order("created_at", { ascending: false })
-      .limit(100),
-    ).then(({ data, error }) => {
+      .limit(100)
+      .then(async ({ data, error }) => {
         if (!active) return;
         if (!error && data?.length) {
+          const developerIds = [...new Set(data.map((item: any) => item.developer_id).filter(Boolean))];
+          const profileResult = developerIds.length
+            ? await supabase.from("public_profiles").select("id,developer_name,display_name").in("id", developerIds)
+            : { data: [] as any[] };
+          const profiles = new Map((profileResult.data ?? []).map((profile: any) => [
+            profile.id, profile.developer_name || profile.display_name || "MAS developer",
+          ]));
+          const catalogue = await Promise.all(data.map(async (item: any) => {
+            const iconResult = item.icon_url
+              ? await supabase.storage.from("app-assets").createSignedUrl(item.icon_url, 3600)
+              : null;
+            return {
+              id: item.id,
+              name: item.name,
+              category: item.category || "Other",
+              description: item.tagline || item.description || "Discover this project on MAS.",
+              mark: String(item.name || "M").slice(0, 1).toUpperCase(),
+              color: COLORS.accent,
+              slug: item.slug,
+              kind: item.kind,
+              developer: String(profiles.get(item.developer_id) || "MAS developer"),
+              iconUrl: iconResult?.data?.signedUrl ?? null,
+              createdAt: item.created_at,
+              downloads: item.downloads ?? 0,
+              rating: item.rating_avg ?? 0,
+            } satisfies StoreApp;
+          }));
+          if (!active) return;
           setCatalogueSource("live");
-          setApps(data.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            category: item.category || "Other",
-            description: item.tagline || item.description || "Discover this project on MAS.",
-            mark: String(item.name || "M").slice(0, 1).toUpperCase(),
-            color: COLORS.accent,
-            slug: item.slug,
-            kind: item.kind,
-            iconUrl: item.icon_url ?? null,
-            createdAt: item.created_at,
-            downloads: item.downloads ?? 0,
-            rating: item.rating_avg ?? 0,
-          })));
+          setApps(catalogue);
         }
         setCatalogueLoading(false);
       })
