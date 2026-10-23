@@ -22,20 +22,36 @@ jobs:
       - name: Check out native MAS
         uses: actions/checkout@v4
 
-      - name: Validate public Supabase configuration
+      - name: Validate Expo project identity
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ]]; then
-            echo "::error::Missing GitHub Actions repository variable EXPO_PUBLIC_SUPABASE_URL."
-            exit 1
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("app.json", "utf8")).expo;
+          const expectedSlug = "malawian-app-store-wsf8defenl82zkzevchmj";
+          const expectedProjectId = "229fd641-5313-4f0e-af76-b22b120ee61b";
+          if (config.slug !== expectedSlug) {
+            console.error(`Expected Expo slug ${expectedSlug}, found ${config.slug}`);
+            process.exit(1);
+          }
+          if (config.extra?.eas?.projectId !== expectedProjectId) {
+            console.error("The EAS project ID in app.json does not match the intended MAS project.");
+            process.exit(1);
+          }
+          console.log("Expo slug and EAS project ID match the intended MAS project.");
+          NODE
+
+      - name: Validate optional public Supabase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "::warning::Supabase public variables are not available to this workflow. Building in preview mode; live backend actions will remain unavailable until the native build receives the public configuration."
+            exit 0
           fi
           if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
             echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
-            exit 1
-          fi
-          if [[ -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::error::Missing GitHub Actions repository variable EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
             exit 1
           fi
           if [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
