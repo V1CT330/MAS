@@ -165,6 +165,7 @@ export default function App() {
   const [accountDisplayName, setAccountDisplayName] = useState("");
   const [accountDeveloperName, setAccountDeveloperName] = useState("");
   const [accountBio, setAccountBio] = useState("");
+  const [accountAvatarUri, setAccountAvatarUri] = useState<string | null>(null);
   const [accountProfileSaving, setAccountProfileSaving] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
   const [notificationItems, setNotificationItems] = useState<any[]>([]);
@@ -360,17 +361,44 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setUtilityLoading(false); return; }
-      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio").eq("id", authData.user.id).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url").eq("id", authData.user.id).maybeSingle();
       if (!active) return;
       setAccountDisplayName(data?.display_name || "");
       setAccountDeveloperName(data?.developer_name || "");
       setAccountBio(data?.bio || "");
+      if (data?.avatar_url) {
+        const { data: avatarData } = await supabase.storage.from("app-assets").createSignedUrl(data.avatar_url, 3600);
+        if (active) setAccountAvatarUri(avatarData?.signedUrl ?? null);
+      } else {
+        setAccountAvatarUri(null);
+      }
       if (error) showNotice(error.message || "Could not load account settings.");
       setUtilityLoading(false);
     };
     void loadAccountSettings().catch(() => { if (active) { setUtilityLoading(false); showNotice("Could not load account settings."); } });
     return () => { active = false; };
   }, [utilityScreen]);
+
+  useEffect(() => {
+    if (tab !== "Profile" || !userEmail || !isSupabaseConfigured) return;
+    let active = true;
+    const loadProfileSummary = async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!active || !authData.user) return;
+      const { data } = await supabase.from("profiles").select("display_name,developer_name,avatar_url").eq("id", authData.user.id).maybeSingle();
+      if (!active || !data) return;
+      setAccountDisplayName(data.display_name || "");
+      setAccountDeveloperName(data.developer_name || "");
+      if (data.avatar_url) {
+        const { data: avatarData } = await supabase.storage.from("app-assets").createSignedUrl(data.avatar_url, 3600);
+        if (active) setAccountAvatarUri(avatarData?.signedUrl ?? null);
+      } else {
+        setAccountAvatarUri(null);
+      }
+    };
+    void loadProfileSummary().catch(() => undefined);
+    return () => { active = false; };
+  }, [tab, userEmail]);
 
   useEffect(() => {
     let active = true;
@@ -462,6 +490,8 @@ export default function App() {
       if (uploadError) throw uploadError;
       const { error: profileError } = await supabase.from("profiles").update({ avatar_url: path }).eq("id", authData.user.id);
       if (profileError) throw profileError;
+      const { data: signedAvatar } = await supabase.storage.from("app-assets").createSignedUrl(path, 3600);
+      setAccountAvatarUri(signedAvatar?.signedUrl ?? null);
       showNotice("Profile photo updated.");
     } catch (error: any) {
       showNotice(error?.message || "Could not upload the profile photo.");
@@ -1373,7 +1403,7 @@ export default function App() {
             </View>
           </View>
           <TouchableOpacity accessibilityRole="button" style={styles.avatar} onPress={() => setTab("Profile")}>
-            <Text style={styles.avatarText}>V</Text>
+            {accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.avatarImage} resizeMode="cover" /> : <Text style={styles.avatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text>}
           </TouchableOpacity>
         </View>
 
@@ -1727,7 +1757,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -1741,7 +1771,7 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail ? "You're signed in" : "Your MAS account"}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
+              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
@@ -1784,7 +1814,7 @@ export default function App() {
                 <>
                   {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : isSupabaseConfigured ? (
                     <View style={styles.composeCard}>
-                      <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{accountDisplayName ? accountDisplayName.charAt(0).toUpperCase() : userEmail ? userEmail.charAt(0).toUpperCase() : "V"}</Text></View><Text style={styles.profileName}>{userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={styles.secondaryButtonText}>Change profile photo</Text></TouchableOpacity></View>
+                      <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={styles.secondaryButtonText}>Change profile photo</Text></TouchableOpacity></View>
                       <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Developer name (max 100 characters)</Text><TextInput value={accountDeveloperName} onChangeText={(value) => setAccountDeveloperName(value.slice(0,100))} placeholder="Your developer or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Bio (max 300 characters)</Text><TextInput value={accountBio} onChangeText={(value) => setAccountBio(value.slice(0,300))} placeholder="A short introduction" placeholderTextColor={COLORS.muted} multiline maxLength={300} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]} />
@@ -1962,6 +1992,7 @@ const styles = StyleSheet.create({
   brandSub: { color: COLORS.muted, fontSize: 8, fontWeight: "700", letterSpacing: 1.3, marginTop: 2 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, alignItems: "center", justifyContent: "center" },
   avatarText: { color: COLORS.text, fontWeight: "800" },
+  avatarImage: { width: 36, height: 36, borderRadius: 18 },
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
