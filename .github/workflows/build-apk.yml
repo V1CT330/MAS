@@ -1,0 +1,137 @@
+name: Build native MAS Android APK
+
+on:
+  push:
+    branches: [native/expo-foundation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep only the newest native APK build for this branch running.
+concurrency:
+  group: native-mas-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Compile installable Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Public client configuration only. Add these as GitHub Actions repository
+    # Variables; never put service-role keys or provider secrets in the mobile app.
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Check out native MAS
+        uses: actions/checkout@v4
+
+      - name: Validate Expo project identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("app.json", "utf8")).expo;
+          const expectedSlug = "malawian-app-store-wsf8defenl82zkzevchmj";
+          const expectedProjectId = "229fd641-5313-4f0e-af76-b22b120ee61b";
+          if (config.slug !== expectedSlug) {
+            console.error(`Expected Expo slug ${expectedSlug}, found ${config.slug}`);
+            process.exit(1);
+          }
+          if (config.extra?.eas?.projectId !== expectedProjectId) {
+            console.error("The EAS project ID in app.json does not match the intended MAS project.");
+            process.exit(1);
+          }
+          console.log("Expo slug and EAS project ID match the intended MAS project.");
+          NODE
+
+      - name: Validate optional public Supabase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "::warning::Supabase public variables are not available to this workflow. Building in preview mode; live backend actions will remain unavailable until the native build receives the public configuration."
+            exit 0
+          fi
+          if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
+            exit 1
+          fi
+          if [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
+            echo "::error::A privileged Supabase key was supplied. Use a publishable key only."
+            exit 1
+          fi
+          echo "Public Supabase configuration is present; values are not printed."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java for Android
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install JavaScript dependencies
+        run: npm install
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Install required Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK_VERSION="27.1.12297006"
+          rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+          for attempt in 1 2 3; do
+            if sdkmanager --install "ndk;$NDK_VERSION"; then
+              if [[ -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties" ]]; then
+                echo "NDK $NDK_VERSION installed successfully."
+                exit 0
+              fi
+            fi
+            echo "NDK installation attempt $attempt failed; clearing partial files before retry."
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            sleep 5
+          done
+          echo "Could not install NDK $NDK_VERSION after three attempts."
+          exit 1
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Verify APK signature and Android package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -s "$APK"
+          test -n "$APKSIGNER"
+          test -n "$AAPT"
+          test -n "$ZIPALIGN"
+          "$APKSIGNER" verify --verbose "$APK"
+          "$ZIPALIGN" -c -p 4 "$APK"
+          "$AAPT" dump badging "$APK" | grep -E "^(package:|sdkVersion:|targetSdkVersion:|native-code:)"
+          echo "APK file size: $(stat -c%s "$APK") bytes"
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mas-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

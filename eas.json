@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "node": "22.14.0"
+    },
+    "preview": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
