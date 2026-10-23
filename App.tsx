@@ -121,6 +121,9 @@ export default function App() {
   const [reviewRating, setReviewRating] = useState(5);
   const [developerScreen, setDeveloperScreen] = useState<string | null>(null);
   const [developerRows, setDeveloperRows] = useState<any[]>([]);
+  const [developerReviews, setDeveloperReviews] = useState<any[]>([]);
+  const [reviewReplies, setReviewReplies] = useState<Record<string, string>>({});
+  const [reviewReplySaving, setReviewReplySaving] = useState<string | null>(null);
   const [developerLoading, setDeveloperLoading] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftTagline, setDraftTagline] = useState("");
@@ -397,6 +400,18 @@ export default function App() {
       const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
+      if (developerScreen === "Reviews" && data?.length) {
+        const { data: reviewData, error: reviewError } = await supabase.from("reviews")
+          .select("id,listing_id,rating,body,created_at,developer_reply,replied_at")
+          .in("listing_id", data.map((item: any) => item.id))
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (!active) return;
+        setDeveloperReviews(reviewData ?? []);
+        if (reviewError) showNotice(reviewError.message || "Could not load product reviews.");
+      } else if (developerScreen === "Reviews") {
+        setDeveloperReviews([]);
+      }
       setDeveloperLoading(false);
       if (error) showNotice(error.message || "Could not load developer listings.");
     };
@@ -482,6 +497,20 @@ export default function App() {
       setDraftWebsiteUrl("");
     }
     showNotice("Product draft deleted.");
+  };
+
+  const replyToDeveloperReview = async (review: any) => {
+    const reply = (reviewReplies[review.id] || "").trim();
+    if (!reply) { showNotice("Write a reply before publishing it."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to reply to reviews."); return; }
+    setReviewReplySaving(review.id);
+    const { error } = await supabase.from("reviews").update({ developer_reply: reply, replied_at: new Date().toISOString() }).eq("id", review.id);
+    setReviewReplySaving(null);
+    if (error) { showNotice(error.message || "Could not publish the review reply."); return; }
+    setDeveloperReviews((items) => items.map((item) => item.id === review.id ? { ...item, developer_reply: reply, replied_at: new Date().toISOString() } : item));
+    setReviewReplies((items) => ({ ...items, [review.id]: "" }));
+    showNotice("Reply published.");
   };
 
   const createNativeDraft = async () => {
@@ -1205,7 +1234,12 @@ export default function App() {
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
                   <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
                 </>
-              ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Reviews" || developerScreen === "Publishing checklist" ? (
+              ) : developerScreen === "Reviews" ? (
+                <>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
+                  {!developerLoading && !developerReviews.length ? <Text style={styles.emptyText}>No reviews have been posted for your products yet.</Text> : null}
+                </>
+              ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Publishing checklist" ? (
                 <>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status === "draft" ? startEditingDraft(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status === "draft" ? <Text style={styles.postTag}>Tap to edit draft</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && item.status === "draft" ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity></View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
