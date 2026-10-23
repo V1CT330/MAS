@@ -583,11 +583,27 @@ export default function App() {
               <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
               <View style={styles.developerStatus}><View style={styles.statusDot}/><Text style={styles.statusText}>Secure integration links enabled</Text></View>
               {[
-                ["▣", "My applications", "Create and manage listings and releases.", "https://malawian-app-store-j6pm.vercel.app/console/products/"],
-                ["✓", "Developer verification", "Start or review your Didit identity verification.", "https://malawian-app-store-j6pm.vercel.app/console/verification"],
-                ["◇", "Developer Pro subscription", "Open the PayChangu checkout flow for Developer Pro.", "https://malawian-app-store-j6pm.vercel.app/console/subscription"],
-                ["↗", "Collaboration, investors & grants", "Open MAS Social opportunities and collaboration tools.", "https://malawian-app-store-j6pm.vercel.app/console/social"],
-                ["▤", "Developer wallet", "View available wallet and earnings information.", "https://malawian-app-store-j6pm.vercel.app/console/wallet"],
+                ["▣", "Developer dashboard", "Publishing readiness, installs, views and performance.", "https://malawian-app-store-j6pm.vercel.app/console"],
+                ["＋", "Publish a product", "Create a new app, website or digital product.", "https://malawian-app-store-j6pm.vercel.app/upload"],
+                ["▣", "My applications", "Manage listings, versions and release details.", "https://malawian-app-store-j6pm.vercel.app/console/products/"],
+                ["↗", "Analytics", "Review product views, installs and conversion.", "https://malawian-app-store-j6pm.vercel.app/console/analytics"],
+                ["✓", "Publishing checklist", "Check store readiness and publishing requirements.", "https://malawian-app-store-j6pm.vercel.app/console/publishing"],
+                ["◇", "Quality checks", "Review product quality and submission requirements.", "https://malawian-app-store-j6pm.vercel.app/console/quality"],
+                ["★", "Reviews", "Read and manage customer feedback.", "https://malawian-app-store-j6pm.vercel.app/console/reviews"],
+                ["▤", "Developer resources", "Guides and tools for building and publishing.", "https://malawian-app-store-j6pm.vercel.app/console/resources"],
+                ["▷", "Testing", "Open product testing and release tools.", "https://malawian-app-store-j6pm.vercel.app/console/testing"],
+                ["✓", "Developer verification", "Start or review identity verification.", "https://malawian-app-store-j6pm.vercel.app/console/verification"],
+                ["◇", "Developer Pro", "Manage subscription and PayChangu checkout.", "https://malawian-app-store-j6pm.vercel.app/console/subscription"],
+                ["↗", "Collaboration & funding", "Open collaboration, investor, grant and crowdfunding tools.", "https://malawian-app-store-j6pm.vercel.app/console/social"],
+                ["▤", "Developer wallet", "View wallet and earnings information.", "https://malawian-app-store-j6pm.vercel.app/console/wallet"],
+                ["⚙", "Console settings", "Manage developer console preferences.", "https://malawian-app-store-j6pm.vercel.app/console/settings"],
+                ["⌑", "Security", "Review account security settings.", "https://malawian-app-store-j6pm.vercel.app/console/security"],
+                ["▦", "Store management", "Open store and product management tools.", "https://malawian-app-store-j6pm.vercel.app/console/store"],
+                ["✦", "Developer assistant", "Get help with developer workflows.", "https://malawian-app-store-j6pm.vercel.app/console/assistant"],
+                ["◎", "Team management", "Manage your developer team.", "https://malawian-app-store-j6pm.vercel.app/team"],
+                ["↗", "Promote a product", "Explore advertising and product promotion.", "https://malawian-app-store-j6pm.vercel.app/advertise"],
+                ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
+                ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again."))}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
