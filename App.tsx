@@ -52,6 +52,12 @@ export default function App() {
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [sectionPostDraft, setSectionPostDraft] = useState("");
   const [sectionPosting, setSectionPosting] = useState(false);
+  const [selectedAppDetails, setSelectedAppDetails] = useState<any>(null);
+  const [selectedVersions, setSelectedVersions] = useState<any[]>([]);
+  const [selectedReviews, setSelectedReviews] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -240,6 +246,66 @@ export default function App() {
     void loadUtilityData().catch(() => { if (active) { setUtilityLoading(false); showNotice("Could not load this section. Check your connection and retry."); } });
     return () => { active = false; };
   }, [utilityScreen]);
+
+  useEffect(() => {
+    let active = true;
+    const loadListingDetails = async () => {
+      if (!selectedApp || selectedApp.id.startsWith("sample-") || !isSupabaseConfigured) {
+        setSelectedAppDetails(null); setSelectedVersions([]); setSelectedReviews([]); setDetailLoading(false); return;
+      }
+      setDetailLoading(true);
+      const [listingResult, versionsResult, reviewsResult] = await Promise.all([
+        supabase.from("listings").select("id,slug,name,tagline,description,kind,website_url,price_mwk,monetization,price_month_mwk,price_year_mwk,screenshots,video_url").eq("id", selectedApp.id).maybeSingle(),
+        supabase.from("listing_versions").select("id,version,release_notes,changelog,file_url,size_bytes,status,created_at").eq("listing_id", selectedApp.id).order("created_at", { ascending: false }).limit(20),
+        supabase.from("reviews").select("id,user_id,rating,body,created_at").eq("listing_id", selectedApp.id).order("created_at", { ascending: false }).limit(30),
+      ]);
+      if (!active) return;
+      setSelectedAppDetails(listingResult.data ?? null);
+      setSelectedVersions(versionsResult.data ?? []);
+      setSelectedReviews(reviewsResult.data ?? []);
+      if (listingResult.error || versionsResult.error || reviewsResult.error) showNotice("Some listing details could not be loaded.");
+      setDetailLoading(false);
+    };
+    void loadListingDetails().catch(() => { if (active) { setDetailLoading(false); showNotice("Could not load listing details. Check your connection and retry."); } });
+    return () => { active = false; };
+  }, [selectedApp]);
+
+  const installSelectedApp = async () => {
+    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be installed."); return; }
+    if (!isSupabaseConfigured) { showNotice("Install actions need the MAS backend configuration."); return; }
+    const { data: authData } = await supabase.auth.getUser();
+    const listing = selectedAppDetails;
+    const latest = selectedVersions.find((version) => version.status === "published") ?? selectedVersions[0];
+    if (listing?.kind === "website" && listing.website_url) {
+      const { error } = await supabase.rpc("register_install", { _listing_id: selectedApp.id, _device: "Android" });
+      if (error) { showNotice(error.message || "Could not record this visit."); return; }
+      await Linking.openURL(listing.website_url).catch(() => showNotice("Could not open this website."));
+      return;
+    }
+    if (!latest?.file_url) { showNotice("This app does not have a downloadable release yet."); return; }
+    const { error: eventError } = await supabase.rpc("register_install", { _listing_id: selectedApp.id, _device: "Android" });
+    if (eventError) { showNotice(eventError.message || "Could not record this install."); return; }
+    if (authData.user) {
+      const { error } = await supabase.from("installed_apps").upsert({ user_id: authData.user.id, listing_id: selectedApp.id, installed_version_id: latest.id }, { onConflict: "user_id,listing_id" });
+      if (error) { showNotice(error.message || "Could not update your library."); return; }
+    }
+    const { data: signed, error } = await supabase.storage.from("app-assets").createSignedUrl(latest.file_url, 3600);
+    if (error || !signed?.signedUrl) { showNotice("Could not create a secure download link."); return; }
+    showNotice("Opening the app download.");
+    await Linking.openURL(signed.signedUrl).catch(() => showNotice("Could not open the download link."));
+  };
+
+  const submitSelectedReview = async () => {
+    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be reviewed."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to post a review."); setSelectedApp(null); setTab("Profile"); return; }
+    const { error } = await supabase.from("reviews").upsert({ listing_id: selectedApp.id, user_id: authData.user.id, rating: reviewRating, body: reviewDraft.trim() || null }, { onConflict: "listing_id,user_id" });
+    if (error) { showNotice(error.message || "Could not save your review."); return; }
+    setReviewDraft("");
+    const { data } = await supabase.from("reviews").select("id,user_id,rating,body,created_at").eq("listing_id", selectedApp.id).order("created_at", { ascending: false }).limit(30);
+    setSelectedReviews(data ?? []);
+    showNotice("Your review has been saved.");
+  };
 
   const choosePostMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -448,10 +514,23 @@ export default function App() {
                 const { error } = await supabase.from("wishlist").insert({ user_id: authData.user.id, listing_id: selectedApp.id });
                 showNotice(error ? (error.code === "23505" ? "This listing is already saved." : error.message || "Could not save listing.") : "Saved to your library.");
               }}><Text style={styles.primaryButtonText}>＋ Save to my library</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => selectedApp.slug ? void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/apps/" + encodeURIComponent(selectedApp.slug)).catch(() => showNotice("Could not open the full listing. Check your connection and try again.")) : showNotice("This is sample catalogue content; live actions are unavailable.")}>
-                <Text style={styles.secondaryButtonText}>{selectedApp.kind === "website" ? "Open website listing →" : "View versions, reviews & install options →"}</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => void installSelectedApp()} disabled={detailLoading}>
+                <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website" : "Download / install"}</Text>
               </TouchableOpacity>
-              <Text style={styles.disclaimer}>This native detail page is a first step toward full parity. Version history, reviews, installation and saved-library actions still need to be rebuilt and verified natively before the feature-complete gate can pass.</Text>
+              {detailLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {selectedAppDetails ? <>
+                <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>About this listing</Text><Text style={styles.sectionMeta}>{selectedAppDetails.price_mwk > 0 ? "MK" + Number(selectedAppDetails.price_mwk).toLocaleString() : "FREE"}</Text></View>
+                <Text style={styles.detailDescription}>{selectedAppDetails.description || selectedAppDetails.tagline || selectedApp.description}</Text>
+                {selectedAppDetails.monetization ? <Text style={styles.disclaimer}>Monetization: {selectedAppDetails.monetization}</Text> : null}
+              </> : null}
+              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Versions</Text><Text style={styles.sectionMeta}>{selectedVersions.length}</Text></View>
+              {selectedVersions.map((version) => <View key={version.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Version {version.version}{version.status === "published" ? " · Release" : " · " + version.status}</Text><Text style={styles.toolDescription}>{version.release_notes || version.changelog || "No release notes provided."}</Text>{version.size_bytes ? <Text style={styles.postTag}>{(version.size_bytes / 1048576).toFixed(1)} MB · {new Date(version.created_at).toLocaleDateString()}</Text> : null}</View></View>)}
+              {!detailLoading && !selectedVersions.length ? <Text style={styles.emptyText}>No version history is available yet.</Text> : null}
+              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Reviews</Text><Text style={styles.sectionMeta}>{selectedReviews.length}</Text></View>
+              {selectedReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{"★".repeat(Math.max(1, Math.min(5, Number(review.rating) || 1)))} · {review.rating}/5</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{new Date(review.created_at).toLocaleDateString()}</Text></View></View>)}
+              {!detailLoading && !selectedReviews.length ? <Text style={styles.emptyText}>No reviews yet. Be the first to review this listing.</Text> : null}
+              <View style={styles.composeCard}><Text style={styles.toolTitle}>Write a review</Text><View style={styles.ratingRow}>{[1,2,3,4,5].map((value) => <TouchableOpacity key={value} onPress={() => setReviewRating(value)}><Text style={[styles.ratingStar, value <= reviewRating && styles.ratingStarActive]}>★</Text></TouchableOpacity>)}</View><TextInput accessibilityLabel="Write a listing review" placeholder="Share your experience (optional)…" placeholderTextColor={COLORS.muted} value={reviewDraft} onChangeText={(value) => setReviewDraft(value.slice(0, 2000))} multiline maxLength={2000} style={styles.commentInput}/><TouchableOpacity style={[styles.composeButton,{alignSelf:"flex-end",marginTop:10}]} onPress={() => void submitSelectedReview()}><Text style={styles.composeButtonText}>Submit review</Text></TouchableOpacity></View>
+              <Text style={styles.disclaimer}>Downloads open through a short-lived signed link. Reviews and installs use the MAS backend policies.</Text>
             </>
           ) : null}
 
@@ -815,6 +894,9 @@ const styles = StyleSheet.create({
   detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
   detailDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
   detailStats: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-around", gap: 8, marginTop: 22, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
+  ratingRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  ratingStar: { fontSize: 26, color: COLORS.border },
+  ratingStarActive: { color: "#F9AB00" },
   detailStat: { flex: 1, alignItems: "center" },
   detailStatValue: { color: COLORS.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
   detailStatLabel: { color: COLORS.muted, fontSize: 10, marginTop: 5 },
