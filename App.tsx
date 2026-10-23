@@ -129,6 +129,7 @@ export default function App() {
   const [draftWebsiteUrl, setDraftWebsiteUrl] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
+  const [draftIcon, setDraftIcon] = useState<{ uri: string; fileName: string; mimeType: string } | null>(null);
   const [utilityScreen, setUtilityScreen] = useState<UtilityScreen>("none");
   const [utilityLoading, setUtilityLoading] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -411,6 +412,7 @@ export default function App() {
     setDraftCategory(listing.category || "Tools");
     setDraftKind(listing.kind === "website" ? "website" : "app");
     setDraftWebsiteUrl(listing.website_url || "");
+    setDraftIcon(null);
     setDeveloperScreen("Publish a product");
     showNotice("Draft loaded for editing.");
   };
@@ -462,7 +464,7 @@ export default function App() {
     if (authError || !authData.user) { showNotice("Sign in to create a product draft."); setDeveloperScreen(null); setTab("Profile"); return; }
     setDraftSaving(true);
     const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "listing";
-    const payload = {
+    const payload: Record<string, any> = {
       name,
       slug,
       kind: draftKind,
@@ -471,6 +473,21 @@ export default function App() {
       description,
       website_url: draftKind === "website" ? draftWebsiteUrl.trim() : null,
     };
+    if (draftIcon) {
+      try {
+        const response = await fetch(draftIcon.uri);
+        const blob = await response.blob();
+        const extension = (draftIcon.fileName.split(".").pop() || "jpg").toLowerCase();
+        const iconPath = `${authData.user.id}/icons/${Date.now()}.${extension.replace(/[^a-z0-9]/g, "") || "jpg"}`;
+        const { error: iconError } = await supabase.storage.from("app-assets").upload(iconPath, blob, { contentType: draftIcon.mimeType, upsert: false });
+        if (iconError) throw iconError;
+        payload.icon_url = iconPath;
+      } catch (iconError: any) {
+        setDraftSaving(false);
+        showNotice(iconError?.message || "Could not upload the product icon.");
+        return;
+      }
+    }
     const result = editingListingId
       ? await supabase.from("listings").update(payload)
           .eq("id", editingListingId)
@@ -492,9 +509,18 @@ export default function App() {
       : [result.data, ...rows]);
     const wasEditing = Boolean(editingListingId);
     setEditingListingId(null);
-    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl("");
+    setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null);
     showNotice(wasEditing ? "Product draft updated." : "Product draft saved. Assets and submission checks still need to be completed.");
     setDeveloperScreen("My applications");
+  };
+
+  const chooseDraftIcon = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { showNotice("Allow photo access to choose a product icon."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setDraftIcon({ uri: asset.uri, fileName: asset.fileName || `icon-${Date.now()}.jpg`, mimeType: asset.mimeType || "image/jpeg" });
   };
 
   const choosePostMedia = async () => {
@@ -1095,6 +1121,9 @@ export default function App() {
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && styles.chipActive]}><Text style={[styles.chipText,draftCategory === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</ScrollView>
                   {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : null}
+                  <Text style={styles.fieldLabel}>Product icon</Text>
+                  <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftIcon()}><Text style={styles.mediaAttachText}>{draftIcon ? `Icon selected · ${draftIcon.fileName}` : "＋ Choose product icon"}</Text></TouchableOpacity>
+                  {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
                   <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Update product draft" : "Save product draft"}</Text></TouchableOpacity>
                   <Text style={styles.disclaimer}>This saves a draft only. Native icon/APK upload, screenshot management, full readiness checks and submission are still required before the publishing workflow is complete.</Text>
