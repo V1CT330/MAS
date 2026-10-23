@@ -236,6 +236,13 @@ export default function App() {
   const [betaListingId, setBetaListingId] = useState("");
   const [betaTesterEmail, setBetaTesterEmail] = useState("");
   const [betaChannel, setBetaChannel] = useState("private");
+  const [portfolioProjects, setPortfolioProjects] = useState<any[]>([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioSaving, setPortfolioSaving] = useState(false);
+  const [portfolioTitle, setPortfolioTitle] = useState("");
+  const [portfolioDescription, setPortfolioDescription] = useState("");
+  const [portfolioType, setPortfolioType] = useState("website");
+  const [portfolioUrl, setPortfolioUrl] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -555,6 +562,12 @@ export default function App() {
         const { data: profileData, error: profileError } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url,website_url,linkedin_url,facebook_url").eq("id", authData.user.id).maybeSingle();
         if (!active) return;
         setDeveloperProfileInfo(profileData ?? null);
+        const { data: portfolioData, error: portfolioError } = await supabase.from("developer_portfolio_projects")
+          .select("id,title,description,project_type,url,created_at")
+          .eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+        if (!active) return;
+        setPortfolioProjects(portfolioData ?? []);
+        if (portfolioError) showNotice(portfolioError.message || "Could not load portfolio projects.");
         if (profileError) showNotice(profileError.message || "Could not load your public profile.");
       }
       const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,banner_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
@@ -1186,6 +1199,44 @@ export default function App() {
     if (error || !data) { showNotice(error?.message || "Could not update feedback status."); return; }
     setBetaFeedback((items) => items.map((item) => item.id === feedback.id ? { ...item, status } : item));
     showNotice("Feedback status updated.");
+  };
+
+  const addPortfolioProject = async () => {
+    const title = portfolioTitle.trim();
+    const description = portfolioDescription.trim();
+    const url = portfolioUrl.trim();
+    if (title.length < 1 || title.length > 100) { showNotice("Project title must contain 1 to 100 characters."); return; }
+    if (!/^https:\/\//i.test(url)) { showNotice("Enter a valid HTTPS project URL."); return; }
+    if (description.length > 500) { showNotice("Project description must be 500 characters or fewer."); return; }
+    if (!isSupabaseConfigured) { showNotice("Portfolio management needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to update your portfolio."); setTab("Profile"); return; }
+    setPortfolioSaving(true);
+    const { data, error } = await supabase.from("developer_portfolio_projects").insert({
+      developer_id: authData.user.id,
+      title,
+      description: description || null,
+      project_type: portfolioType,
+      url,
+    }).select("id,title,description,project_type,url,created_at").single();
+    setPortfolioSaving(false);
+    if (error || !data) { showNotice(error?.message || "Could not add this portfolio project."); return; }
+    setPortfolioProjects((items) => [data, ...items]);
+    setPortfolioTitle("");
+    setPortfolioDescription("");
+    setPortfolioUrl("");
+    showNotice("Portfolio project added.");
+  };
+
+  const removePortfolioProject = async (project: any) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage your portfolio."); return; }
+    const { error } = await supabase.from("developer_portfolio_projects").delete()
+      .eq("id", project.id).eq("developer_id", authData.user.id);
+    if (error) { showNotice(error.message || "Could not remove this project."); return; }
+    setPortfolioProjects((items) => items.filter((item) => item.id !== project.id));
+    showNotice("Portfolio project removed.");
   };
 
   const submitSpotlightApplication = async () => {
@@ -1929,6 +1980,20 @@ export default function App() {
               {developerScreen === "My public profile" ? (
                 <>
                   <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Portfolio projects</Text><Text style={styles.sectionMeta}>{portfolioProjects.length}</Text></View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Project name *</Text>
+                    <TextInput value={portfolioTitle} onChangeText={(value) => setPortfolioTitle(value.slice(0,100))} placeholder="Project or product name" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Project type</Text>
+                    <View style={styles.chips}>{([["app","App"],["website","Website"],["game","Game"],["tool","Tool"],["other","Other"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setPortfolioType(value)} style={[styles.chip,portfolioType === value && styles.chipActive]}><Text style={[styles.chipText,portfolioType === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>HTTPS URL *</Text>
+                    <TextInput value={portfolioUrl} onChangeText={(value) => setPortfolioUrl(value.slice(0,1000))} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Short description</Text>
+                    <TextInput value={portfolioDescription} onChangeText={(value) => setPortfolioDescription(value.slice(0,500))} multiline maxLength={500} placeholder="What did you build?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
+                    <TouchableOpacity disabled={portfolioSaving} style={[styles.primaryButton,portfolioSaving && {opacity:0.5}]} onPress={() => void addPortfolioProject()}><Text style={styles.primaryButtonText}>{portfolioSaving ? "Adding…" : "Add portfolio project"}</Text></TouchableOpacity>
+                  </View>
+                  {portfolioLoading ? <ActivityIndicator color={COLORS.accent}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
+                  {!portfolioLoading && !portfolioProjects.length ? <Text style={styles.emptyText}>Add projects built outside MAS to showcase your work.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Published products</Text><Text style={styles.sectionMeta}>{developerRows.filter((item) => item.status === "published").length}</Text></View>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
                   {!developerLoading && !developerRows.some((item) => item.status === "published") ? <Text style={styles.emptyText}>Published products will appear on your profile when they are approved.</Text> : null}
