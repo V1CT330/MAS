@@ -216,6 +216,18 @@ export default function App() {
   const [investmentGoal, setInvestmentGoal] = useState("");
   const [investmentCurrency, setInvestmentCurrency] = useState("MWK");
   const [investmentUse, setInvestmentUse] = useState("");
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [teamActivity, setTeamActivity] = useState<any[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamSaving, setTeamSaving] = useState(false);
+  const [teamEmail, setTeamEmail] = useState("");
+  const [teamRole, setTeamRole] = useState("editor");
+  const [spotlightApplications, setSpotlightApplications] = useState<any[]>([]);
+  const [spotlightLoading, setSpotlightLoading] = useState(false);
+  const [spotlightSaving, setSpotlightSaving] = useState(false);
+  const [spotlightOpportunity, setSpotlightOpportunity] = useState("App Spotlight");
+  const [spotlightListingId, setSpotlightListingId] = useState("");
+  const [spotlightPitch, setSpotlightPitch] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -496,7 +508,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadDeveloperListings = async () => {
-      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks", "My public profile"].includes(developerScreen)) return;
+      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks", "My public profile", "Spotlight"].includes(developerScreen)) return;
       if (!isSupabaseConfigured) { setDeveloperRows([]); setDeveloperLoading(false); return; }
       setDeveloperLoading(true);
       const { data: authData } = await supabase.auth.getUser();
@@ -993,6 +1005,128 @@ export default function App() {
     });
     return () => { active = false; };
   }, [tab, socialSection]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !developerScreen || !["Team management", "Spotlight"].includes(developerScreen)) return;
+    let active = true;
+    const loadDeveloperWorkspace = async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (!active) return;
+      if (authError || !authData.user) {
+        setTeamMembers([]);
+        setTeamActivity([]);
+        setSpotlightApplications([]);
+        setTeamLoading(false);
+        setSpotlightLoading(false);
+        return;
+      }
+      const userId = authData.user.id;
+      if (developerScreen === "Team management") {
+        setTeamLoading(true);
+        const [membersResult, activityResult] = await Promise.all([
+          supabase.from("team_members").select("id,email,role,status,created_at").eq("owner_id", userId).order("created_at", { ascending: false }).limit(100),
+          supabase.from("activity_logs").select("id,action,target,created_at").eq("owner_id", userId).order("created_at", { ascending: false }).limit(30),
+        ]);
+        if (!active) return;
+        setTeamMembers(membersResult.data ?? []);
+        setTeamActivity(activityResult.data ?? []);
+        setTeamLoading(false);
+        if (membersResult.error) showNotice(membersResult.error.message || "Could not load team members.");
+        if (activityResult.error) showNotice(activityResult.error.message || "Could not load the team activity log.");
+      } else {
+        setSpotlightLoading(true);
+        const { data, error } = await supabase.from("spotlight_applications")
+          .select("id,listing_id,opportunity,pitch,status,created_at")
+          .eq("developer_id", userId).order("created_at", { ascending: false }).limit(100);
+        if (!active) return;
+        setSpotlightApplications(data ?? []);
+        setSpotlightLoading(false);
+        if (error) showNotice(error.message || "Could not load spotlight applications.");
+      }
+    };
+    void loadDeveloperWorkspace().catch(() => {
+      if (!active) return;
+      setTeamLoading(false);
+      setSpotlightLoading(false);
+      showNotice("Could not load this developer workspace. Check your connection and try again.");
+    });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const writeTeamActivity = async (ownerId: string, actorId: string, action: string, target?: string) => {
+    const { error } = await supabase.from("activity_logs").insert({
+      owner_id: ownerId,
+      actor_id: actorId,
+      action,
+      target: target || null,
+    });
+    if (error) showNotice("The team action succeeded, but its activity entry could not be recorded.");
+  };
+
+  const inviteTeamMember = async () => {
+    const email = teamEmail.trim().toLowerCase();
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      showNotice("Enter a valid teammate email address.");
+      return;
+    }
+    if (!isSupabaseConfigured) { showNotice("Team management needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage your developer team."); setTab("Profile"); return; }
+    if (email === (authData.user.email || "").toLowerCase()) { showNotice("You cannot invite your own account."); return; }
+    setTeamSaving(true);
+    const { data, error } = await supabase.from("team_members")
+      .insert({ owner_id: authData.user.id, email, role: teamRole, status: "invited" })
+      .select("id,email,role,status,created_at").single();
+    setTeamSaving(false);
+    if (error || !data) { showNotice(error?.code === "23505" ? "This email already has a team invitation." : error?.message || "Could not invite this teammate."); return; }
+    setTeamMembers((items) => [data, ...items]);
+    await writeTeamActivity(authData.user.id, authData.user.id, "Invited teammate as " + teamRole, email);
+    setTeamEmail("");
+    showNotice("Team invitation recorded. The teammate must still join through the account workflow.");
+  };
+
+  const updateTeamMember = async (member: any, patch: { role?: string; status?: string }) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage your team."); return; }
+    const { data, error } = await supabase.from("team_members")
+      .update(patch).eq("id", member.id).eq("owner_id", authData.user.id)
+      .select("id,email,role,status,created_at").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "Could not update this team member."); return; }
+    setTeamMembers((items) => items.map((item) => item.id === member.id ? data : item));
+    await writeTeamActivity(authData.user.id, authData.user.id, "Updated teammate " + (patch.role ? "role to " + patch.role : "status to " + patch.status), member.email);
+    showNotice("Team member updated.");
+  };
+
+  const removeTeamMember = async (member: any) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage your team."); return; }
+    const { error } = await supabase.from("team_members").delete().eq("id", member.id).eq("owner_id", authData.user.id);
+    if (error) { showNotice(error.message || "Could not remove this team member."); return; }
+    setTeamMembers((items) => items.filter((item) => item.id !== member.id));
+    await writeTeamActivity(authData.user.id, authData.user.id, "Removed teammate", member.email);
+    showNotice("Team member removed.");
+  };
+
+  const submitSpotlightApplication = async () => {
+    if (spotlightPitch.trim().length < 30) { showNotice("Tell us a little more, at least 30 characters."); return; }
+    if (!isSupabaseConfigured) { showNotice("Spotlight applications need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to apply for Spotlight."); setTab("Profile"); return; }
+    setSpotlightSaving(true);
+    const { data, error } = await supabase.from("spotlight_applications").insert({
+      developer_id: authData.user.id,
+      listing_id: spotlightListingId || null,
+      opportunity: spotlightOpportunity,
+      pitch: spotlightPitch.trim(),
+    }).select("id,listing_id,opportunity,pitch,status,created_at").single();
+    setSpotlightSaving(false);
+    if (error || !data) { showNotice(error?.message || "Could not submit the Spotlight application."); return; }
+    setSpotlightApplications((items) => [data, ...items]);
+    setSpotlightPitch("");
+    showNotice("Spotlight application submitted.");
+  };
 
   const respondToConnection = async (connection: any, status: "accepted" | "declined") => {
     if (!isSupabaseConfigured) { showNotice("Connections need the MAS backend configuration."); return; }
@@ -1728,6 +1862,39 @@ export default function App() {
                     return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
                   })}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No listings to check yet. Create a product draft first.</Text> : null}
+                </>
+              ) : developerScreen === "Team management" ? (
+                <>
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Team access</Text><Text style={styles.infoText}>Invitations are recorded in your MAS workspace. Actual member access depends on the existing account membership workflow and database permissions.</Text></View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Teammate email</Text>
+                    <TextInput value={teamEmail} onChangeText={(value) => setTeamEmail(value.slice(0,255))} autoCapitalize="none" keyboardType="email-address" placeholder="teammate@example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Role</Text>
+                    <View style={styles.chips}>{([["admin","Admin"],["editor","Editor"],["viewer","Viewer"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setTeamRole(value)} style={[styles.chip,teamRole === value && styles.chipActive]}><Text style={[styles.chipText,teamRole === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                    <TouchableOpacity disabled={teamSaving} style={[styles.primaryButton,teamSaving && {opacity:0.5}]} onPress={() => void inviteTeamMember()}><Text style={styles.primaryButtonText}>{teamSaving ? "Inviting…" : "Invite teammate"}</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Members</Text><Text style={styles.sectionMeta}>{teamMembers.length}</Text></View>
+                  {teamLoading ? <ActivityIndicator color={COLORS.accent}/> : teamMembers.map((member) => <View key={member.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{member.email}</Text><Text style={styles.toolDescription}>Role: {member.role} · Status: {member.status}</Text><Text style={styles.postTag}>{member.created_at ? new Date(member.created_at).toLocaleDateString() : ""}</Text><View style={styles.chips}>{(["admin","editor","viewer"]).map((role) => <TouchableOpacity key={role} onPress={() => role !== member.role ? void updateTeamMember(member,{role}) : undefined} style={[styles.chip,member.role === role && styles.chipActive]}><Text style={[styles.chipText,member.role === role && styles.chipTextActive]}>{role}</Text></TouchableOpacity>)}</View></View><View style={{gap:8,alignItems:"flex-end"}}>{member.status !== "active" ? <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"active"})}><Text style={styles.secondaryButtonText}>Activate</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"invited"})}><Text style={styles.secondaryButtonText}>Deactivate</Text></TouchableOpacity>}<TouchableOpacity onPress={() => void removeTeamMember(member)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View></View>)}
+                  {!teamLoading && !teamMembers.length ? <Text style={styles.emptyText}>No team members yet. Invite a collaborator to start.</Text> : null}
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Activity log</Text><Text style={styles.sectionMeta}>{teamActivity.length}</Text></View>
+                  {teamActivity.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.action}</Text>{item.target ? <Text style={styles.toolDescription}>{item.target}</Text> : null}<Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View></View>)}
+                  {!teamLoading && !teamActivity.length ? <Text style={styles.emptyText}>Team actions will appear here.</Text> : null}
+                </>
+              ) : developerScreen === "Spotlight" ? (
+                <>
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Feature opportunities</Text><Text style={styles.infoText}>Apply for App Spotlight, Developer Spotlight, Project Spotlight, podcast features or Made in Malawi features. Applications are reviewed by MAS; submission does not guarantee selection.</Text></View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Opportunity</Text>
+                    <View style={styles.chips}>{(["App Spotlight","Developer Spotlight","Project Spotlight","Podcast feature","Made in Malawi feature"]).map((item) => <TouchableOpacity key={item} onPress={() => setSpotlightOpportunity(item)} style={[styles.chip,spotlightOpportunity === item && styles.chipActive]}><Text style={[styles.chipText,spotlightOpportunity === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>Product (optional)</Text>
+                    <View style={styles.chips}><TouchableOpacity onPress={() => setSpotlightListingId("")} style={[styles.chip,!spotlightListingId && styles.chipActive]}><Text style={[styles.chipText,!spotlightListingId && styles.chipTextActive]}>No specific product</Text></TouchableOpacity>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setSpotlightListingId(listing.id)} style={[styles.chip,spotlightListingId === listing.id && styles.chipActive]}><Text style={[styles.chipText,spotlightListingId === listing.id && styles.chipTextActive]}>{listing.name}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>Pitch (at least 30 characters)</Text>
+                    <TextInput value={spotlightPitch} onChangeText={(value) => setSpotlightPitch(value.slice(0,800))} multiline maxLength={800} placeholder="What are you building, who is it for in Malawi, and why should it be featured?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:110,textAlignVertical:"top"}]}/>
+                    <TouchableOpacity disabled={spotlightSaving} style={[styles.primaryButton,spotlightSaving && {opacity:0.5}]} onPress={() => void submitSpotlightApplication()}><Text style={styles.primaryButtonText}>{spotlightSaving ? "Submitting…" : "Submit application"}</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your applications</Text><Text style={styles.sectionMeta}>{spotlightApplications.length}</Text></View>
+                  {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
+                  {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
                 </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
