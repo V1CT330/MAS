@@ -1,0 +1,8 @@
+name: MAS Android APK Build
+
+jobs:
+  build_android:
+    type: build
+    params:
+      platform: android
+      profile: preview
