@@ -394,7 +394,7 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
-      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
       setDeveloperLoading(false);
@@ -422,6 +422,30 @@ export default function App() {
     setDraftChangelog("First release");
     setDeveloperScreen("Publish a product");
     showNotice("Draft loaded for editing.");
+  };
+
+  const submitDraftForReview = async (listing: any) => {
+    if (!isSupabaseConfigured) { showNotice("Submitting a listing needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit a product for review."); setDeveloperScreen(null); setTab("Profile"); return; }
+    const { data: current, error: listingError } = await supabase.from("listings")
+      .select("id,name,kind,description,tagline,website_url,icon_url,status")
+      .eq("id", listing.id).eq("developer_id", authData.user.id).maybeSingle();
+    if (listingError || !current) { showNotice(listingError?.message || "This listing could not be found."); return; }
+    if (current.status !== "draft" && current.status !== "rejected") { showNotice("Only draft or rejected listings can be submitted."); return; }
+    if ((current.name || "").trim().length < 3 || (current.description || "").trim().length < 20) { showNotice("Add a product name and a description of at least 20 characters before submitting."); return; }
+    if (!current.icon_url) { showNotice("Upload a product icon before submitting for review."); return; }
+    if (current.kind === "website") {
+      if (!/^https:\/\//i.test(current.website_url || "")) { showNotice("Add a valid HTTPS website URL before submitting."); return; }
+    } else {
+      const { data: versions, error: versionError } = await supabase.from("listing_versions").select("id,file_url").eq("listing_id", listing.id).order("created_at", { ascending: false }).limit(10);
+      if (versionError) { showNotice(versionError.message || "Could not verify the release file."); return; }
+      if (!(versions || []).some((version: any) => Boolean(version.file_url))) { showNotice("Upload an APK or ZIP release before submitting this app."); return; }
+    }
+    const { error } = await supabase.from("listings").update({ status: "pending" }).eq("id", listing.id).eq("developer_id", authData.user.id);
+    if (error) { showNotice(error.message || "Could not submit the listing."); return; }
+    setDeveloperRows((rows) => rows.map((row) => row.id === listing.id ? { ...row, status: "pending" } : row));
+    showNotice("Listing submitted for MAS review.");
   };
 
   const deleteNativeDraft = async (listing: any) => {
@@ -1183,7 +1207,7 @@ export default function App() {
                 </>
               ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Reviews" || developerScreen === "Publishing checklist" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status === "draft" ? startEditingDraft(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status === "draft" ? <Text style={styles.postTag}>Tap to edit draft</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View>)}
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status === "draft" ? startEditingDraft(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Reviews" ? <Text style={styles.postTag}>{item.rating_count ?? 0} reviews · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " average" : "No reviews yet"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status === "draft" ? <Text style={styles.postTag}>Tap to edit draft</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && item.status === "draft" ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity></View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
