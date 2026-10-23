@@ -416,7 +416,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadDeveloperListings = async () => {
-      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist"].includes(developerScreen)) return;
+      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks"].includes(developerScreen)) return;
       if (!isSupabaseConfigured) { setDeveloperRows([]); setDeveloperLoading(false); return; }
       setDeveloperLoading(true);
       const { data: authData } = await supabase.auth.getUser();
@@ -1343,7 +1343,16 @@ export default function App() {
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
               ) : null}
-              {nativeDeveloperPreviews[developerScreen] ? (
+              {developerScreen === "Quality checks" ? (
+                <>
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Store readiness</Text><Text style={styles.infoText}>The checklist mirrors MAS store-quality requirements. Scores are guidance; a strong score does not guarantee approval.</Text></View>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => {
+                    const report = getListingQualityReport(item);
+                    return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
+                  })}
+                  {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No listings to check yet. Create a product draft first.</Text> : null}
+                </>
+              ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
                   <View style={styles.infoBanner}>
                     <Text style={styles.infoTitle}>Native workspace preview</Text>
