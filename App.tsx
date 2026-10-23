@@ -562,11 +562,13 @@ export default function App() {
         const { data: profileData, error: profileError } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url,website_url,linkedin_url,facebook_url").eq("id", authData.user.id).maybeSingle();
         if (!active) return;
         setDeveloperProfileInfo(profileData ?? null);
+        setPortfolioLoading(true);
         const { data: portfolioData, error: portfolioError } = await supabase.from("developer_portfolio_projects")
           .select("id,title,description,project_type,url,created_at")
           .eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
         if (!active) return;
         setPortfolioProjects(portfolioData ?? []);
+        setPortfolioLoading(false);
         if (portfolioError) showNotice(portfolioError.message || "Could not load portfolio projects.");
         if (profileError) showNotice(profileError.message || "Could not load your public profile.");
       }
