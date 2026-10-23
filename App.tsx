@@ -116,12 +116,12 @@ export default function App() {
     let active = true;
     if (!isSupabaseConfigured) return () => { active = false; };
     setCatalogueLoading(true);
-    supabase
+    Promise.resolve(supabase
       .from("listings")
       .select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
       .eq("status", "published")
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(100))
       .then(async ({ data, error }) => {
         if (!active) return;
         if (!error && data?.length) {
