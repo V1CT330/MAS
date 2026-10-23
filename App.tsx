@@ -137,6 +137,7 @@ export default function App() {
   const [developerScreen, setDeveloperScreen] = useState<string | null>(null);
   const [developerRows, setDeveloperRows] = useState<any[]>([]);
   const [developerReviews, setDeveloperReviews] = useState<any[]>([]);
+  const [developerProfileInfo, setDeveloperProfileInfo] = useState<any>(null);
   const [reviewReplies, setReviewReplies] = useState<Record<string, string>>({});
   const [reviewReplySaving, setReviewReplySaving] = useState<string | null>(null);
   const [developerLoading, setDeveloperLoading] = useState(false);
@@ -479,12 +480,18 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadDeveloperListings = async () => {
-      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks"].includes(developerScreen)) return;
+      if (!developerScreen || !["Developer dashboard", "My applications", "Analytics", "Reviews", "Publishing checklist", "Quality checks", "My public profile"].includes(developerScreen)) return;
       if (!isSupabaseConfigured) { setDeveloperRows([]); setDeveloperLoading(false); return; }
       setDeveloperLoading(true);
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setDeveloperRows([]); setDeveloperLoading(false); showNotice("Sign in to access developer tools."); return; }
+      if (developerScreen === "My public profile") {
+        const { data: profileData, error: profileError } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url,website_url,linkedin_url,facebook_url").eq("id", authData.user.id).maybeSingle();
+        if (!active) return;
+        setDeveloperProfileInfo(profileData ?? null);
+        if (profileError) showNotice(profileError.message || "Could not load your public profile.");
+      }
       const { data, error } = await supabase.from("listings").select("id,name,slug,kind,category,tagline,description,website_url,icon_url,banner_url,screenshots,keywords,tags,status,downloads,rating_avg,rating_count,created_at").eq("developer_id", authData.user.id).order("created_at", { ascending: false }).limit(100);
       if (!active) return;
       setDeveloperRows(data ?? []);
@@ -1414,7 +1421,14 @@ export default function App() {
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
               ) : null}
-              {developerScreen === "Quality checks" ? (
+              {developerScreen === "My public profile" ? (
+                <>
+                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Published products</Text><Text style={styles.sectionMeta}>{developerRows.filter((item) => item.status === "published").length}</Text></View>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
+                  {!developerLoading && !developerRows.some((item) => item.status === "published") ? <Text style={styles.emptyText}>Published products will appear on your profile when they are approved.</Text> : null}
+                </>
+              ) : developerScreen === "Quality checks" ? (
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Store readiness</Text><Text style={styles.infoText}>The checklist mirrors MAS store-quality requirements. Scores are guidance; a strong score does not guarantee approval.</Text></View>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => {
