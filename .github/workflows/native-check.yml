@@ -44,6 +44,8 @@ jobs:
             echo "npm did not generate package-lock.json" >&2
             exit 1
           fi
+      - name: Expo project health check
+        run: npx --yes expo-doctor
       - name: TypeScript check
         run: npm run typecheck
       - name: Bundle Android JavaScript
