@@ -2121,7 +2121,7 @@ export default function App() {
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
-              <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
+              <Text style={styles.pageIntro}>Manage listings, releases, reviews, analytics, team access, Spotlight applications and developer verification. Payment checkout and selected advanced tools hand off to the secure MAS web console.</Text>
               <View style={styles.developerStatus}><View style={styles.statusDot}/><Text style={styles.statusText}>Secure integration links enabled</Text></View>
               {[
                 ["▣", "Developer dashboard", "Publishing readiness, installs, views and performance.", "https://malawian-app-store-j6pm.vercel.app/console"],
@@ -2256,7 +2256,7 @@ export default function App() {
                   {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
                   <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Save listing changes" : "Save product draft"}</Text></TouchableOpacity>
-                  <Text style={styles.disclaimer}>This saves a draft only. Native icon/APK upload, screenshot management, full readiness checks and submission are still required before the publishing workflow is complete.</Text>
+                  <Text style={styles.disclaimer}>Saving creates or updates your draft. From My applications, complete the required assets and listing checks, then submit eligible drafts for review. Upload and submission errors are shown in the app.</Text>
                 </View>
               ) : developerScreen === "Developer dashboard" ? (
                 <>
@@ -2479,7 +2479,7 @@ export default function App() {
                   <Text style={styles.disclaimer}>These are native preparation and checklist screens, not claims that campaign, team permissions or provider workflows are already connected. Live integrations will be completed in the final integration phase.</Text>
                 </>
               ) : null}
-              <Text style={styles.disclaimer}>Only screens marked native are rebuilt in this app. Payment, identity verification and wallet transactions remain integration work and will not be treated as complete until their native screens and backend workflows are implemented and tested.</Text>
+              <Text style={styles.disclaimer}>Payment settlement, identity-provider decisions and wallet transactions remain server-authoritative. Hosted checkout and selected provider workflows open securely in the MAS web console; all native and hosted journeys still require final end-to-end acceptance testing.</Text>
             </>
           ) : null}
           <View style={styles.bottomSpace}/>
