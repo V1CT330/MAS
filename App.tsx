@@ -241,6 +241,12 @@ export default function App() {
   const [diditLoading, setDiditLoading] = useState(false);
   const [proSubscription, setProSubscription] = useState<any>(null);
   const [proLoading, setProLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsStats, setAnalyticsStats] = useState<{
+    views: number; installs: number; viewsByDevice: Record<string, number>; installsByDevice: Record<string, number>;
+    viewsByCountry: Record<string, number>; installsByCountry: Record<string, number>; byListing: Record<string, { views: number; installs: number }>;
+  }>({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
   const [betaLoading, setBetaLoading] = useState(false);
   const [betaSaving, setBetaSaving] = useState(false);
   const [betaListingId, setBetaListingId] = useState("");
@@ -253,6 +259,64 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Analytics" || !isSupabaseConfigured) return;
+    let active = true;
+    const loadAnalytics = async () => {
+      setAnalyticsLoading(true);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) { setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} }); setAnalyticsLoading(false); showNotice("Sign in to view product analytics."); }
+        return;
+      }
+      const { data: listings, error: listingsError } = await supabase.from("listings").select("id").eq("developer_id", authData.user.id);
+      if (!active) return;
+      if (listingsError) { setAnalyticsLoading(false); showNotice(listingsError.message || "Could not load your analytics listings."); return; }
+      const ids = (listings ?? []).map((item: any) => item.id).filter(Boolean);
+      if (!ids.length) {
+        setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
+        setAnalyticsLoading(false);
+        return;
+      }
+      const days = Number(analyticsRange.replace("d", ""));
+      const end = new Date();
+      const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+      const startIso = start.toISOString();
+      const endIso = end.toISOString();
+      const [viewsResult, installsResult] = await Promise.all([
+        supabase.from("view_events").select("created_at,device,country,listing_id").in("listing_id", ids).gte("created_at", startIso).lte("created_at", endIso),
+        supabase.from("install_events").select("created_at,device,country,listing_id").in("listing_id", ids).gte("created_at", startIso).lte("created_at", endIso),
+      ]);
+      if (!active) return;
+      if (viewsResult.error || installsResult.error) {
+        setAnalyticsLoading(false);
+        showNotice(viewsResult.error?.message || installsResult.error?.message || "Could not load analytics events.");
+        return;
+      }
+      const aggregate = (rows: any[], key: "device" | "country") => rows.reduce((acc: Record<string, number>, row: any) => {
+        const label = String(row[key] || "Unknown");
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {});
+      const byListing: Record<string, { views: number; installs: number }> = {};
+      ids.forEach((id: string) => { byListing[id] = { views: 0, installs: 0 }; });
+      (viewsResult.data ?? []).forEach((row: any) => { if (byListing[row.listing_id]) byListing[row.listing_id].views += 1; });
+      (installsResult.data ?? []).forEach((row: any) => { if (byListing[row.listing_id]) byListing[row.listing_id].installs += 1; });
+      setAnalyticsStats({
+        views: (viewsResult.data ?? []).length,
+        installs: (installsResult.data ?? []).length,
+        viewsByDevice: aggregate(viewsResult.data ?? [], "device"),
+        installsByDevice: aggregate(installsResult.data ?? [], "device"),
+        viewsByCountry: aggregate(viewsResult.data ?? [], "country"),
+        installsByCountry: aggregate(installsResult.data ?? [], "country"),
+        byListing,
+      });
+      setAnalyticsLoading(false);
+    };
+    void loadAnalytics().catch(() => { if (active) { setAnalyticsLoading(false); showNotice("Could not load analytics."); } });
+    return () => { active = false; };
+  }, [developerScreen, analyticsRange]);
 
   useEffect(() => {
     if (developerScreen !== "Developer Pro" || !isSupabaseConfigured) return;
@@ -2132,8 +2196,29 @@ export default function App() {
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
                   {!developerLoading && !developerReviews.length ? <Text style={styles.emptyText}>No reviews have been posted for your products yet.</Text> : null}
                 </>
-              ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Publishing checklist" ? (
+              ) : developerScreen === "Analytics" ? (
                 <>
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Product analytics</Text><Text style={styles.infoText}>Live view and install events for your listings. Conversion is installs divided by views; repeated events may be counted separately.</Text></View>
+                  <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && styles.chipActive]}><Text style={[styles.chipText,analyticsRange === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : <>
+                    <View style={styles.devMetricGrid}>
+                      {[["Views",analyticsStats.views],["Installs",analyticsStats.installs],["Conversion",analyticsStats.views ? Math.round(analyticsStats.installs / analyticsStats.views * 100) + "%" : "—"],["Products",developerRows.length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{String(value)}</Text><Text style={styles.devMetricLabel}>{String(label)}</Text></View>)}
+                    </View>
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Performance by product</Text><Text style={styles.sectionMeta}>{analyticsRange}</Text></View>
+                    {developerRows.map((item) => {
+                      const metrics = analyticsStats.byListing[item.id] || { views: 0, installs: 0 };
+                      const conversion = metrics.views ? Math.round(metrics.installs / metrics.views * 100) : 0;
+                      return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{metrics.views} views · {metrics.installs} installs · {metrics.views ? conversion + "% conversion" : "No views in this period"}</Text><Text style={styles.postTag}>Lifetime: {item.downloads ?? 0} installs · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text></View></View>;
+                    })}
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Audience devices</Text></View>
+                    {Object.entries(analyticsStats.viewsByDevice).sort((a,b) => b[1]-a[1]).slice(0,5).map(([device,count]) => <View key={device} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{device}</Text><Text style={styles.toolDescription}>{count} views · {(analyticsStats.installsByDevice[device] || 0)} installs</Text></View></View>)}
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Audience countries</Text></View>
+                    {Object.entries(analyticsStats.viewsByCountry).sort((a,b) => b[1]-a[1]).slice(0,5).map(([country,count]) => <View key={country} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{country}</Text><Text style={styles.toolDescription}>{count} views · {(analyticsStats.installsByCountry[country] || 0)} installs</Text></View></View>)}
+                    {!developerRows.length ? <Text style={styles.emptyText}>Publish a product to begin collecting analytics.</Text> : null}
+                    {!analyticsStats.views && !analyticsStats.installs && developerRows.length ? <Text style={styles.emptyText}>No tracked events in this period yet.</Text> : null}
+                  </>}
+                </>
+              ) : developerScreen === "My applications" || developerScreen === "Publishing checklist" ? (                <>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
