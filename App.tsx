@@ -103,7 +103,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
     { title: "Plan a release", description: "Check version details, release notes and package readiness before submission.", status: "Workflow", action: "Open publishing checklist" },
   ],
   "Team management": [
-    { title: "Team roles", description: "Plan who can manage listings, publish releases and view analytics.", status: "Integration pending", action: "Review team access" },
+    { title: "Team roles", description: "Invite teammates and manage their recorded role and status. Actual access still depends on backend membership enforcement.", status: "Native workflow", action: "Review team access" },
     { title: "Access review", description: "Only grant collaborators the permissions they need for their work.", status: "Security", action: "Review access guidance" },
   ],
   "Promote a product": [
@@ -113,7 +113,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   ],
   "Spotlight": [
     { title: "Featured product readiness", description: "Keep your listing complete, current and easy to understand.", status: "Preparation", action: "Open quality checks" },
-    { title: "Feature submission", description: "Featured placement requires a connected submission and review workflow.", status: "Integration pending", action: "Review publishing checklist" },
+    { title: "Feature submission", description: "Submit a Spotlight application and track its review status in the native app.", status: "Native workflow", action: "Open Spotlight applications" },
   ],
   "My public profile": [
     { title: "Developer identity", description: "Your public profile helps people understand who builds and maintains a product.", status: "Profile", action: "Review profile" },
@@ -2469,6 +2469,9 @@ export default function App() {
                         else if (item.action === "Start a product draft") setDeveloperScreen("Publish a product");
                         else if (item.action === "Open quality checks") setDeveloperScreen("Quality checks");
                         else if (item.action === "Open publishing checklist") setDeveloperScreen("Publishing checklist");
+                        else if (item.action === "Review team access") setDeveloperScreen("Team management");
+                        else if (item.action === "Open Spotlight applications") setDeveloperScreen("Spotlight");
+                        else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
                         else showNotice(item.status === "Integration pending" || item.status === "Backend check" || item.status === "Integration test" ? "This action needs its backend integration and device testing before it can be marked complete." : "Review the checklist above and verify it during native app testing.");
                       }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
                     </View>
