@@ -165,6 +165,15 @@ export default function App() {
   const [accountDisplayName, setAccountDisplayName] = useState("");
   const [accountDeveloperName, setAccountDeveloperName] = useState("");
   const [accountBio, setAccountBio] = useState("");
+  const [accountCompanyName, setAccountCompanyName] = useState("");
+  const [accountLocation, setAccountLocation] = useState("");
+  const [accountContactEmail, setAccountContactEmail] = useState("");
+  const [accountSkills, setAccountSkills] = useState("");
+  const [accountWebsiteUrl, setAccountWebsiteUrl] = useState("");
+  const [accountGithubUrl, setAccountGithubUrl] = useState("");
+  const [accountPortfolioUrl, setAccountPortfolioUrl] = useState("");
+  const [accountLinkedinUrl, setAccountLinkedinUrl] = useState("");
+  const [accountFacebookUrl, setAccountFacebookUrl] = useState("");
   const [accountAvatarUri, setAccountAvatarUri] = useState<string | null>(null);
   const [accountProfileSaving, setAccountProfileSaving] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -499,11 +508,20 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setUtilityLoading(false); return; }
-      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url").eq("id", authData.user.id).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url,company_name,location,contact_email,skills,website_url,github_url,portfolio_url,linkedin_url,facebook_url").eq("id", authData.user.id).maybeSingle();
       if (!active) return;
       setAccountDisplayName(data?.display_name || "");
       setAccountDeveloperName(data?.developer_name || "");
       setAccountBio(data?.bio || "");
+      setAccountCompanyName(data?.company_name || "");
+      setAccountLocation(data?.location || "");
+      setAccountContactEmail(data?.contact_email || "");
+      setAccountSkills(Array.isArray(data?.skills) ? data.skills.join(", ") : "");
+      setAccountWebsiteUrl(data?.website_url || "");
+      setAccountGithubUrl(data?.github_url || "");
+      setAccountPortfolioUrl(data?.portfolio_url || "");
+      setAccountLinkedinUrl(data?.linkedin_url || "");
+      setAccountFacebookUrl(data?.facebook_url || "");
       if (data?.avatar_url) {
         const { data: avatarData } = await supabase.storage.from("app-assets").createSignedUrl(data.avatar_url, 3600);
         if (active) setAccountAvatarUri(avatarData?.signedUrl ?? null);
@@ -603,9 +621,36 @@ export default function App() {
     const displayName = accountDisplayName.trim();
     const developerName = accountDeveloperName.trim();
     const bio = accountBio.trim();
+    const profileUrls = [
+      ["Website", accountWebsiteUrl], ["GitHub", accountGithubUrl], ["Portfolio", accountPortfolioUrl],
+      ["LinkedIn", accountLinkedinUrl], ["Facebook", accountFacebookUrl],
+    ] as [string, string][];
+    for (const [label, value] of profileUrls) {
+      if (value.trim() && !/^https:\/\//i.test(value.trim())) {
+        showNotice(`${label} URL must start with https://.`);
+        return;
+      }
+    }
+    if (accountContactEmail.trim() && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(accountContactEmail.trim())) {
+      showNotice("Enter a valid contact email address.");
+      return;
+    }
     if (displayName.length > 80 || developerName.length > 100 || bio.length > 300) { showNotice("Display name: max 80 characters; developer name: max 100; bio: max 300."); return; }
     setAccountProfileSaving(true);
-    const { error } = await supabase.from("profiles").update({ display_name: displayName || null, developer_name: developerName || null, bio: bio || null }).eq("id", authData.user.id);
+    const { error } = await supabase.from("profiles").update({
+      display_name: displayName || null,
+      developer_name: developerName || null,
+      bio: bio || null,
+      company_name: accountCompanyName.trim() || null,
+      location: accountLocation.trim() || null,
+      contact_email: accountContactEmail.trim() || null,
+      skills: accountSkills.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 30),
+      website_url: accountWebsiteUrl.trim() || null,
+      github_url: accountGithubUrl.trim() || null,
+      portfolio_url: accountPortfolioUrl.trim() || null,
+      linkedin_url: accountLinkedinUrl.trim() || null,
+      facebook_url: accountFacebookUrl.trim() || null,
+    }).eq("id", authData.user.id);
     setAccountProfileSaving(false);
     if (error) { showNotice(error.message || "Could not save your profile."); return; }
     showNotice("Profile saved.");
@@ -2157,6 +2202,15 @@ export default function App() {
                       <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Developer name (max 100 characters)</Text><TextInput value={accountDeveloperName} onChangeText={(value) => setAccountDeveloperName(value.slice(0,100))} placeholder="Your developer or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Bio (max 300 characters)</Text><TextInput value={accountBio} onChangeText={(value) => setAccountBio(value.slice(0,300))} placeholder="A short introduction" placeholderTextColor={COLORS.muted} multiline maxLength={300} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]} />
+                      <Text style={styles.fieldLabel}>Company / studio</Text><TextInput value={accountCompanyName} onChangeText={(value) => setAccountCompanyName(value.slice(0,120))} placeholder="Company or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Location</Text><TextInput value={accountLocation} onChangeText={(value) => setAccountLocation(value.slice(0,120))} placeholder="City, country" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Contact email</Text><TextInput value={accountContactEmail} onChangeText={setAccountContactEmail} autoCapitalize="none" keyboardType="email-address" placeholder="contact@example.com" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Skills (comma-separated)</Text><TextInput value={accountSkills} onChangeText={(value) => setAccountSkills(value.slice(0,800))} placeholder="React Native, design, backend" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Website (HTTPS)</Text><TextInput value={accountWebsiteUrl} onChangeText={setAccountWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.com" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>GitHub (HTTPS)</Text><TextInput value={accountGithubUrl} onChangeText={setAccountGithubUrl} autoCapitalize="none" keyboardType="url" placeholder="https://github.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Portfolio (HTTPS)</Text><TextInput value={accountPortfolioUrl} onChangeText={setAccountPortfolioUrl} autoCapitalize="none" keyboardType="url" placeholder="https://portfolio.example" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>LinkedIn (HTTPS)</Text><TextInput value={accountLinkedinUrl} onChangeText={setAccountLinkedinUrl} autoCapitalize="none" keyboardType="url" placeholder="https://linkedin.com/in/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Facebook (HTTPS)</Text><TextInput value={accountFacebookUrl} onChangeText={setAccountFacebookUrl} autoCapitalize="none" keyboardType="url" placeholder="https://facebook.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
                       {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
                     </View>
