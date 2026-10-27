@@ -243,6 +243,7 @@ export default function App() {
   const [proLoading, setProLoading] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<"7d" | "30d" | "90d">("30d");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsProAllowed, setAnalyticsProAllowed] = useState(false);
   const [analyticsStats, setAnalyticsStats] = useState<{
     views: number; installs: number; viewsByDevice: Record<string, number>; installsByDevice: Record<string, number>;
     viewsByCountry: Record<string, number>; installsByCountry: Record<string, number>; byListing: Record<string, { views: number; installs: number }>;
@@ -268,6 +269,18 @@ export default function App() {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData.user) {
         if (active) { setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} }); setAnalyticsLoading(false); showNotice("Sign in to view product analytics."); }
+        return;
+      }
+      const { data: subscription, error: subscriptionError } = await supabase.from("subscriptions").select("status,current_period_end").eq("user_id", authData.user.id).maybeSingle();
+      if (!active) return;
+      if (subscriptionError) { setAnalyticsLoading(false); showNotice(subscriptionError.message || "Could not verify Developer Pro access."); return; }
+      const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : null;
+      const hasPro = (subscription?.status === "active" && (periodEnd === null || periodEnd > Date.now())) ||
+        (subscription?.status === "cancelled" && periodEnd !== null && periodEnd > Date.now());
+      setAnalyticsProAllowed(hasPro);
+      if (!hasPro) {
+        setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
+        setAnalyticsLoading(false);
         return;
       }
       const { data: listings, error: listingsError } = await supabase.from("listings").select("id").eq("developer_id", authData.user.id);
@@ -2200,7 +2213,13 @@ export default function App() {
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Product analytics</Text><Text style={styles.infoText}>Live view and install events for your listings. Conversion is installs divided by views; repeated events may be counted separately.</Text></View>
                   <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && styles.chipActive]}><Text style={[styles.chipText,analyticsRange === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
-                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : <>
+                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : !analyticsProAllowed ? (
+                    <View style={styles.composeCard}>
+                      <Text style={styles.sectionTitle}>Advanced analytics requires Developer Pro</Text>
+                      <Text style={styles.toolDescription}>Your detailed view/install events and audience breakdowns are available while your Pro subscription is active or within its paid period.</Text>
+                      <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
+                    </View>
+                  ) : <>
                     <View style={styles.devMetricGrid}>
                       {[["Views",analyticsStats.views],["Installs",analyticsStats.installs],["Conversion",analyticsStats.views ? Math.round(analyticsStats.installs / analyticsStats.views * 100) + "%" : "—"],["Products",developerRows.length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{String(value)}</Text><Text style={styles.devMetricLabel}>{String(label)}</Text></View>)}
                     </View>
