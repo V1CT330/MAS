@@ -296,7 +296,7 @@ export default function App() {
       }
       const [listingsResult, campaignsResult] = await Promise.all([
         supabase.from("listings").select("id,name,status").eq("developer_id", authData.user.id).order("updated_at", { ascending: false }),
-        supabase.from("promotions").select("id,listing_id,name,kind,budget_mwk,target_location,starts_at,ends_at,status,created_at").eq("owner_id", authData.user.id).order("created_at", { ascending: false }).limit(100),
+        supabase.from("promotions").select("id,listing_id,name,kind,budget_mwk,spent_mwk,impressions,clicks,target_location,starts_at,ends_at,status,created_at").eq("owner_id", authData.user.id).order("created_at", { ascending: false }).limit(100),
       ]);
       if (!active) return;
       setPromotionListings(listingsResult.data ?? []); setPromotionCampaigns(campaignsResult.data ?? []);
@@ -326,7 +326,7 @@ export default function App() {
       name: promotionName.trim() || "Promotion campaign", kind: promotionPlacement,
       budget_mwk: amount, target_location: promotionLocation,
       starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), status: "pending",
-    }).select("id,listing_id,name,kind,budget_mwk,target_location,starts_at,ends_at,status,created_at").single();
+    }).select("id,listing_id,name,kind,budget_mwk,spent_mwk,impressions,clicks,target_location,starts_at,ends_at,status,created_at").single();
     setPromotionSaving(false);
     if (error || !data) { showNotice(error?.message || "Campaign was not submitted."); return; }
     setPromotionCampaigns((items) => [data, ...items]); setPromotionName("");
@@ -2568,6 +2568,12 @@ export default function App() {
                         <Text style={styles.toolTitle}>{campaign.name || "Promotion campaign"}</Text>
                         <Text style={styles.toolDescription}>{String(campaign.kind || "featured")} · {campaign.target_location || "All Malawi"} · MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text>
                         <Text style={styles.postTag}>Status: {campaign.status || "pending"} · {campaign.ends_at ? "Ends " + new Date(campaign.ends_at).toLocaleDateString() : "No end date"}</Text>
+                        <View style={styles.detailStats}>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>{Number(campaign.impressions || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Views</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>{Number(campaign.clicks || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Clicks</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>MK{Number(campaign.spent_mwk || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Spent</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Budget</Text></View>
+                        </View>
                       </View>
                       {campaign.status !== "paused" && campaign.status !== "rejected" && campaign.status !== "completed" ? <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => void pausePromotionCampaign(campaign)}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : null}
                     </View>
