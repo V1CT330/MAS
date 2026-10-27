@@ -250,6 +250,11 @@ export default function App() {
   const [promotionBudget, setPromotionBudget] = useState("10000");
   const [promotionDays, setPromotionDays] = useState("7");
   const [promotionLocation, setPromotionLocation] = useState("All Malawi");
+  const [featureRequests, setFeatureRequests] = useState<any[]>([]);
+  const [featureRequestsLoading, setFeatureRequestsLoading] = useState(false);
+  const [featureRequestSaving, setFeatureRequestSaving] = useState(false);
+  const [featureRequestTitle, setFeatureRequestTitle] = useState("");
+  const [featureRequestBody, setFeatureRequestBody] = useState("");
   const [betaTesters, setBetaTesters] = useState<any[]>([]);
   const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
   const [verificationPhone, setVerificationPhone] = useState("");
@@ -281,6 +286,43 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Developer resources") return;
+    let active = true;
+    const loadFeatureRequests = async () => {
+      if (!isSupabaseConfigured) { setFeatureRequests([]); setFeatureRequestsLoading(false); return; }
+      setFeatureRequestsLoading(true);
+      const { data, error } = await supabase.from("feature_requests")
+        .select("id,title,body,status,vote_count,created_at")
+        .order("vote_count", { ascending: false }).limit(30);
+      if (!active) return;
+      setFeatureRequests(data ?? []);
+      setFeatureRequestsLoading(false);
+      if (error) showNotice(error.message || "Could not load feature requests.");
+    };
+    void loadFeatureRequests().catch(() => {
+      if (active) { setFeatureRequestsLoading(false); showNotice("Could not load feature requests. Check your connection and try again."); }
+    });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const submitFeatureRequest = async () => {
+    const title = featureRequestTitle.trim();
+    if (title.length < 5) { showNotice("Give your feature request a title of at least 5 characters."); return; }
+    if (!isSupabaseConfigured) { showNotice("Feature requests need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit a feature request."); setTab("Profile"); return; }
+    setFeatureRequestSaving(true);
+    const { data, error } = await supabase.from("feature_requests")
+      .insert({ user_id: authData.user.id, title, body: featureRequestBody.trim() || null })
+      .select("id,title,body,status,vote_count,created_at").single();
+    setFeatureRequestSaving(false);
+    if (error || !data) { showNotice(error?.message || "Feature request was not submitted."); return; }
+    setFeatureRequests((items) => [data, ...items].sort((a,b) => Number(b.vote_count || 0) - Number(a.vote_count || 0)).slice(0,30));
+    setFeatureRequestTitle(""); setFeatureRequestBody("");
+    showNotice("Feature request submitted.");
+  };
 
   useEffect(() => {
     if (developerScreen !== "Promote a product") return;
@@ -2610,6 +2652,39 @@ export default function App() {
                     </View>
                   )) : <Text style={styles.emptyText}>No campaigns yet. Submit a campaign above to start the review process.</Text>}
                   <Text style={styles.disclaimer}>Impressions, clicks, approval and billing are not fabricated in this app. They will only be shown when the MAS backend provides verified campaign metrics.</Text>
+                </>
+              ) : developerScreen === "Developer resources" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer resources</Text>
+                    <Text style={styles.infoText}>Publishing guidance, design standards, release preparation and FAQs. Submit a feature request to the shared MAS portal.</Text>
+                  </View>
+                  {[
+                    ["Publishing guidelines", "Every listing is reviewed. Use a clear title and description, real screenshots, an appropriate icon, and a signed app build or secure HTTPS website URL. Never misrepresent functionality or collect data without consent."],
+                    ["Design and media", "Use a square product icon and genuine product screenshots. Keep screenshot text readable on small phones and make the first screenshot demonstrate the core task."],
+                    ["Versioning and updates", "Use semantic versions such as 1.4.2. Include release notes for each update and test a new release before publishing it to all users."],
+                    ["Security and privacy", "Request only necessary permissions, protect credentials, validate uploads, and keep payment-provider secrets on the server. Do not expose identity documents or private storage URLs."],
+                    ["Review and verification", "Submit complete listing information and required verification. Review outcomes are decided by MAS backend and moderation workflows, not by the client."],
+                  ].map(([title, body]) => (
+                    <View key={title} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{body}</Text></View></View>
+                  ))}
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Request a feature</Text>
+                    <Text style={styles.fieldLabel}>Title (at least 5 characters)</Text>
+                    <TextInput accessibilityLabel="Feature request title" value={featureRequestTitle} onChangeText={(value) => setFeatureRequestTitle(value.slice(0,100))} maxLength={100} placeholder="What should MAS support?" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Details (optional)</Text>
+                    <TextInput accessibilityLabel="Feature request details" value={featureRequestBody} onChangeText={(value) => setFeatureRequestBody(value.slice(0,2000))} maxLength={2000} multiline numberOfLines={4} textAlignVertical="top" placeholder="Explain the problem and how the feature would help." placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:100}]} />
+                    <TouchableOpacity accessibilityRole="button" disabled={featureRequestSaving} style={[styles.primaryButton,featureRequestSaving&&{opacity:0.5}]} onPress={() => void submitFeatureRequest()}>
+                      <Text style={styles.primaryButtonText}>{featureRequestSaving ? "Submitting…" : "Submit feature request"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community requests</Text><Text style={styles.sectionMeta}>{featureRequests.length}</Text></View>
+                  {featureRequestsLoading ? <ActivityIndicator color={COLORS.accent} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
+                    <View key={item.id} style={styles.toolCard}>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title}</Text><Text style={styles.toolDescription}>{item.body || "No additional details."}</Text><Text style={styles.postTag}>{item.status || "open"} · {Number(item.vote_count || 0)} votes · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View>
+                    </View>
+                  )) : <Text style={styles.emptyText}>No feature requests found yet.</Text>}
+                  <Text style={styles.disclaimer}>Feature requests are stored in the shared MAS backend. Voting and status changes are not enabled here unless a secure backend workflow is available.</Text>
                 </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
