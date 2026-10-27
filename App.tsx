@@ -2262,7 +2262,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2563,6 +2563,28 @@ export default function App() {
                     <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
+                </>
+              ) : developerScreen === "Console settings" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer console settings</Text>
+                    <Text style={styles.infoText}>Open the relevant account area below. Sensitive account, authentication, payment and identity changes remain protected by the existing MAS backend.</Text>
+                  </View>
+                  {[
+                    ["Public developer profile", "Edit your public developer information.", "My public profile"],
+                    ["Product listings", "Manage product drafts, releases and listing status.", "My applications"],
+                    ["Developer verification", "Review identity verification status and submission.", "Verification"],
+                    ["Developer Pro", "Review plan access and continue to secure hosted checkout.", "Developer Pro"],
+                    ["Wallet & earnings", "Review ledger readiness and payout safety.", "Developer wallet"],
+                    ["Security settings", "Manage account security in the existing secure workflow.", "Security"],
+                    ["Developer resources", "Read publishing guidance and submit feature requests.", "Developer resources"],
+                    ["Promotion campaigns", "Create and manage product promotion campaigns.", "Promote a product"],
+                  ].map(([title, description, target]) => (
+                    <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="button" onPress={() => setDeveloperScreen(target)}>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View><Text style={styles.chevron}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={styles.disclaimer}>Settings navigation is native. Provider-backed security changes and financial operations are not simulated in this screen.</Text>
                 </>
               ) : developerScreen === "Developer wallet" ? (
                 <>
