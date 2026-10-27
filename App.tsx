@@ -1382,7 +1382,7 @@ export default function App() {
 
   const saveVerificationPhone = async () => {
     const normalized = verificationPhone.trim();
-    if (!/^\\+[1-9]\\d{7,14}$/.test(normalized)) {
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
       showNotice("Enter a valid international phone number, for example +265991234567.");
       return;
     }
