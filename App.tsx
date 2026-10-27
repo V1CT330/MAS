@@ -91,6 +91,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
     { title: "Mobile client keys", description: "Only public Supabase client configuration belongs in the app. Keep service-role and provider secrets server-side.", status: "Security rule", action: "Review security rule" },
     { title: "Session handling", description: "Sessions are persisted securely through the configured native storage adapter; verify sign-in and sign-out on device.", status: "Test required", action: "Review account tests" },
     { title: "Row-level security", description: "Production data access depends on correct Supabase RLS policies and storage permissions.", status: "Backend check", action: "Review backend checks" },
+    { title: "Account security console", description: "Use the existing MAS security console for account-level controls that are not exposed natively.", status: "Secure web handoff", action: "Open security console" },
   ],
   "Store management": [
     { title: "Published catalogue", description: "Published listings are shown in Explore when the MAS backend is configured.", status: "Native", action: "Open Explore" },
@@ -101,6 +102,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
     { title: "Prepare a listing", description: "Get your product name, category, tagline, description and release information ready.", status: "Workflow", action: "Start a product draft" },
     { title: "Improve store quality", description: "Use concise descriptions, clear screenshots and accurate feature claims.", status: "Guidance", action: "Open quality checks" },
     { title: "Plan a release", description: "Check version details, release notes and package readiness before submission.", status: "Workflow", action: "Open publishing checklist" },
+    { title: "AI assistant", description: "Open the existing MAS assistant for tasks that require the connected web service. This native screen does not simulate AI answers.", status: "Secure web handoff", action: "Open assistant console" },
   ],
   "Team management": [
     { title: "Team roles", description: "Invite teammates and manage their recorded role and status. Actual access still depends on backend membership enforcement.", status: "Native workflow", action: "Review team access" },
@@ -109,7 +111,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   "Promote a product": [
     { title: "Product description", description: "Prepare a concise value proposition and the audience your product serves.", status: "Preparation", action: "Review listing" },
     { title: "Campaign assets", description: "Prepare original screenshots, a logo and promotional copy.", status: "Preparation", action: "Review asset requirements" },
-    { title: "Campaign analytics", description: "Promotion performance requires connected campaign and analytics services.", status: "Integration pending", action: "Review analytics requirements" },
+    { title: "Campaign analytics", description: "Campaign-specific reporting is not available in the native app yet. General listing views and installs are available under Analytics; use the existing web promotion console for campaign setup.", status: "Web handoff for campaigns", action: "Open promotion console" },
   ],
   "Spotlight": [
     { title: "Featured product readiness", description: "Keep your listing complete, current and easy to understand.", status: "Preparation", action: "Open quality checks" },
@@ -2146,7 +2148,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web workflow. Please check your connection and try again.")); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2462,7 +2464,10 @@ export default function App() {
                         <Text style={styles.postTag}>{item.status}</Text>
                       </View>
                       <TouchableOpacity accessibilityRole="button" onPress={() => {
-                        if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
+                        if (item.action === "Open assistant console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/assistant").catch(() => showNotice("Could not open the MAS assistant. Check your connection and try again."));
+                        else if (item.action === "Open promotion console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open the promotion console. Check your connection and try again."));
+                        else if (item.action === "Open security console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/security").catch(() => showNotice("Could not open the security console. Check your connection and try again."));
+                        else if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
                         else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Open My applications") setDeveloperScreen("My applications");
