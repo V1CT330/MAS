@@ -239,6 +239,8 @@ export default function App() {
   const [verificationStatus, setVerificationStatus] = useState("none");
   const [verificationSaving, setVerificationSaving] = useState(false);
   const [diditLoading, setDiditLoading] = useState(false);
+  const [proSubscription, setProSubscription] = useState<any>(null);
+  const [proLoading, setProLoading] = useState(false);
   const [betaLoading, setBetaLoading] = useState(false);
   const [betaSaving, setBetaSaving] = useState(false);
   const [betaListingId, setBetaListingId] = useState("");
@@ -251,6 +253,25 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Developer Pro" || !isSupabaseConfigured) return;
+    let active = true;
+    setProLoading(true);
+    void (async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) { setProSubscription(null); setProLoading(false); showNotice("Sign in to view your Developer Pro subscription."); }
+        return;
+      }
+      const { data, error } = await supabase.from("subscriptions").select("status,current_period_end").eq("user_id", authData.user.id).maybeSingle();
+      if (!active) return;
+      setProSubscription(data ?? null);
+      setProLoading(false);
+      if (error) showNotice(error.message || "Could not load Developer Pro status.");
+    })().catch(() => { if (active) { setProLoading(false); showNotice("Could not load Developer Pro status."); } });
+    return () => { active = false; };
+  }, [developerScreen]);
 
   useEffect(() => {
     if (developerScreen !== "Verification" || !isSupabaseConfigured) return;
@@ -1998,7 +2019,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2200,6 +2221,32 @@ export default function App() {
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your applications</Text><Text style={styles.sectionMeta}>{spotlightApplications.length}</Text></View>
                   {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
                   {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
+                </>
+              ) : developerScreen === "Developer Pro" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer Pro · MK5,000/month</Text>
+                    <Text style={styles.infoText}>Professional tools for developers. Payment is completed through MAS's existing secure PayChangu checkout; this screen never handles card or mobile-money details.</Text>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>{proLoading ? "Checking subscription…" : proSubscription?.status === "active" ? "Subscription active" : proSubscription?.status === "cancelled" ? "Subscription cancelled" : "Free plan"}</Text>
+                      <Text style={styles.toolDescription}>{proSubscription?.current_period_end ? (proSubscription.status === "cancelled" ? "Access ends " : "Current period ends ") + new Date(proSubscription.current_period_end).toLocaleDateString() : proSubscription?.status === "active" ? "Your active plan is recorded in MAS." : "Activate Developer Pro to access paid developer features."}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open Developer Pro checkout."))}><Text style={styles.secondaryButtonText}>Manage plan →</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Included tools</Text>
+                    {[
+                      "Developer verification and a Verified Developer badge when approved",
+                      "Product publishing and release management",
+                      "Advanced analytics where available",
+                      "Product promotion and Spotlight application tools",
+                      "Kwacha checkout through the existing PayChangu workflow",
+                    ].map((item) => <Text key={item} style={styles.postTag}>✓  {item}</Text>)}
+                    <TouchableOpacity style={styles.primaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
+                    <Text style={styles.disclaimer}>The hosted checkout and cancellation actions remain on the MAS web service so payment validation and subscription changes stay server-side. If prompted, sign in to your MAS account in the browser.</Text>
+                  </View>
                 </>
               ) : developerScreen === "Verification" ? (
                 <>
