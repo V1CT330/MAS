@@ -2,13 +2,29 @@ import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").trim();
+// Both Supabase key names are public client keys. Never put service-role or provider secrets here.
+const supabaseKey = (
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  ""
+).trim();
+
+const isValidSupabaseUrl = (() => {
+  try {
+    const parsed = new URL(supabaseUrl);
+    return parsed.protocol === "https:" && Boolean(parsed.hostname) &&
+      !parsed.hostname.includes("example.supabase.co") &&
+      !parsed.hostname.includes("your-project");
+  } catch {
+    return false;
+  }
+})();
 
 export const isSupabaseConfigured =
-  /^https:\/\//.test(supabaseUrl) &&
+  isValidSupabaseUrl &&
   Boolean(supabaseKey) &&
-  !supabaseUrl.includes("your-project") &&
+  !supabaseKey.includes("placeholder-publishable-key") &&
   !supabaseKey.includes("your-publishable-key");
 
 export const supabase = createClient(
