@@ -1566,6 +1566,11 @@ export default function App() {
     if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) { showNotice("Sign in to submit verification."); setTab("Profile"); return; }
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("is_developer,kyc_status").eq("id", authData.user.id).maybeSingle();
+    if (profileError || !profile) { showNotice(profileError?.message || "Could not verify your developer account."); return; }
+    if (profile.is_developer !== true) { showNotice("Only developer accounts can submit identity verification."); return; }
+    if (profile.kyc_status === "approved") { setVerificationStatus("approved"); showNotice("Your identity is already verified."); return; }
+    if (profile.kyc_status === "pending") { setVerificationStatus("pending"); showNotice("Your verification is already pending review. Refresh status later."); return; }
     setVerificationSaving(true);
     try {
       const response = await fetch(verificationDocument.uri);
