@@ -231,6 +231,14 @@ export default function App() {
   const [spotlightPitch, setSpotlightPitch] = useState("");
   const [betaTesters, setBetaTesters] = useState<any[]>([]);
   const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
+  const [verificationPhone, setVerificationPhone] = useState("");
+  const [verificationFullName, setVerificationFullName] = useState("");
+  const [verificationIdType, setVerificationIdType] = useState("National ID");
+  const [verificationIdNumber, setVerificationIdNumber] = useState("");
+  const [verificationDocument, setVerificationDocument] = useState<{ uri: string; name: string; mimeType: string; size: number | null } | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState("none");
+  const [verificationSaving, setVerificationSaving] = useState(false);
+  const [diditLoading, setDiditLoading] = useState(false);
   const [betaLoading, setBetaLoading] = useState(false);
   const [betaSaving, setBetaSaving] = useState(false);
   const [betaListingId, setBetaListingId] = useState("");
@@ -243,6 +251,24 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Verification" || !isSupabaseConfigured) return;
+    let active = true;
+    void (async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) showNotice("Sign in to view your verification status.");
+        return;
+      }
+      const { data, error } = await supabase.from("profiles").select("phone,kyc_status").eq("id", authData.user.id).maybeSingle();
+      if (!active) return;
+      if (error) showNotice(error.message || "Could not load verification status.");
+      setVerificationPhone(data?.phone || "");
+      setVerificationStatus(data?.kyc_status || "none");
+    })().catch(() => { if (active) showNotice("Could not load verification status."); });
+    return () => { active = false; };
+  }, [developerScreen]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1354,6 +1380,119 @@ export default function App() {
     showNotice(status === "open" ? "Opportunity reopened." : status === "paused" ? "Opportunity paused." : "Opportunity closed.");
   };
 
+  const saveVerificationPhone = async () => {
+    const normalized = verificationPhone.trim();
+    if (!/^\\+[1-9]\\d{7,14}$/.test(normalized)) {
+      showNotice("Enter a valid international phone number, for example +265991234567.");
+      return;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to save your contact number."); return; }
+    setVerificationSaving(true);
+    const { error } = await supabase.from("profiles").update({ phone: normalized }).eq("id", authData.user.id);
+    setVerificationSaving(false);
+    showNotice(error ? (error.message || "Could not save your contact number.") : "Contact number saved.");
+  };
+
+  const chooseVerificationDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    if (asset.size && asset.size > 10 * 1024 * 1024) {
+      showNotice("Choose a document smaller than 10 MB.");
+      return;
+    }
+    setVerificationDocument({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType || (asset.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+      size: asset.size ?? null,
+    });
+  };
+
+  const submitManualVerification = async () => {
+    const fullName = verificationFullName.trim();
+    const idNumber = verificationIdNumber.trim();
+    if (fullName.length < 3) { showNotice("Enter your full legal name."); return; }
+    if (idNumber.length < 4) { showNotice("Enter a valid document number."); return; }
+    if (!verificationDocument) { showNotice("Attach a national ID or passport image/PDF."); return; }
+    if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit verification."); setTab("Profile"); return; }
+    setVerificationSaving(true);
+    try {
+      const response = await fetch(verificationDocument.uri);
+      const blob = await response.blob();
+      const safeName = verificationDocument.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${authData.user.id}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("kyc-docs").upload(path, blob, {
+        contentType: verificationDocument.mimeType,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      const { error: insertError } = await supabase.from("kyc_submissions").insert({
+        user_id: authData.user.id,
+        full_name: fullName,
+        id_type: verificationIdType,
+        id_number: idNumber,
+        document_url: path,
+        status: "pending",
+      });
+      if (insertError) throw insertError;
+      const { error: profileError } = await supabase.from("profiles").update({ kyc_status: "pending" }).eq("id", authData.user.id);
+      if (profileError) throw profileError;
+      setVerificationStatus("pending");
+      setVerificationDocument(null);
+      setVerificationIdNumber("");
+      showNotice("Verification submitted for manual review.");
+    } catch (error: any) {
+      showNotice(error?.message || "Could not submit verification.");
+    } finally {
+      setVerificationSaving(false);
+    }
+  };
+
+  const startDiditVerification = async () => {
+    if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) { showNotice("Your session has expired. Sign in again."); setTab("Profile"); return; }
+    setDiditLoading(true);
+    try {
+      const response = await fetch("https://malawian-app-store-j6pm.vercel.app/api/public/didit/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!response.ok) throw new Error(result.error || "Could not start Didit verification.");
+      if (!result.url) throw new Error("Didit did not return a verification link.");
+      const verificationUrl = new URL(result.url);
+      if (verificationUrl.protocol !== "https:" || !(verificationUrl.hostname === "verify.didit.me" || verificationUrl.hostname.endsWith(".didit.me"))) {
+        throw new Error("Didit returned an unexpected verification link.");
+      }
+      await Linking.openURL(verificationUrl.toString());
+      showNotice("Complete the secure Didit flow, then return here and refresh your status.");
+    } catch (error: any) {
+      showNotice(error?.message || "Could not start Didit verification.");
+    } finally {
+      setDiditLoading(false);
+    }
+  };
+
+  const refreshVerificationStatus = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to refresh verification status."); return; }
+    const { data, error } = await supabase.from("profiles").select("phone,kyc_status").eq("id", authData.user.id).maybeSingle();
+    if (error) { showNotice(error.message || "Could not refresh verification status."); return; }
+    setVerificationPhone(data?.phone || "");
+    setVerificationStatus(data?.kyc_status || "none");
+    showNotice("Verification status refreshed.");
+  };
+
   const openConversation = async (recipientId: string) => {
     if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1859,7 +1998,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2061,6 +2200,43 @@ export default function App() {
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your applications</Text><Text style={styles.sectionMeta}>{spotlightApplications.length}</Text></View>
                   {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
                   {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
+                </>
+              ) : developerScreen === "Verification" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer verification</Text>
+                    <Text style={styles.infoText}>Submit your details for manual review or continue through Didit. Your status changes only when MAS confirms the result.</Text>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Current status: {verificationStatus.replace(/_/g, " ")}</Text>
+                      <Text style={styles.toolDescription}>Keep your contact number current. Identity documents are stored for verification review.</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => void refreshVerificationStatus()}><Text style={styles.secondaryButtonText}>Refresh</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>WhatsApp / contact number (international format)</Text>
+                    <TextInput value={verificationPhone} onChangeText={setVerificationPhone} keyboardType="phone-pad" placeholder="+265991234567" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton, verificationSaving && {opacity:0.5}]} onPress={() => void saveVerificationPhone()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Saving…" : "Save contact number"}</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Manual identity review</Text>
+                    <Text style={styles.fieldLabel}>Full legal name</Text>
+                    <TextInput value={verificationFullName} onChangeText={setVerificationFullName} autoCapitalize="words" placeholder="As shown on your document" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <Text style={styles.fieldLabel}>Document type</Text>
+                    <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && styles.chipActive]}><Text style={[styles.chipText,verificationIdType === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                    <Text style={styles.fieldLabel}>Document number</Text>
+                    <TextInput value={verificationIdNumber} onChangeText={setVerificationIdNumber} autoCapitalize="characters" placeholder="Enter document number" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <TouchableOpacity style={styles.mediaAttachButton} onPress={() => void chooseVerificationDocument()}><Text style={styles.mediaAttachText}>{verificationDocument ? verificationDocument.name : "＋ Attach ID/passport image or PDF (max 10 MB)"}</Text></TouchableOpacity>
+                    {verificationDocument ? <TouchableOpacity onPress={() => setVerificationDocument(null)}><Text style={styles.removeMediaText}>Remove selected document</Text></TouchableOpacity> : null}
+                    <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton,verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Automatic verification</Text>
+                    <Text style={styles.toolDescription}>Didit opens in a secure external page. MAS updates your status after the server confirms the result.</Text>
+                    <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
+                  </View>
+                  <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
                 </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
