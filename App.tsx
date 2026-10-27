@@ -2471,6 +2471,13 @@ export default function App() {
                         else if (item.action === "Open publishing checklist") setDeveloperScreen("Publishing checklist");
                         else if (item.action === "Review team access") setDeveloperScreen("Team management");
                         else if (item.action === "Open Spotlight applications") setDeveloperScreen("Spotlight");
+                        else if (item.action === "Review security notes" || item.action === "Review security rule") setDeveloperScreen("Security");
+                        else if (item.action === "Open public profile") setDeveloperScreen("My public profile");
+                        else if (item.action === "Open My applications" || item.action === "Review listing screens" || item.action === "Review store test") setDeveloperScreen("My applications");
+                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
+                        else if (item.action === "Open Social" || item.action === "Review Social test") { setDeveloperScreen(null); setSocialSection("Feed"); setTab("Social"); }
+                        else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
+                        else if (item.action === "Record test status" || item.action === "Review account test") setDeveloperScreen("Testing");
                         else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
                         else showNotice(item.status === "Integration pending" || item.status === "Backend check" || item.status === "Integration test" ? "This action needs its backend integration and device testing before it can be marked complete." : "Review the checklist above and verify it during native app testing.");
                       }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
