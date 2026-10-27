@@ -240,6 +240,16 @@ export default function App() {
   const [spotlightOpportunity, setSpotlightOpportunity] = useState("App Spotlight");
   const [spotlightListingId, setSpotlightListingId] = useState("");
   const [spotlightPitch, setSpotlightPitch] = useState("");
+  const [promotionListings, setPromotionListings] = useState<any[]>([]);
+  const [promotionCampaigns, setPromotionCampaigns] = useState<any[]>([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionSaving, setPromotionSaving] = useState(false);
+  const [promotionListingId, setPromotionListingId] = useState("");
+  const [promotionName, setPromotionName] = useState("");
+  const [promotionPlacement, setPromotionPlacement] = useState<"featured" | "search" | "banner">("featured");
+  const [promotionBudget, setPromotionBudget] = useState("10000");
+  const [promotionDays, setPromotionDays] = useState("7");
+  const [promotionLocation, setPromotionLocation] = useState("All Malawi");
   const [betaTesters, setBetaTesters] = useState<any[]>([]);
   const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
   const [verificationPhone, setVerificationPhone] = useState("");
@@ -271,6 +281,68 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Promote a product") return;
+    let active = true;
+    const loadPromotions = async () => {
+      if (!isSupabaseConfigured) { setPromotionListings([]); setPromotionCampaigns([]); setPromotionLoading(false); return; }
+      setPromotionLoading(true);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (!active) return;
+      if (authError || !authData.user) {
+        setPromotionListings([]); setPromotionCampaigns([]); setPromotionLoading(false);
+        showNotice("Sign in to manage promotion campaigns."); return;
+      }
+      const [listingsResult, campaignsResult] = await Promise.all([
+        supabase.from("listings").select("id,name,status").eq("developer_id", authData.user.id).order("updated_at", { ascending: false }),
+        supabase.from("promotions").select("id,listing_id,name,kind,budget_mwk,target_location,starts_at,ends_at,status,created_at").eq("owner_id", authData.user.id).order("created_at", { ascending: false }).limit(100),
+      ]);
+      if (!active) return;
+      setPromotionListings(listingsResult.data ?? []); setPromotionCampaigns(campaignsResult.data ?? []);
+      if (listingsResult.error) showNotice(listingsResult.error.message || "Could not load your products for promotion.");
+      if (campaignsResult.error) showNotice(campaignsResult.error.message || "Could not load your campaigns.");
+      setPromotionLoading(false);
+    };
+    void loadPromotions().catch(() => { if (active) { setPromotionLoading(false); showNotice("Could not load promotions. Check your connection and try again."); } });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const submitPromotionCampaign = async () => {
+    if (!isSupabaseConfigured) { showNotice("Promotion campaigns need the MAS backend configuration."); return; }
+    if (!promotionListingId) { showNotice("Choose a product to promote."); return; }
+    const amount = Number(promotionBudget);
+    if (!Number.isFinite(amount) || amount < 1000) { showNotice("Set a campaign budget of at least MK1,000."); return; }
+    const days = Number(promotionDays);
+    if (!Number.isFinite(days) || days < 1 || days > 90) { showNotice("Campaign duration must be between 1 and 90 days."); return; }
+    if (!promotionListings.some((item) => item.id === promotionListingId)) { showNotice("Choose one of your own products."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit a campaign."); setTab("Profile"); return; }
+    setPromotionSaving(true);
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
+    const { data, error } = await supabase.from("promotions").insert({
+      owner_id: authData.user.id, listing_id: promotionListingId,
+      name: promotionName.trim() || "Promotion campaign", kind: promotionPlacement,
+      budget_mwk: amount, target_location: promotionLocation,
+      starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), status: "pending",
+    }).select("id,listing_id,name,kind,budget_mwk,target_location,starts_at,ends_at,status,created_at").single();
+    setPromotionSaving(false);
+    if (error || !data) { showNotice(error?.message || "Campaign was not submitted."); return; }
+    setPromotionCampaigns((items) => [data, ...items]); setPromotionName("");
+    showNotice("Campaign submitted for review. No payment was taken by this action.");
+  };
+
+  const pausePromotionCampaign = async (campaign: any) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage campaigns."); return; }
+    const { data, error } = await supabase.from("promotions").update({ status: "paused" })
+      .eq("id", campaign.id).eq("owner_id", authData.user.id).select("id,status").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "Only the campaign owner can pause this campaign."); return; }
+    setPromotionCampaigns((items) => items.map((item) => item.id === campaign.id ? { ...item, status: "paused" } : item));
+    showNotice("Campaign paused.");
+  };
 
   useEffect(() => {
     if (developerScreen !== "Analytics" || !isSupabaseConfigured) return;
@@ -2449,6 +2521,58 @@ export default function App() {
                     <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
+                </>
+              ) : developerScreen === "Promote a product" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Promote your product</Text>
+                    <Text style={styles.infoText}>Create a campaign in MWK, choose a placement and target location, and submit it for review. Submitting a campaign does not charge you; payment and campaign approval remain separate server-side steps.</Text>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Product</Text>
+                    {promotionListings.length ? promotionListings.map((listing) => (
+                      <TouchableOpacity key={listing.id} style={[styles.storeTab, promotionListingId === listing.id && styles.storeTabActive]} onPress={() => setPromotionListingId(listing.id)}>
+                        <Text style={[styles.storeTabText, promotionListingId === listing.id && styles.storeTabTextActive]}>{listing.name} · {listing.status}</Text>
+                      </TouchableOpacity>
+                    )) : <Text style={styles.emptyText}>{promotionLoading ? "Loading your products…" : "No products found for this account. Create a product listing first."}</Text>}
+                    <Text style={styles.fieldLabel}>Campaign name</Text>
+                    <TextInput accessibilityLabel="Campaign name" value={promotionName} onChangeText={(value) => setPromotionName(value.slice(0, 60))} maxLength={60} placeholder="Launch week promotion" placeholderTextColor={COLORS.muted} style={styles.textInput} />
+                    <Text style={styles.fieldLabel}>Placement</Text>
+                    <View style={styles.storeTabs}>
+                      {([["featured", "Featured"], ["search", "Search boost"], ["banner", "Store banner"]] as const).map(([value, label]) => (
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionPlacement === value && styles.storeTabActive]} onPress={() => setPromotionPlacement(value)}>
+                          <Text style={[styles.storeTabText, promotionPlacement === value && styles.storeTabTextActive]}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.fieldLabel}>Budget (MWK; minimum 1,000)</Text>
+                    <TextInput accessibilityLabel="Campaign budget in MWK" value={promotionBudget} onChangeText={(value) => setPromotionBudget(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.textInput} />
+                    <Text style={styles.fieldLabel}>Duration (1–90 days)</Text>
+                    <TextInput accessibilityLabel="Campaign duration in days" value={promotionDays} onChangeText={(value) => setPromotionDays(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.textInput} />
+                    <Text style={styles.fieldLabel}>Target location</Text>
+                    <View style={styles.storeTabs}>
+                      {["All Malawi", "Lilongwe", "Blantyre", "Mzuzu", "Zomba"].map((value) => (
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionLocation === value && styles.storeTabActive]} onPress={() => setPromotionLocation(value)}>
+                          <Text style={[styles.storeTabText, promotionLocation === value && styles.storeTabTextActive]}>{value}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TouchableOpacity accessibilityRole="button" disabled={promotionSaving || promotionLoading || !promotionListings.length} style={[styles.primaryButton, (promotionSaving || promotionLoading || !promotionListings.length) && { opacity: 0.5 }]} onPress={() => void submitPromotionCampaign()}>
+                      <Text style={styles.primaryButtonText}>{promotionSaving ? "Submitting campaign…" : "Submit campaign for review"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your campaigns</Text><Text style={styles.sectionMeta}>{promotionCampaigns.length}</Text></View>
+                  {promotionLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
+                    <View key={campaign.id} style={styles.toolCard}>
+                      <View style={styles.toolCopy}>
+                        <Text style={styles.toolTitle}>{campaign.name || "Promotion campaign"}</Text>
+                        <Text style={styles.toolDescription}>{String(campaign.kind || "featured")} · {campaign.target_location || "All Malawi"} · MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text>
+                        <Text style={styles.postTag}>Status: {campaign.status || "pending"} · {campaign.ends_at ? "Ends " + new Date(campaign.ends_at).toLocaleDateString() : "No end date"}</Text>
+                      </View>
+                      {campaign.status !== "paused" && campaign.status !== "rejected" && campaign.status !== "completed" ? <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => void pausePromotionCampaign(campaign)}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : null}
+                    </View>
+                  )) : <Text style={styles.emptyText}>No campaigns yet. Submit a campaign above to start the review process.</Text>}
+                  <Text style={styles.disclaimer}>Impressions, clicks, approval and billing are not fabricated in this app. They will only be shown when the MAS backend provides verified campaign metrics.</Text>
                 </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
