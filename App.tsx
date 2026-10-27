@@ -2536,7 +2536,7 @@ export default function App() {
                       </TouchableOpacity>
                     )) : <Text style={styles.emptyText}>{promotionLoading ? "Loading your products…" : "No products found for this account. Create a product listing first."}</Text>}
                     <Text style={styles.fieldLabel}>Campaign name</Text>
-                    <TextInput accessibilityLabel="Campaign name" value={promotionName} onChangeText={(value) => setPromotionName(value.slice(0, 60))} maxLength={60} placeholder="Launch week promotion" placeholderTextColor={COLORS.muted} style={styles.textInput} />
+                    <TextInput accessibilityLabel="Campaign name" value={promotionName} onChangeText={(value) => setPromotionName(value.slice(0, 60))} maxLength={60} placeholder="Launch week promotion" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                     <Text style={styles.fieldLabel}>Placement</Text>
                     <View style={styles.storeTabs}>
                       {([["featured", "Featured"], ["search", "Search boost"], ["banner", "Store banner"]] as const).map(([value, label]) => (
@@ -2546,9 +2546,9 @@ export default function App() {
                       ))}
                     </View>
                     <Text style={styles.fieldLabel}>Budget (MWK; minimum 1,000)</Text>
-                    <TextInput accessibilityLabel="Campaign budget in MWK" value={promotionBudget} onChangeText={(value) => setPromotionBudget(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.textInput} />
+                    <TextInput accessibilityLabel="Campaign budget in MWK" value={promotionBudget} onChangeText={(value) => setPromotionBudget(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.formInput} />
                     <Text style={styles.fieldLabel}>Duration (1–90 days)</Text>
-                    <TextInput accessibilityLabel="Campaign duration in days" value={promotionDays} onChangeText={(value) => setPromotionDays(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.textInput} />
+                    <TextInput accessibilityLabel="Campaign duration in days" value={promotionDays} onChangeText={(value) => setPromotionDays(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.formInput} />
                     <Text style={styles.fieldLabel}>Target location</Text>
                     <View style={styles.storeTabs}>
                       {["All Malawi", "Lilongwe", "Blantyre", "Mzuzu", "Zomba"].map((value) => (
