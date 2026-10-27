@@ -2220,7 +2220,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2521,6 +2521,37 @@ export default function App() {
                     <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
+                </>
+              ) : developerScreen === "Developer wallet" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Wallet & earnings</Text>
+                    <Text style={styles.infoText}>Your developer wallet is not yet connected to a verified earnings ledger. No sample balance is shown as real money, and withdrawals are disabled until a secure ledger, identity checks, payout support, refunds and settlement rules are in place.</Text>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Wallet status</Text><Text style={styles.sectionMeta}>Setup pending</Text></View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Available balance</Text>
+                      <Text style={styles.toolDescription}>Your verified, withdrawable balance will appear when a real ledger is connected.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Pending funds</Text>
+                      <Text style={styles.toolDescription}>Funds awaiting settlement, delivery confirmation or refund checks.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Transaction history</Text>
+                      <Text style={styles.toolDescription}>Marketplace sales, fees, refunds and payouts will be listed only when backed by verified transaction records.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Payment and payout safety</Text></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Developer Pro payments</Text><Text style={styles.toolDescription}>PayChangu checkout is handled by the secure hosted payment flow. A subscription payment is not developer earnings.</Text></View><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.secondaryButtonText}>View Pro</Text></TouchableOpacity></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Protected withdrawals</Text><Text style={styles.toolDescription}>Withdrawals are unavailable until identity and payout details are verified and eligible funds are supported by the ledger.</Text></View><Text style={styles.postTag}>Disabled</Text></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>One shared ledger</Text><Text style={styles.toolDescription}>Marketplace and eligible Social earnings need consistent transaction records, commissions, refunds and payout history.</Text></View></View>
+                  <Text style={styles.disclaimer}>No money movement is initiated from this screen. Balance, transaction history, settlement, refunds and withdrawals require server-authoritative financial records.</Text>
                 </>
               ) : developerScreen === "Promote a product" ? (
                 <>
