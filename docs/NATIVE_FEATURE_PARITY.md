@@ -17,22 +17,22 @@ A feature is **complete** only when the native screen and its real workflow exis
 | Automatic publishing/security review | Connected through existing RPC | Test rejected/accepted paths against production policies without bypassing server checks. |
 | Developer dashboard and listing status | Partial | Add web-prototype analytics metrics and meaningful recent activity; current dashboard is primarily status counts. |
 | Reviews and developer replies | Implemented | Verify ownership/RLS and replies on device. |
-| Developer public profile and portfolio | Implemented | Verify all profile fields/social links and public visibility against the web profile. |
+| Developer public profile and portfolio | Implemented | Native profile editing now includes company, location, contact email, skills and public links; verify persistence and public visibility on device. |
 | Social feed, media, reactions and comments | Implemented | Test media upload, pagination, moderation, ownership and network-failure states. |
 | Messages, connections and notifications | Implemented | Verify request acceptance/decline, unread state, ordering and privacy on device. |
 | Collabo, Investors, Grants and Crowdfund sections | Implemented | Verify section filters and post persistence; money movement must not be implied where no payment workflow exists. |
 | Team management | Implemented | Verify invitations, role/status updates, membership and activity log against RLS. |
 | Spotlight applications | Implemented | Verify submit/read states and any listing association. |
 | Testing / beta testers / feedback | Implemented | Verify invite/tester management and feedback flows; confirm any email/distribution integrations separately. |
-| Developer identity verification (manual) | Native workflow added; untested | Verify private `kyc-docs` upload, submission insert, duplicate/pending handling and RLS. Never expose document URLs publicly. |
+| Developer identity verification (manual) | Native workflow added; untested | Saves contact phone, uploads a private ID/passport file, checks developer eligibility and pending/approved status, and submits for review. Verify private `kyc-docs` upload, submission insert and RLS. Never expose document URLs publicly. |
 | Didit identity verification | Native start flow added; untested | Test session creation, trusted-host validation, browser return, webhook processing and status refresh. |
 | Developer Pro subscription status | Native overview added; checkout is hosted web handoff | Test subscription entitlement, PayChangu return/webhook, cancellation and period-end access. Checkout itself is not native. |
-| Advanced analytics | Partial | Mirror web `console.analytics`: date ranges, views/installs, conversion, device/country breakdown and per-product metrics; gate advanced analytics according to current Pro rules. |
-| Wallet and earnings | Web handoff | Decide which read-only wallet data can be shown natively; all money movement must remain server-side. |
-| Advertising / promotion | Web handoff | Native campaign creation, moderation, payment, reporting and failure states are not complete. |
-| Console settings and account security | Partial / web handoff | Mirror supported settings, session controls and account actions natively without exposing privileged operations. |
-| Developer assistant / AI tools | Web handoff / preview | Identify the real prototype functions and connect native UI to supported server-side tools; no fake AI responses. |
-| Developer resources and security guidance | Preview / web handoff | Make guide actions open the correct native content or verified destination; remove dead-end checklist actions. |
+| Advanced analytics | Native screen implemented; CI/device test pending | 7/30/90-day views, installs, conversion, per-product metrics and device/country breakdowns; event queries are gated by active/paid-period Developer Pro entitlement. Compare against web metrics and test RLS. |
+| Wallet and earnings | Web handoff | Native menu opens the existing wallet workflow. Decide which read-only wallet data can be shown natively; all money movement must remain server-side. |
+| Advertising / promotion | Deliberate web handoff | Native menu opens the existing promotion workflow; native campaign creation, moderation, payment and reporting are not complete. |
+| Console settings and account security | Partial / web handoff | Account profile fields are editable natively; broader security settings, session controls and console preferences still require parity work. |
+| Developer assistant / AI tools | Deliberate web handoff | Native menu opens the real prototype assistant rather than a non-functional preview. Native chat/API integration remains future parity work; no fake AI responses. |
+| Developer resources and security guidance | Deliberate web handoff | Native menu opens the real guide/security pages instead of generic preview cards. Native content screens remain future parity work. |
 | Store administration and moderation | Not a native parity target yet | Decide authorized admin-only workflows and verify the account gate before implementing. |
 | Native Android OAuth/session persistence | Code present; device test pending | Test Google sign-in, callback, session persistence, expiry, sign-out and fresh install. |
 
