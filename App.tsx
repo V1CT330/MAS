@@ -631,7 +631,7 @@ export default function App() {
         return;
       }
     }
-    if (accountContactEmail.trim() && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(accountContactEmail.trim())) {
+    if (accountContactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountContactEmail.trim())) {
       showNotice("Enter a valid contact email address.");
       return;
     }
