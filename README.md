@@ -9,6 +9,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 - Listing details, versions, screenshots, ratings/reviews and developer listing workflows are implemented in the native client where supported by the existing backend schema.
 - Social includes feed posts, reactions, comments, connection requests, activity, direct messages, photo/video selection and Storage upload.
 - Google OAuth sign-in, persisted session display and sign-out are implemented. The `mw.wealthgrid.mas://auth/callback` redirect has been added to the existing Supabase Auth allowlist; keep it there and verify the callback on a real device.
+- The native app uses the canonical public MAS Supabase client configuration. Manual identity-document upload is disabled because the live project lacks a private `kyc-docs` bucket; use the secure Didit flow instead.
 - Developer Space includes listing drafts, release uploads and quality checks. Some advanced workflows are native screens backed by existing tables; others hand off to the MAS website where the secure web flow already exists.
 - Investor opportunities, grants and crowdfunding must not be treated as completed funding transactions just because a listing or link is visible. Native investment opportunity publishing is not payment collection or investment settlement.
 - Media upload, messaging, account profiles, release upload and developer workflows depend on the live Supabase schema, storage buckets/policies, user sessions and row-level security. They must be verified against production on a real phone.
