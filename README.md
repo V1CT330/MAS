@@ -20,7 +20,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
    - `EXPO_PUBLIC_SUPABASE_URL`
    - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 3. These are public client values. If saved as Actions secrets, the build workflow can read them as build inputs. **Never** add a Supabase service-role key, PayChangu secret, Didit secret or webhook secret to the Android app.
-4. The APK build fails early if public Supabase configuration is missing or invalid, so a non-functional preview APK is not handed off for testing.
+4. The native client includes the canonical public MAS Supabase URL and publishable key as safe client defaults; GitHub Actions variables/secrets can override them. No service-role or provider secret is embedded in the app.
 5. For Google OAuth, add `mw.wealthgrid.mas://auth/callback` to the existing Supabase Auth redirect allowlist. This is a Supabase setting change and must be authorized before it is made.
 6. Run `npm ci`, `npm run typecheck` and `npx expo config --type public` before making a release build.
 
