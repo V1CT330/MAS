@@ -37,17 +37,6 @@ type FeedPost = { id: string; name: string; tag: string; text: string; createdAt
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 type UtilityScreen = "none" | "library" | "notifications" | "settings";
 
-const sampleApps: StoreApp[] = [
-  { id: "sample-redbot", name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
-  { id: "sample-malawi-market", name: "Malawi Market", category: "Business", description: "Discover local products and growing businesses.", mark: "M", color: "#2B9D80" },
-  { id: "sample-cloud-pay", name: "Cloud Pay", category: "Finance", description: "A future-ready digital payments experience.", mark: "C", color: "#4C82E8" },
-];
-
-const samplePosts: FeedPost[] = [
-  { id: "sample-mas-community", name: "MAS Community", tag: "Community update", text: "Welcome to the native MAS community. Connect with builders, share ideas and discover projects across Malawi." },
-  { id: "sample-startup-circle", name: "Startup Circle Malawi", tag: "Collaboration", text: "What problem in your community would you love to solve with technology? Share your idea and find collaborators." },
-];
-
 const getListingQualityReport = (listing: any) => {
   const checks = [
     { label: "Name between 3 and 30 characters", ok: (listing.name?.length ?? 0) >= 3 && (listing.name?.length ?? 0) <= 30, weight: 10 },
@@ -195,12 +184,12 @@ export default function App() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageSending, setMessageSending] = useState(false);
   const [notice, setNotice] = useState("");
-  const [apps, setApps] = useState<StoreApp[]>(sampleApps);
-  const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
+  const [apps, setApps] = useState<StoreApp[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [catalogueLoading, setCatalogueLoading] = useState(false);
-  const [catalogueSource, setCatalogueSource] = useState<"preview" | "live">("preview");
+  const [catalogueSource, setCatalogueSource] = useState<"unconfigured" | "live" | "error">("unconfigured");
   const [feedLoading, setFeedLoading] = useState(false);
-  const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
+  const [feedSource, setFeedSource] = useState<"unconfigured" | "live" | "error">("unconfigured");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
@@ -528,7 +517,7 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    if (!isSupabaseConfigured) return () => { active = false; };
+    if (!isSupabaseConfigured) { setApps([]); setCatalogueSource("unconfigured"); setPosts([]); setFeedSource("unconfigured"); return () => { active = false; }; }
     setCatalogueLoading(true);
     Promise.resolve(supabase
       .from("listings")
@@ -538,15 +527,16 @@ export default function App() {
       .limit(100))
       .then(async ({ data, error }) => {
         if (!active) return;
-        if (!error && data?.length) {
-          const developerIds = [...new Set(data.map((item: any) => item.developer_id).filter(Boolean))];
+        if (!error) {
+          const listingRows = data ?? [];
+          const developerIds = [...new Set(listingRows.map((item: any) => item.developer_id).filter(Boolean))];
           const profileResult = developerIds.length
             ? await supabase.from("public_profiles").select("id,developer_name,display_name").in("id", developerIds)
             : { data: [] as any[] };
           const profiles = new Map((profileResult.data ?? []).map((profile: any) => [
             profile.id, profile.developer_name || profile.display_name || "MAS developer",
           ]));
-          const catalogue = await Promise.all(data.map(async (item: any) => {
+          const catalogue = await Promise.all(listingRows.map(async (item: any) => {
             const iconResult = item.icon_url
               ? await supabase.storage.from("app-assets").createSignedUrl(item.icon_url, 3600)
               : null;
@@ -570,6 +560,7 @@ export default function App() {
           setCatalogueSource("live");
           setApps(catalogue);
         }
+        if (error) { setApps([]); setCatalogueSource("error"); showNotice(error.message || "Could not load the MAS catalogue."); }
         setCatalogueLoading(false);
       })
       .catch(() => { if (active) setCatalogueLoading(false); });
@@ -582,15 +573,18 @@ export default function App() {
       .limit(30),
     ).then(async ({ data, error }) => {
         if (!active) return;
-        if (!error && data?.length) {
-          const ids = [...new Set(data.map((post: any) => post.author_id))];
+        if (!error) {
+          const postRows = data ?? [];
+          setFeedSource("live");
+          if (!postRows.length) { setPosts([]); setReactionCounts({}); setLikedPostIds([]); setFeedLoading(false); return; }
+          const ids = [...new Set(postRows.map((post: any) => post.author_id))];
           const { data: profiles } = await supabase
             .from("public_profiles")
             .select("id,display_name,developer_name")
             .in("id", ids);
           const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
           if (active) setFeedSource("live");
-          if (active) setPosts(data.map((post: any) => ({
+          if (active) setPosts(postRows.map((post: any) => ({
             id: post.id,
             authorId: post.author_id,
             name: String(names.get(post.author_id) || "MAS member"),
@@ -600,7 +594,7 @@ export default function App() {
             mediaUrl: post.media_url ?? null,
             mediaType: post.media_type ?? null,
           })));
-          const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", data.map((post: any) => post.id));
+          const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", postRows.map((post: any) => post.id));
           if (active && reactionRows) {
             const counts: Record<string, number> = {};
             reactionRows.forEach((reaction: any) => { counts[reaction.post_id] = (counts[reaction.post_id] ?? 0) + 1; });
@@ -608,7 +602,7 @@ export default function App() {
             const { data: currentUser } = await supabase.auth.getUser();
             if (currentUser.user) setLikedPostIds(reactionRows.filter((reaction: any) => reaction.user_id === currentUser.user?.id).map((reaction: any) => reaction.post_id));
           }
-        }
+        } else { setFeedSource("error"); setPosts([]); showNotice(error.message || "Could not load MAS Social."); }
         if (active) setFeedLoading(false);
       })
       .catch(() => { if (active) setFeedLoading(false); });
@@ -1990,7 +1984,7 @@ export default function App() {
 
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>{kindFilter === "website" ? "Explore websites" : kindFilter === "app" ? "Explore apps" : "Explore apps & websites"}</Text>
-                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
+                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO CATALOGUE DATA" : "BACKEND NOT CONFIGURED"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", "Business", "Education", "Entertainment", "Finance", "Health", "News", "Shopping", "Social", "Tools", "Transport", "Other"].map((item) => (
@@ -2019,7 +2013,7 @@ export default function App() {
                 </View>
               )) : null}
 
-              {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
@@ -2091,7 +2085,7 @@ export default function App() {
                       showNotice("Your post is live on MAS Social.");
                     }}><Text style={styles.composeButtonText}>{posting ? "Publishing…" : "Publish post"}</Text></TouchableOpacity></View>
                   </View>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : feedSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO SOCIAL POSTS" : "BACKEND NOT CONFIGURED"}</Text></View>
                   {filteredSocialPosts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
@@ -2214,7 +2208,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : "START A CONVERSATION"}</Text></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : feedSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO SOCIAL POSTS" : "BACKEND NOT CONFIGURED"}</Text></View>
                   <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
                   <View style={styles.composeCard}>
                     <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
