@@ -70,6 +70,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Set up Java for Android
         uses: actions/setup-java@v4
@@ -83,7 +84,7 @@ jobs:
           packages: platform-tools
 
       - name: Install JavaScript dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
