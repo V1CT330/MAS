@@ -16,10 +16,10 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 ## Configure the native build
 
 1. In GitHub, open **V1CT330/MAS → Settings → Secrets and variables → Actions → Variables**.
-2. Add these **repository variables** using the public client values from the existing MAS Supabase project:
+2. Add these as **repository variables or Actions secrets** using the public client values from the existing MAS Supabase project:
    - `EXPO_PUBLIC_SUPABASE_URL`
    - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-3. These are public client values, not privileged secrets. **Never** add a Supabase service-role key, PayChangu secret, Didit secret or webhook secret to the Android app.
+3. These are public client values. If saved as Actions secrets, the build workflow can read them as build inputs. **Never** add a Supabase service-role key, PayChangu secret, Didit secret or webhook secret to the Android app.
 4. If the variables are absent or invalid, the app intentionally uses preview data and backend actions are not live.
 5. For Google OAuth, add `mw.wealthgrid.mas://auth/callback` to the existing Supabase Auth redirect allowlist. This is a Supabase setting change and must be authorized before it is made.
 6. Run `npm ci`, `npm run typecheck` and `npx expo config --type public` before making a release build.
