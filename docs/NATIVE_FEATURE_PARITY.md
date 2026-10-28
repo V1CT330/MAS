@@ -15,13 +15,13 @@ A feature is **complete** only when the native screen and its real workflow exis
 | Developer listing drafts and editing | Implemented | Test upload failures/partial saves, edit published/rejected drafts and release version handling. |
 | Listing quality checks | Implemented | Compare checks and weights with web `console.quality`; verify all asset requirements. |
 | Automatic publishing/security review | Connected through existing RPC | Test rejected/accepted paths against production policies without bypassing server checks. |
-| Developer dashboard and listing status | Partial | Add web-prototype analytics metrics and meaningful recent activity; current dashboard is primarily status counts. |
+| Developer dashboard and listing status | Partial | The dashboard is primarily status counts; detailed native analytics is a separate Pro-gated screen. Add recent activity and compare the dashboard metrics against the web console. |
 | Reviews and developer replies | Implemented | Verify ownership/RLS and replies on device. |
 | Developer public profile and portfolio | Implemented | Native profile editing now includes company, location, contact email, skills and public links; verify persistence and public visibility on device. |
 | Social feed, media, reactions and comments | Implemented | Test media upload, pagination, moderation, ownership and network-failure states. |
 | Messages, connections and notifications | Implemented | Verify request acceptance/decline, unread state, ordering and privacy on device. |
 | Collabo, Investors, Grants and Crowdfund sections | Implemented | Verify section filters and post persistence; money movement must not be implied where no payment workflow exists. |
-| Team management | Implemented | Verify invitations, role/status updates, membership and activity log against RLS. |
+| Team workspace management | Native UI and owner-scoped CRUD implemented | Invitations are recorded in `team_members`; native does not send invitation emails or independently grant app access. Verify owner-scoped role/status changes, activity log and RLS on device; add a trusted invite/acceptance mechanism before describing invitations as delivered. |
 | Spotlight applications | Implemented | Verify submit/read states and any listing association. |
 | Testing / beta testers / feedback | Implemented | Verify invite/tester management and feedback flows; confirm any email/distribution integrations separately. |
 | Developer identity verification (manual) | Native workflow added; untested | Saves contact phone, uploads a private ID/passport file, checks developer eligibility and pending/approved status, and submits for review. Verify private `kyc-docs` upload, submission insert and RLS. Never expose document URLs publicly. |
@@ -33,7 +33,7 @@ A feature is **complete** only when the native screen and its real workflow exis
 | Console settings and account security | Native settings navigation implemented; security controls still hosted | Native console settings routes to profile, listings, verification, Developer Pro, wallet, resources and promotions. Security controls remain in the existing secure hosted workflow until their backend/session behavior is safely verified. |
 | Developer assistant / AI tools | Deliberate web handoff | Native menu opens the real prototype assistant rather than a non-functional preview. Native chat/API integration remains future parity work; no fake AI responses. |
 | Developer resources and feature requests | Native guides and feature-request workflow implemented | Native publishing/design/versioning/security guidance and live feature-request list/submission use the shared `feature_requests` table. Voting/status mutation remain disabled until a secure backend workflow is confirmed. |
-| Store administration and moderation | Not a native parity target yet | Decide authorized admin-only workflows and verify the account gate before implementing. |
+| Store administration and moderation | Secure hosted handoff / native parity not yet implemented | Keep privileged moderation/admin actions on the existing secure web workflow until the native app can verify the exact authorized admin identity and enforce server-side role checks. Do not expose admin actions to ordinary developers. |
 | Native Android OAuth/session persistence | Code present; device test pending | Test Google sign-in, callback, session persistence, expiry, sign-out and fresh install. |
 
 ## Prototype routes to audit
