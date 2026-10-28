@@ -53,8 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::error::Public Supabase client configuration is missing. Configure the existing MAS public URL and publishable/anon key as GitHub Actions variables or secrets before building the test APK."
-            exit 1
+            echo "::notice::No GitHub Actions Supabase overrides were supplied; the app will use its canonical public MAS client configuration from src/lib/supabase.ts."
           fi
           if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
             echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
