@@ -54,6 +54,7 @@ jobs:
           set -euo pipefail
           if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
             echo "::notice::No GitHub Actions Supabase overrides were supplied; the app will use its canonical public MAS client configuration from src/lib/supabase.ts."
+            exit 0
           fi
           if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
             echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
