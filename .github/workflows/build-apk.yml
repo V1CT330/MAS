@@ -20,10 +20,10 @@ jobs:
     name: Compile installable Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Public client configuration only. Never put service-role keys or provider secrets in the mobile app.
+    # Public client values may be configured as GitHub Actions variables or secrets. Never use privileged/provider secrets.
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
       - name: Check out native MAS
         uses: actions/checkout@v4
