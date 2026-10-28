@@ -48,7 +48,10 @@ const SEEDED_DEMO_DEVELOPER_IDS = [
   "11111111-1111-4111-8111-111111111106",
   "11111111-1111-4111-8111-111111111107",
   "11111111-1111-4111-8111-111111111108",
-] as const;
+] as const
+
+// The live Supabase project has no private kyc-docs bucket; keep manual ID upload disabled until it is provisioned safely.
+const MANUAL_KYC_UPLOAD_ENABLED = false;;
 
 const getListingQualityReport = (listing: any) => {
   const checks = [
@@ -1733,6 +1736,7 @@ export default function App() {
   };
 
   const submitManualVerification = async () => {
+    if (!MANUAL_KYC_UPLOAD_ENABLED) { showNotice("Manual ID upload is disabled until private KYC storage is configured. Use Didit verification instead."); return; }
     const fullName = verificationFullName.trim();
     const idNumber = verificationIdNumber.trim();
     if (fullName.length < 3) { showNotice("Enter your full legal name."); return; }
@@ -2604,18 +2608,25 @@ export default function App() {
                     <TextInput value={verificationPhone} onChangeText={setVerificationPhone} keyboardType="phone-pad" placeholder="+265991234567" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton, verificationSaving && {opacity:0.5}]} onPress={() => void saveVerificationPhone()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Saving…" : "Save contact number"}</Text></TouchableOpacity>
                   </View>
-                  <View style={styles.composeCard}>
-                    <Text style={styles.sectionTitle}>Manual identity review</Text>
-                    <Text style={styles.fieldLabel}>Full legal name</Text>
-                    <TextInput value={verificationFullName} onChangeText={setVerificationFullName} autoCapitalize="words" placeholder="As shown on your document" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
-                    <Text style={styles.fieldLabel}>Document type</Text>
-                    <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && styles.chipActive]}><Text style={[styles.chipText,verificationIdType === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
-                    <Text style={styles.fieldLabel}>Document number</Text>
-                    <TextInput value={verificationIdNumber} onChangeText={setVerificationIdNumber} autoCapitalize="characters" placeholder="Enter document number" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
-                    <TouchableOpacity style={styles.mediaAttachButton} onPress={() => void chooseVerificationDocument()}><Text style={styles.mediaAttachText}>{verificationDocument ? verificationDocument.name : "＋ Attach ID/passport image or PDF (max 10 MB)"}</Text></TouchableOpacity>
-                    {verificationDocument ? <TouchableOpacity onPress={() => setVerificationDocument(null)}><Text style={styles.removeMediaText}>Remove selected document</Text></TouchableOpacity> : null}
-                    <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton,verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
-                  </View>
+                  {MANUAL_KYC_UPLOAD_ENABLED ? (
+                    <View style={styles.composeCard}>
+                      <Text style={styles.sectionTitle}>Manual identity review</Text>
+                      <Text style={styles.fieldLabel}>Full legal name</Text>
+                      <TextInput value={verificationFullName} onChangeText={setVerificationFullName} autoCapitalize="words" placeholder="As shown on your document" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                      <Text style={styles.fieldLabel}>Document type</Text>
+                      <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && styles.chipActive]}><Text style={[styles.chipText,verificationIdType === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                      <Text style={styles.fieldLabel}>Document number</Text>
+                      <TextInput value={verificationIdNumber} onChangeText={setVerificationIdNumber} autoCapitalize="characters" placeholder="Enter document number" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                      <TouchableOpacity style={styles.mediaAttachButton} onPress={() => void chooseVerificationDocument()}><Text style={styles.mediaAttachText}>{verificationDocument ? verificationDocument.name : "＋ Attach ID/passport image or PDF (max 10 MB)"}</Text></TouchableOpacity>
+                      {verificationDocument ? <TouchableOpacity onPress={() => setVerificationDocument(null)}><Text style={styles.removeMediaText}>Remove selected document</Text></TouchableOpacity> : null}
+                      <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton,verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.infoBanner}>
+                      <Text style={styles.infoTitle}>Manual ID upload unavailable</Text>
+                      <Text style={styles.infoText}>The private KYC document bucket is not configured in the live MAS backend. No identity document will be uploaded from this screen. Use the secure Didit verification flow below.</Text>
+                    </View>
+                  )}
                   <View style={styles.composeCard}>
                     <Text style={styles.sectionTitle}>Automatic verification</Text>
                     <Text style={styles.toolDescription}>Didit opens in a secure external page. MAS updates your status after the server confirms the result.</Text>
