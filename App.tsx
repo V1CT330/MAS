@@ -37,6 +37,19 @@ type FeedPost = { id: string; name: string; tag: string; text: string; createdAt
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 type UtilityScreen = "none" | "library" | "notifications" | "settings";
 
+// These fixed developer IDs are the demo catalogue seeded by the prototype migration.
+// Keep demo listings out of the native live catalogue without deleting production data.
+const SEEDED_DEMO_DEVELOPER_IDS = [
+  "11111111-1111-4111-8111-111111111101",
+  "11111111-1111-4111-8111-111111111102",
+  "11111111-1111-4111-8111-111111111103",
+  "11111111-1111-4111-8111-111111111104",
+  "11111111-1111-4111-8111-111111111105",
+  "11111111-1111-4111-8111-111111111106",
+  "11111111-1111-4111-8111-111111111107",
+  "11111111-1111-4111-8111-111111111108",
+] as const;
+
 const getListingQualityReport = (listing: any) => {
   const checks = [
     { label: "Name between 3 and 30 characters", ok: (listing.name?.length ?? 0) >= 3 && (listing.name?.length ?? 0) <= 30, weight: 10 },
@@ -574,6 +587,7 @@ export default function App() {
       .from("listings")
       .select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
       .eq("status", "published")
+      .not("developer_id", "in", `(${SEEDED_DEMO_DEVELOPER_IDS.join(",")})`)
       .order("created_at", { ascending: false })
       .limit(100))
       .then(async ({ data, error }) => {
