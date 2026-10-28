@@ -5,7 +5,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 ## Current implementation
 
 - Native bottom tabs: Explore, Social, Developer Space and Profile.
-- Explore loads published MAS listings when the backend is configured and shows sample entries only as a fallback.
+- Explore and Social load only live MAS backend data. Mock catalogue entries and sample community posts have been removed; missing configuration or empty live data is clearly identified.
 - Listing details, versions, screenshots, ratings/reviews and developer listing workflows are implemented in the native client where supported by the existing backend schema.
 - Social includes feed posts, reactions, comments, connection requests, activity, direct messages, photo/video selection and Storage upload.
 - Google OAuth sign-in, persisted session display and sign-out are implemented. The `mw.wealthgrid.mas://auth/callback` redirect has been added to the existing Supabase Auth allowlist; keep it there and verify the callback on a real device.
