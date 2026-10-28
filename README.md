@@ -8,7 +8,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 - Explore loads published MAS listings when the backend is configured and shows sample entries only as a fallback.
 - Listing details, versions, screenshots, ratings/reviews and developer listing workflows are implemented in the native client where supported by the existing backend schema.
 - Social includes feed posts, reactions, comments, connection requests, activity, direct messages, photo/video selection and Storage upload.
-- Google OAuth sign-in, persisted session display and sign-out are implemented. The `mw.wealthgrid.mas://auth/callback` redirect still requires allowlisting in the existing Supabase Auth configuration and real-device verification.
+- Google OAuth sign-in, persisted session display and sign-out are implemented. The `mw.wealthgrid.mas://auth/callback` redirect has been added to the existing Supabase Auth allowlist; keep it there and verify the callback on a real device.
 - Developer Space includes listing drafts, release uploads and quality checks. Some advanced workflows are native screens backed by existing tables; others hand off to the MAS website where the secure web flow already exists.
 - Investor opportunities, grants and crowdfunding must not be treated as completed funding transactions just because a listing or link is visible. Native investment opportunity publishing is not payment collection or investment settlement.
 - Media upload, messaging, account profiles, release upload and developer workflows depend on the live Supabase schema, storage buckets/policies, user sessions and row-level security. They must be verified against production on a real phone.
@@ -22,7 +22,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 3. These are public client values, not privileged secrets. **Never** add a Supabase service-role key, PayChangu secret, Didit secret or webhook secret to the Android app.
 4. If the variables are absent or invalid, the app intentionally uses preview data and backend actions are not live.
 5. For Google OAuth, add `mw.wealthgrid.mas://auth/callback` to the existing Supabase Auth redirect allowlist. This is a Supabase setting change and must be authorized before it is made.
-6. Run `npm install`, `npm run typecheck` and `npx expo config --type public` before making a release build.
+6. Run `npm ci`, `npm run typecheck` and `npx expo config --type public` before making a release build.
 
 ## Accelerated release checklist
 
@@ -53,7 +53,7 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 
 ## Android APK
 
-The existing native branch is `native/expo-foundation`; accelerated work should be reviewed before it is merged there. Use the existing EAS project and build profiles to generate a direct-distribution APK. A successful build is not a substitute for installing and testing on a real Android device. MAS is intended for direct APK distribution, not Google Play publishing.
+The active implementation branch is `native/accelerated-mas-readiness`, targeting `native/expo-foundation` through [PR #2](https://github.com/V1CT330/MAS/pull/2). GitHub Actions builds a direct-distribution **debug APK** from the active branch. This is for acceptance testing, not a signed production release. Use the existing EAS project and build profiles for a release build after acceptance. A successful build is not a substitute for installing and testing on a real Android device. MAS is intended for direct APK distribution, not Google Play publishing.
 
 ## Security and architecture
 
