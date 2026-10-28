@@ -1963,16 +1963,20 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.app}>
         <View style={styles.header}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandMark}><Text style={styles.brandMarkText}>M</Text></View>
-            <View>
-              <Text style={styles.brand}>MAS</Text>
-              <Text style={styles.brandSub}>MALAWIAN APP STORE</Text>
-            </View>
+          <View style={styles.headerSearchBox}>
+            <View style={styles.headerBrandMark}><Text style={styles.headerBrandMarkText}>M</Text></View>
+            <Text style={styles.headerSearchIcon}>⌕</Text>
+            <TextInput
+              accessibilityLabel="Search apps and websites"
+              placeholder="Search apps & websites"
+              placeholderTextColor={COLORS.muted}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.headerSearchInput}
+              returnKeyType="search"
+              maxLength={120}
+            />
           </View>
-          <TouchableOpacity accessibilityRole="button" style={styles.avatar} onPress={() => setTab("Profile")}>
-            {accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.avatarImage} resizeMode="cover" /> : <Text style={styles.avatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text>}
-          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
@@ -2021,18 +2025,6 @@ export default function App() {
 
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
             <>
-              <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
-                <TextInput
-                  accessibilityLabel="Search apps and websites"
-                  placeholder="Search apps & websites"
-                  placeholderTextColor={COLORS.muted}
-                  value={query}
-                  onChangeText={setQuery}
-                  style={styles.searchInput}
-                  returnKeyType="search"
-                />
-              </View>
               <View style={styles.storeTabs}>
                 {([
                   ["all", "For you"],
@@ -2051,10 +2043,6 @@ export default function App() {
                 ))}
               </View>
 
-              <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>{kindFilter === "website" ? "Explore websites" : kindFilter === "app" ? "Explore apps" : "Explore apps & websites"}</Text>
-                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO CATALOGUE DATA" : "BACKEND NOT CONFIGURED"}</Text>
-              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", "Business", "Education", "Entertainment", "Finance", "Health", "News", "Shopping", "Social", "Tools", "Transport", "Other"].map((item) => (
                   <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
@@ -2063,10 +2051,10 @@ export default function App() {
                 ))}
               </ScrollView>
 
-              {!catalogueLoading && filteredApps.length > 0 ? [
+              {!catalogueLoading && filteredApps.length > 0 && !query.trim() && category === "All" && kindFilter === "all" ? [
+                { title: "Recommended for you", items: recentApps },
                 { title: "Top charts", items: topCharts },
                 { title: "Top rated", items: topRated },
-                { title: "Recently added", items: recentApps },
               ].map((shelf) => (
                 <View key={shelf.title} style={styles.nativeShelf}>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.sectionMeta}>MAS STORE</Text></View>
@@ -2082,6 +2070,10 @@ export default function App() {
                 </View>
               )) : null}
 
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>{query.trim() || category !== "All" || kindFilter !== "all" ? `${filteredApps.length} result${filteredApps.length === 1 ? "" : "s"}` : "All listings"}</Text>
+                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : ""}</Text>
+              </View>
               {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
@@ -2851,8 +2843,12 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   app: { flex: 1, backgroundColor: COLORS.background },
-  header: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  header: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
+  headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F5F5F5" },
+  headerBrandMark: { width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
+  headerBrandMarkText: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
+  headerSearchIcon: { color: COLORS.muted, fontSize: 21, lineHeight: 24 },
+  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 14 },
   brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
@@ -2866,9 +2862,9 @@ const styles = StyleSheet.create({
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
   heroText: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 10, marginBottom: 18 },
-  searchBox: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
+  searchBox: { minHeight: 40, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
   searchIcon: { color: COLORS.muted, fontSize: 25, marginRight: 8 },
-  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 10 },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 0, minHeight: 40 },
   storeTabs: { flexDirection: "row", gap: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 12, marginBottom: 14 },
   storeTab: { paddingTop: 9, paddingBottom: 11, borderBottomWidth: 3, borderBottomColor: "transparent" },
   storeTabActive: { borderBottomColor: COLORS.accent },
@@ -2882,14 +2878,14 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: "#CDE8D2", backgroundColor: "#E8F5E9" },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
   chipTextActive: { color: "#188038" },
-  appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 16, borderWidth: 1, borderColor: "#ECEFF1", backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
-  appIcon: { width: 53, height: 53, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 4, gap: 16 },
+  appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 14, paddingBottom: 8 },
   nativeShelfItem: { width: 104 },
-  nativeShelfIcon: { width: 92, height: 92, borderRadius: 19, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
+  nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
   nativeShelfIconImage: { width: "100%", height: "100%" },
   nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
   nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
@@ -2915,8 +2911,8 @@ const styles = StyleSheet.create({
   detailStatValue: { color: COLORS.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
   detailStatLabel: { color: COLORS.muted, fontSize: 10, marginTop: 5 },
   appDetails: { flex: 1 },
-  appName: { color: COLORS.text, fontWeight: "800", fontSize: 14 },
-  appCategory: { color: COLORS.accent, fontSize: 10, fontWeight: "800", marginTop: 3 },
+  appName: { color: COLORS.text, fontWeight: "600", fontSize: 15 },
+  appCategory: { color: COLORS.muted, fontSize: 12, fontWeight: "500", marginTop: 3 },
   appDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
   chevron: { color: COLORS.muted, fontSize: 25, paddingHorizontal: 2 },
   emptyText: { color: COLORS.muted, padding: 18, textAlign: "center" },
