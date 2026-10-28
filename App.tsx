@@ -244,6 +244,8 @@ export default function App() {
   const [featureRequestSaving, setFeatureRequestSaving] = useState(false);
   const [featureRequestTitle, setFeatureRequestTitle] = useState("");
   const [featureRequestBody, setFeatureRequestBody] = useState("");
+  const [featureRequestVoteIds, setFeatureRequestVoteIds] = useState<string[]>([]);
+  const [featureRequestVotingId, setFeatureRequestVotingId] = useState<string | null>(null);
   const [betaTesters, setBetaTesters] = useState<any[]>([]);
   const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
   const [verificationPhone, setVerificationPhone] = useState("");
@@ -280,18 +282,43 @@ export default function App() {
     if (developerScreen !== "Developer resources") return;
     let active = true;
     const loadFeatureRequests = async () => {
-      if (!isSupabaseConfigured) { setFeatureRequests([]); setFeatureRequestsLoading(false); return; }
+      if (!isSupabaseConfigured) {
+        setFeatureRequests([]);
+        setFeatureRequestVoteIds([]);
+        setFeatureRequestsLoading(false);
+        return;
+      }
       setFeatureRequestsLoading(true);
       const { data, error } = await supabase.from("feature_requests")
         .select("id,title,body,status,vote_count,created_at")
         .order("vote_count", { ascending: false }).limit(30);
       if (!active) return;
       setFeatureRequests(data ?? []);
+      if (error) {
+        setFeatureRequestVoteIds([]);
+        showNotice(error.message || "Could not load feature requests.");
+      } else {
+        const { data: authData } = await supabase.auth.getUser();
+        if (!active) return;
+        if (authData.user && data?.length) {
+          const { data: votes, error: votesError } = await supabase.from("feature_votes")
+            .select("request_id").eq("user_id", authData.user.id)
+            .in("request_id", data.map((item: any) => item.id));
+          if (!active) return;
+          setFeatureRequestVoteIds(votesError ? [] : (votes ?? []).map((vote: any) => vote.request_id));
+          if (votesError) showNotice(votesError.message || "Could not load your feature votes.");
+        } else {
+          setFeatureRequestVoteIds([]);
+        }
+      }
       setFeatureRequestsLoading(false);
-      if (error) showNotice(error.message || "Could not load feature requests.");
     };
     void loadFeatureRequests().catch(() => {
-      if (active) { setFeatureRequestsLoading(false); showNotice("Could not load feature requests. Check your connection and try again."); }
+      if (active) {
+        setFeatureRequestsLoading(false);
+        setFeatureRequestVoteIds([]);
+        showNotice("Could not load feature requests. Check your connection and try again.");
+      }
     });
     return () => { active = false; };
   }, [developerScreen]);
@@ -311,6 +338,30 @@ export default function App() {
     setFeatureRequests((items) => [data, ...items].sort((a,b) => Number(b.vote_count || 0) - Number(a.vote_count || 0)).slice(0,30));
     setFeatureRequestTitle(""); setFeatureRequestBody("");
     showNotice("Feature request submitted.");
+  };
+
+  const toggleFeatureRequestVote = async (item: any) => {
+    if (!isSupabaseConfigured) { showNotice("Feature voting needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to vote for a feature request."); setTab("Profile"); return; }
+    const alreadyVoted = featureRequestVoteIds.includes(item.id);
+    setFeatureRequestVotingId(item.id);
+    const result = alreadyVoted
+      ? await supabase.from("feature_votes").delete().eq("request_id", item.id).eq("user_id", authData.user.id)
+      : await supabase.from("feature_votes").insert({ request_id: item.id, user_id: authData.user.id });
+    if (result.error) {
+      setFeatureRequestVotingId(null);
+      showNotice(result.error.code === "23505" ? "You have already voted for this request." : result.error.message || "Could not update your vote.");
+      return;
+    }
+    const { data: refreshed, error: refreshError } = await supabase.from("feature_requests")
+      .select("vote_count").eq("id", item.id).single();
+    setFeatureRequestVotingId(null);
+    if (refreshError) { showNotice(refreshError.message || "Vote saved, but the count could not refresh."); return; }
+    setFeatureRequestVoteIds((ids) => alreadyVoted ? ids.filter((id) => id !== item.id) : [...ids, item.id]);
+    setFeatureRequests((items) => items.map((request) => request.id === item.id ? { ...request, vote_count: refreshed.vote_count } : request)
+      .sort((left, right) => Number(right.vote_count || 0) - Number(left.vote_count || 0)));
+    showNotice(alreadyVoted ? "Your vote was removed." : "Your vote was counted.");
   };
 
   useEffect(() => {
@@ -2698,9 +2749,10 @@ export default function App() {
                   {featureRequestsLoading ? <ActivityIndicator color={COLORS.accent} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
                     <View key={item.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title}</Text><Text style={styles.toolDescription}>{item.body || "No additional details."}</Text><Text style={styles.postTag}>{item.status || "open"} · {Number(item.vote_count || 0)} votes · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View>
+                      <TouchableOpacity accessibilityRole="button" disabled={featureRequestVotingId === item.id} onPress={() => void toggleFeatureRequestVote(item)} style={[styles.secondaryButton, featureRequestVotingId === item.id && { opacity: 0.5 }]}><Text style={styles.secondaryButtonText}>{featureRequestVotingId === item.id ? "Saving…" : featureRequestVoteIds.includes(item.id) ? "Remove vote" : "Vote"}</Text></TouchableOpacity>
                     </View>
                   )) : <Text style={styles.emptyText}>No feature requests found yet.</Text>}
-                  <Text style={styles.disclaimer}>Feature requests are stored in the shared MAS backend. Voting and status changes are not enabled here unless a secure backend workflow is available.</Text>
+                  <Text style={styles.disclaimer}>Feature requests and votes are stored in the shared MAS backend. Voting requires sign-in; review status remains controlled by the MAS moderation workflow.</Text>
                 </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
