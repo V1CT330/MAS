@@ -2081,7 +2081,7 @@ export default function App() {
                   <View style={styles.appDetails}>
                     <Text style={styles.appName}>{app.name}</Text>
                     <Text style={styles.appCategory}>{app.category}</Text>
-                    <Text style={styles.appDescription}>{app.description}</Text>
+                    <Text style={styles.appDescription}>{(app.rating ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"} ★  ·  {(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
