@@ -7,11 +7,16 @@ const DEFAULT_MAS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_7gCVgi4SoqzoAE4G0U3
 
 const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || DEFAULT_MAS_SUPABASE_URL).trim();
 // Both Supabase key names are public client keys. Never put service-role or provider secrets here.
-const supabaseKey = (
+const configuredSupabaseKey = (
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  DEFAULT_MAS_SUPABASE_PUBLISHABLE_KEY
+  ""
 ).trim();
+const supabaseKey = configuredSupabaseKey &&
+  !configuredSupabaseKey.startsWith("sb_secret_") &&
+  !configuredSupabaseKey.includes("service_role")
+  ? configuredSupabaseKey
+  : DEFAULT_MAS_SUPABASE_PUBLISHABLE_KEY;
 
 const isValidSupabaseUrl = (() => {
   try {
