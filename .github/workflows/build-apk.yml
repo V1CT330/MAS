@@ -52,19 +52,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::notice::No GitHub Actions Supabase overrides were supplied; the app will use its canonical public MAS client configuration from src/lib/supabase.ts."
-            exit 0
-          fi
-          if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
-            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ]]; then
+            echo "::notice::No Supabase URL override supplied; using the canonical public MAS URL in src/lib/supabase.ts."
+          elif [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be an HTTPS Supabase project URL."
             exit 1
           fi
-          if [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
-            echo "::error::A privileged Supabase key was supplied. Use a publishable key only."
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "::notice::No publishable key override supplied; using the canonical public MAS key in src/lib/supabase.ts."
+          elif [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
+            echo "::error::A privileged Supabase key was supplied. Use a publishable/anon key only."
             exit 1
           fi
-          echo "Public Supabase configuration is present; values are not printed."
+          echo "Supabase client configuration validated without printing values."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
