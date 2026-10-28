@@ -563,7 +563,7 @@ export default function App() {
         if (error) { setApps([]); setCatalogueSource("error"); showNotice(error.message || "Could not load the MAS catalogue."); }
         setCatalogueLoading(false);
       })
-      .catch(() => { if (active) setCatalogueLoading(false); });
+      .catch(() => { if (active) { setApps([]); setCatalogueSource("error"); setCatalogueLoading(false); showNotice("Could not load the MAS catalogue. Check your connection and try again."); } });
     setFeedLoading(true);
     Promise.resolve(
       supabase
@@ -605,7 +605,7 @@ export default function App() {
         } else { setFeedSource("error"); setPosts([]); showNotice(error.message || "Could not load MAS Social."); }
         if (active) setFeedLoading(false);
       })
-      .catch(() => { if (active) setFeedLoading(false); });
+      .catch(() => { if (active) { setPosts([]); setFeedSource("error"); setFeedLoading(false); showNotice("Could not load MAS Social. Check your connection and try again."); } });
     return () => { active = false; };
   }, []);
 
@@ -701,7 +701,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadListingDetails = async () => {
-      if (!selectedApp || selectedApp.id.startsWith("sample-") || !isSupabaseConfigured) {
+      if (!selectedApp || !isSupabaseConfigured) {
         setSelectedAppDetails(null); setSelectedVersions([]); setSelectedReviews([]); setSelectedScreenshotUrls([]); setDetailLoading(false); return;
       }
       setDetailLoading(true);
@@ -792,7 +792,7 @@ export default function App() {
   };
 
   const installSelectedApp = async () => {
-    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be installed."); return; }
+    if (!selectedApp) { showNotice("Choose a live MAS listing first."); return; }
     if (!isSupabaseConfigured) { showNotice("Install actions need the MAS backend configuration."); return; }
     const { data: authData } = await supabase.auth.getUser();
     const listing = selectedAppDetails;
@@ -817,7 +817,7 @@ export default function App() {
   };
 
   const submitSelectedReview = async () => {
-    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be reviewed."); return; }
+    if (!selectedApp) { showNotice("Choose a live MAS listing first."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) { showNotice("Sign in to post a review."); setSelectedApp(null); setTab("Profile"); return; }
     const { error } = await supabase.from("reviews").upsert({ listing_id: selectedApp.id, user_id: authData.user.id, rating: reviewRating, body: reviewDraft.trim() || null }, { onConflict: "listing_id,user_id" });
@@ -1922,7 +1922,7 @@ export default function App() {
                 </View>
               </View>
               <TouchableOpacity style={styles.primaryButton} onPress={async () => {
-                if (selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be saved. Connect to the live MAS catalogue first."); return; }
+                if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
                 if (authError || !authData.user) { showNotice("Sign in to save this listing to your library."); setSelectedApp(null); setTab("Profile"); return; }
