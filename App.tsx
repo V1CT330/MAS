@@ -111,7 +111,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   "Promote a product": [
     { title: "Product description", description: "Prepare a concise value proposition and the audience your product serves.", status: "Preparation", action: "Review listing" },
     { title: "Campaign assets", description: "Prepare original screenshots, a logo and promotional copy.", status: "Preparation", action: "Review asset requirements" },
-    { title: "Campaign analytics", description: "Campaign-specific reporting is not available in the native app yet. General listing views and installs are available under Analytics; use the existing web promotion console for campaign setup.", status: "Web handoff for campaigns", action: "Open promotion console" },
+    { title: "Campaign analytics", description: "Create and manage native promotion campaigns and review server-reported impressions, clicks, spend and budget. Campaign approval and payment are separate server-side steps.", status: "Native campaign workflow", action: "Open promotion campaign manager" },
   ],
   "Spotlight": [
     { title: "Featured product readiness", description: "Keep your listing complete, current and easy to understand.", status: "Preparation", action: "Open quality checks" },
@@ -2724,6 +2724,7 @@ export default function App() {
                       <TouchableOpacity accessibilityRole="button" onPress={() => {
                         if (item.action === "Open assistant console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/assistant").catch(() => showNotice("Could not open the MAS assistant. Check your connection and try again."));
                         else if (item.action === "Open promotion console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open the promotion console. Check your connection and try again."));
+                        else if (item.action === "Open promotion campaign manager") setDeveloperScreen("Promote a product");
                         else if (item.action === "Open security console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/security").catch(() => showNotice("Could not open the security console. Check your connection and try again."));
                         else if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
                         else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
@@ -2746,7 +2747,7 @@ export default function App() {
                       }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
                     </View>
                   ))}
-                  <Text style={styles.disclaimer}>These are native preparation and checklist screens, not claims that campaign, team permissions or provider workflows are already connected. Live integrations will be completed in the final integration phase.</Text>
+                  <Text style={styles.disclaimer}>This workspace combines native workflows with clearly labeled guidance for tasks that still require a secure hosted provider or production backend. Campaign approval, payments, identity decisions and privileged moderation remain server-authoritative.</Text>
                 </>
               ) : null}
               <Text style={styles.disclaimer}>Payment settlement, identity-provider decisions and wallet transactions remain server-authoritative. Hosted checkout and selected provider workflows open securely in the MAS web console; all native and hosted journeys still require final end-to-end acceptance testing.</Text>
