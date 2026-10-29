@@ -2083,7 +2083,12 @@ export default function App() {
                   <View style={styles.appDetails}>
                     <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
                     <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
-                    <Text style={styles.appDescription}>{(app.ratingCount ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"} ★  ·  {(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
+                    <View style={styles.appMetricRow}>
+                      <Text style={styles.appMetricRating}>{(app.ratingCount ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"}</Text>
+                      <Text style={styles.appMetricStar}>★</Text>
+                      <Text style={styles.appMetricDot}>·</Text>
+                      <Text style={styles.appDescription}>{(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               )) : <Text style={styles.emptyText}>No apps match that search. Try another category or search term.</Text>}
@@ -2825,9 +2830,10 @@ export default function App() {
             ["Profile", "○"],
           ] as [Tab, string][]).map(([name, icon]) => (
             <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => { setUtilityScreen("none"); setSelectedApp(null); setDeveloperScreen(null); setTab(name); }}>
-              <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
+              <View style={[styles.tabIconPill, tab === name && styles.tabIconPillActive]}>
+                <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
+              </View>
               <Text style={[styles.tabLabel, tab === name && styles.tabLabelActive]}>{name}</Text>
-              {tab === name ? <View style={styles.tabIndicator}/> : null}
             </TouchableOpacity>
           ))}
         </View>
@@ -2844,7 +2850,7 @@ const styles = StyleSheet.create({
   headerLogo: { width: 28, height: 28, flexShrink: 0 },
   
   headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
-  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 14 },
+  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 16 },
   brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
@@ -2876,16 +2882,16 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600" },
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
-  chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  chipActive: { borderColor: "#CDE8D2", backgroundColor: "#E8F5E9" },
-  chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
-  chipTextActive: { color: "#188038" },
+  chip: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentSoft },
+  chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "500" },
+  chipTextActive: { color: COLORS.accent },
   appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 0, gap: 16 },
   appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
-  nativeShelfRow: { gap: 14, paddingBottom: 8 },
+  nativeShelfRow: { gap: 16, paddingBottom: 8 },
   nativeShelfItem: { width: 104 },
   nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
   nativeShelfIconImage: { width: "100%", height: "100%" },
@@ -2915,7 +2921,11 @@ const styles = StyleSheet.create({
   appDetails: { flex: 1 },
   appName: { color: COLORS.text, fontWeight: "500", fontSize: 15 },
   appCategory: { color: COLORS.muted, fontSize: 12, fontWeight: "400", marginTop: 3 },
-  appDescription: { color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 4 },
+  appDescription: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
+  appMetricRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+  appMetricRating: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
+  appMetricStar: { color: "#4285F4", fontSize: 12, lineHeight: 16 },
+  appMetricDot: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
   chevron: { color: COLORS.muted, fontSize: 25, paddingHorizontal: 2 },
   emptyText: { color: COLORS.muted, padding: 18, textAlign: "center" },
   infoBanner: { padding: 17, marginTop: 15, backgroundColor: "#F7FBF7", borderWidth: 1, borderColor: "#DDEFE0", borderRadius: 16 },
@@ -2980,13 +2990,14 @@ const styles = StyleSheet.create({
   primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 6 },
-  tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 3 },
+  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4 },
+  tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 56, gap: 2, paddingVertical: 3 },
+  tabIconPill: { width: 64, height: 28, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  tabIconPillActive: { backgroundColor: COLORS.accentSoft },
   tabIcon: { color: COLORS.muted, fontSize: 20, lineHeight: 22 },
   tabActive: { color: COLORS.accent },
-  tabLabel: { color: COLORS.muted, fontSize: 9, fontWeight: "700" },
-  tabLabelActive: { color: COLORS.accent },
-  tabIndicator: { position: "absolute", top: -6, width: 22, height: 3, borderRadius: 2, backgroundColor: COLORS.accent },
+  tabLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "500" },
+  tabLabelActive: { color: COLORS.text },
   toast: { position: "absolute", bottom: 72, left: 18, right: 18, padding: 13, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: COLORS.border },
   toastText: { color: COLORS.text, fontSize: 12, textAlign: "center" },
 });
