@@ -32,7 +32,7 @@ const COLORS = {
   green: "#188038",
 };
 
-type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; iconUrl?: string | null; createdAt?: string; };
+type StoreApp = { id: string; name: string; category: string; tagline?: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; ratingCount?: number; iconUrl?: string | null; createdAt?: string; };
 type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string; mediaUrl?: string | null; mediaType?: "image" | "video" | null };
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 type UtilityScreen = "none" | "library" | "notifications" | "settings";
@@ -612,7 +612,8 @@ export default function App() {
               id: item.id,
               name: item.name,
               category: item.category || "Other",
-              description: item.tagline || item.description || "Discover this project on MAS.",
+              tagline: item.tagline || item.category || "Discover this project on MAS.",
+              description: item.description || item.tagline || "Discover this project on MAS.",
               mark: String(item.name || "M").slice(0, 1).toUpperCase(),
               color: COLORS.accent,
               slug: item.slug,
@@ -622,6 +623,7 @@ export default function App() {
               createdAt: item.created_at,
               downloads: item.downloads ?? 0,
               rating: item.rating_avg ?? 0,
+              ratingCount: item.rating_count ?? 0,
             } satisfies StoreApp;
           }));
           if (!active) return;
@@ -1964,7 +1966,7 @@ export default function App() {
       <View style={styles.app}>
         <View style={styles.header}>
           <View style={styles.headerSearchBox}>
-            <View style={styles.headerBrandMark}><Text style={styles.headerBrandMarkText}>M</Text></View>
+            <Image accessibilityLabel="Malawian App Store logo" source={{ uri: "https://malawian-app-store-j6pm.vercel.app/favicon.png" }} style={styles.headerLogo} resizeMode="contain" />
             <Text style={styles.headerSearchIcon}>⌕</Text>
             <TextInput
               accessibilityLabel="Search apps and websites"
@@ -2057,13 +2059,13 @@ export default function App() {
                 { title: "Top rated", items: topRated },
               ].map((shelf) => (
                 <View key={shelf.title} style={styles.nativeShelf}>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.sectionMeta}>MAS STORE</Text></View>
+                  <View style={styles.shelfHeading}><View style={styles.shelfHeadingCopy}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.shelfSubtitle}>{shelf.title === "Recommended for you" ? "Fresh from Malawian developers" : shelf.title === "Top charts" ? "Most popular this week" : "Loved by reviewers"}</Text></View><Text style={styles.shelfChevron}>›</Text></View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
                         <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
-                        <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.category} · {item.rating ? item.rating.toFixed(1) + " ★" : (item.kind || "app")}</Text>
+                        <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -2079,19 +2081,13 @@ export default function App() {
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
                   <View style={styles.appDetails}>
-                    <Text style={styles.appName}>{app.name}</Text>
-                    <Text style={styles.appCategory}>{app.category}</Text>
-                    <Text style={styles.appDescription}>{(app.rating ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"} ★  ·  {(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
+                    <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
+                    <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
+                    <Text style={styles.appDescription}>{(app.ratingCount ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"} ★  ·  {(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
                   </View>
-                  <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
               )) : <Text style={styles.emptyText}>No apps match that search. Try another category or search term.</Text>}
 
-              <View style={styles.infoBanner}>
-                <Text style={styles.infoTitle}>Have an app idea?</Text>
-                <Text style={styles.infoText}>Build, publish and grow with Malawi's developer community.</Text>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => setTab("Develop")}><Text style={styles.secondaryButtonText}>Explore developer tools  →</Text></TouchableOpacity>
-              </View>
             </>
           )}
 
@@ -2845,9 +2841,9 @@ const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: COLORS.background },
   header: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
   headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F5F5F5" },
-  headerBrandMark: { width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
-  headerBrandMarkText: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
-  headerSearchIcon: { color: COLORS.muted, fontSize: 21, lineHeight: 24 },
+  headerLogo: { width: 28, height: 28, flexShrink: 0 },
+  
+  headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
   headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 14 },
   brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
@@ -2857,7 +2853,7 @@ const styles = StyleSheet.create({
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
   content: { flex: 1 },
-  contentInner: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12 },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
@@ -2865,21 +2861,27 @@ const styles = StyleSheet.create({
   searchBox: { minHeight: 40, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
   searchIcon: { color: COLORS.muted, fontSize: 25, marginRight: 8 },
   searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 0, minHeight: 40 },
-  storeTabs: { flexDirection: "row", gap: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 12, marginBottom: 14 },
-  storeTab: { paddingTop: 9, paddingBottom: 11, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  storeTabs: { flexDirection: "row", gap: 24, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 0, marginBottom: 12 },
+  storeTab: { paddingTop: 4, paddingBottom: 10, borderBottomWidth: 3, borderBottomColor: "transparent" },
   storeTabActive: { borderBottomColor: COLORS.accent },
-  storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "600" },
+  storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "500" },
   storeTabTextActive: { color: COLORS.accent, fontWeight: "700" },
-  sectionHeading: { marginTop: 25, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: "800" },
+  sectionHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shelfHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  shelfHeadingCopy: { flex: 1 },
+  shelfSubtitle: { color: COLORS.muted, fontSize: 12, marginTop: 2 },
+  shelfChevron: { color: COLORS.muted, fontSize: 24, lineHeight: 28 },
+  appNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  kindGlyph: { color: COLORS.muted, fontSize: 12 },
+  sectionTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600" },
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
   chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
   chipActive: { borderColor: "#CDE8D2", backgroundColor: "#E8F5E9" },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
   chipTextActive: { color: "#188038" },
-  appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 4, gap: 16 },
-  appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 0, gap: 16 },
+  appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
@@ -2887,8 +2889,8 @@ const styles = StyleSheet.create({
   nativeShelfItem: { width: 104 },
   nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
   nativeShelfIconImage: { width: "100%", height: "100%" },
-  nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
-  nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
+  nativeShelfName: { color: COLORS.text, fontSize: 13, fontWeight: "500" },
+  nativeShelfMeta: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
   fieldLabel: { color: COLORS.text, fontSize: 11, fontWeight: "800", marginTop: 12, marginBottom: 6 },
   formInput: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13 },
   devMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 15 },
@@ -2911,9 +2913,9 @@ const styles = StyleSheet.create({
   detailStatValue: { color: COLORS.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
   detailStatLabel: { color: COLORS.muted, fontSize: 10, marginTop: 5 },
   appDetails: { flex: 1 },
-  appName: { color: COLORS.text, fontWeight: "600", fontSize: 15 },
-  appCategory: { color: COLORS.muted, fontSize: 12, fontWeight: "500", marginTop: 3 },
-  appDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
+  appName: { color: COLORS.text, fontWeight: "500", fontSize: 15 },
+  appCategory: { color: COLORS.muted, fontSize: 12, fontWeight: "400", marginTop: 3 },
+  appDescription: { color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 4 },
   chevron: { color: COLORS.muted, fontSize: 25, paddingHorizontal: 2 },
   emptyText: { color: COLORS.muted, padding: 18, textAlign: "center" },
   infoBanner: { padding: 17, marginTop: 15, backgroundColor: "#F7FBF7", borderWidth: 1, borderColor: "#DDEFE0", borderRadius: 16 },
