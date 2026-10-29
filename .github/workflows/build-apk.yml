@@ -2,7 +2,9 @@ name: Build native MAS Android APK
 
 on:
   push:
-    branches: [native/expo-foundation]
+    branches:
+      - native/expo-foundation
+      - native/accelerated-mas-readiness
   workflow_dispatch:
 
 permissions:
@@ -18,11 +20,10 @@ jobs:
     name: Compile installable Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Public client configuration only. Add these as GitHub Actions repository
-    # Variables; never put service-role keys or provider secrets in the mobile app.
+    # Public client values may be configured as GitHub Actions variables or secrets. Never use privileged/provider secrets.
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL || vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL || vars.SUPABASE_URL || secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_PUBLISHABLE_KEY || vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Check out native MAS
         uses: actions/checkout@v4
@@ -51,24 +52,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::warning::Supabase public variables are not available to this workflow. Building in preview mode; live backend actions will remain unavailable until the native build receives the public configuration."
-            exit 0
-          fi
-          if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
-            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ]]; then
+            echo "::notice::No Supabase URL override supplied; using the canonical public MAS URL in src/lib/supabase.ts."
+          elif [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
+            echo "::error::EXPO_PUBLIC_SUPABASE_URL must be an HTTPS Supabase project URL."
             exit 1
           fi
-          if [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
-            echo "::error::A privileged Supabase key was supplied. Use a publishable key only."
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "::notice::No publishable key override supplied; using the canonical public MAS key in src/lib/supabase.ts."
+          elif [[ "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* || "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == *service_role* ]]; then
+            echo "::error::A privileged Supabase key was supplied. Use a publishable/anon key only."
             exit 1
           fi
-          echo "Public Supabase configuration is present; values are not printed."
+          echo "Supabase client configuration validated without printing values."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Set up Java for Android
         uses: actions/setup-java@v4
@@ -82,7 +84,7 @@ jobs:
           packages: platform-tools
 
       - name: Install JavaScript dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive

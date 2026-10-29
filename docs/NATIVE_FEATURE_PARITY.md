@@ -1,0 +1,45 @@
+# MAS Native Feature-Parity Tracker
+
+This tracker compares the native Expo app in this repository with the live web prototype in `V1CT330/malawian-app-store`. It is an engineering checklist, not a claim that unverified functionality works in production.
+
+## Definition of done
+
+A feature is **complete** only when the native screen and its real workflow exist, signed-in access and ownership checks are respected, loading/empty/error/success states are handled, data is connected to the existing MAS backend, and CI plus a real Android test pass. A link to the web app, a preview card, sample data, or a typecheck alone does not count as native feature parity.
+
+## Native feature inventory
+
+| Prototype capability | Native state | Remaining work / acceptance criteria |
+|---|---|---|
+| Explore app and website catalogue | Implemented | Verify live catalogue, search/category filters, details and signed asset URLs on device. |
+| Product detail, screenshots, versions, ratings and reviews | Implemented | Verify published release selection, secure download, review upsert and error states. |
+| Developer listing drafts and editing | Implemented | Test upload failures/partial saves, edit published/rejected drafts and release version handling. |
+| Listing quality checks | Implemented | Compare checks and weights with web `console.quality`; verify all asset requirements. |
+| Automatic publishing/security review | Connected through existing RPC | Test rejected/accepted paths against production policies without bypassing server checks. |
+| Developer dashboard and listing status | Partial | The dashboard is primarily status counts; detailed native analytics is a separate Pro-gated screen. Add recent activity and compare the dashboard metrics against the web console. |
+| Reviews and developer replies | Implemented | Verify ownership/RLS and replies on device. |
+| Developer public profile and portfolio | Implemented | Native profile editing now includes company, location, contact email, skills and public links; verify persistence and public visibility on device. |
+| Social feed, media, reactions and comments | Implemented | Test media upload, pagination, moderation, ownership and network-failure states. |
+| Messages, connections and notifications | Implemented | Verify request acceptance/decline, unread state, ordering and privacy on device. |
+| Collabo, Investors, Grants and Crowdfund sections | Implemented | Verify section filters and post persistence; money movement must not be implied where no payment workflow exists. |
+| Team workspace management | Native UI and owner-scoped CRUD implemented | Invitations are recorded in `team_members`; native does not send invitation emails or independently grant app access. Verify owner-scoped role/status changes, activity log and RLS on device; add a trusted invite/acceptance mechanism before describing invitations as delivered. |
+| Spotlight applications | Implemented | Verify submit/read states and any listing association. |
+| Testing / beta testers / feedback | Implemented | Verify invite/tester management and feedback flows; confirm any email/distribution integrations separately. |
+| Developer identity verification | Contact/status workflow and Didit flow implemented; manual ID upload safely disabled | Live Supabase has no `kyc-docs` bucket. Native UI therefore does not collect or upload ID documents; it directs users to secure Didit verification. Manual uploads require explicit approval to provision the private bucket and policies. Verify Didit session creation, callback and server-derived status on device. |
+| Didit identity verification | Native start flow added; untested | Test session creation, trusted-host validation, browser return, webhook processing and status refresh. |
+| Developer Pro subscription status | Native overview added; checkout is hosted web handoff | Test subscription entitlement, PayChangu return/webhook, cancellation and period-end access. Checkout itself is not native. |
+| Advanced analytics | Native screen implemented; CI/device test pending | 7/30/90-day views, installs, conversion, per-product metrics and device/country breakdowns; event queries are gated by active/paid-period Developer Pro entitlement. Compare against web metrics and test RLS. |
+| Wallet and earnings | Native safety/status screen implemented; ledger not connected | Native screen explains that verified balances, pending funds and transaction history are unavailable until a real ledger exists; withdrawals remain disabled and no fake balance or money movement is shown. Ledger integration and payout flows remain backend work. |
+| Advertising / promotion | Native campaign workflow implemented; backend metrics displayed | Native screen creates and lists campaigns from the existing `promotions` table, supports placement, MWK budget, duration, target location, pause, and live impressions/clicks/spend/budget fields. Campaign approval, billing/charging and server-side metric updates remain backend-authoritative and must be verified; the native client does not charge or approve campaigns. |
+| Console settings and account security | Native settings navigation implemented; security controls still hosted | Native console settings routes to profile, listings, verification, Developer Pro, wallet, resources and promotions. Security controls remain in the existing secure hosted workflow until their backend/session behavior is safely verified. |
+| Developer assistant / AI tools | Deliberate web handoff | Native menu opens the real prototype assistant rather than a non-functional preview. Native chat/API integration remains future parity work; no fake AI responses. |
+| Developer resources and feature requests | Native guides, submission and authenticated voting implemented | Native publishing/design/versioning/security guidance and live feature-request list/submission use the shared `feature_requests` table. Votes use the existing `feature_votes` table with user-scoped insert/delete and server-triggered vote counts. Moderation status remains controlled by the MAS workflow. Verify vote RLS and count refresh on device. |
+| Store administration and moderation | Secure hosted handoff / native parity not yet implemented | Keep privileged moderation/admin actions on the existing secure web workflow until the native app can verify the exact authorized admin identity and enforce server-side role checks. Do not expose admin actions to ordinary developers. |
+| Native Android OAuth/session persistence | Code present; device test pending | Test Google sign-in, callback, session persistence, expiry, sign-out and fresh install. |
+
+## Prototype routes to audit
+
+The reference prototype includes dashboard, analytics, assistant, product management, publishing, quality, resources, reviews, security, settings, social, developer profile, subscription, testing, verification, wallet, admin, advertise, library, notifications, Pro, public profile, team, upload and Spotlight. Each route must be assigned either a native implementation, a deliberate secure hosted handoff, or an explicitly out-of-scope decision.
+
+## Release gate
+
+Do not describe MAS as “fully built and only needing testing” until every in-scope route is marked complete, all non-native handoffs are explicitly approved, automated checks pass on the final commit, and a real Android acceptance run covers Google OAuth plus the main store, publishing, Social, verification and subscription journeys.
