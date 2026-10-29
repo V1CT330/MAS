@@ -2,7 +2,7 @@ name: Build native MAS Android APK
 
 on:
   push:
-    branches: [native/expo-foundation]
+    branches: [main, native/expo-foundation]
   workflow_dispatch:
 
 permissions:
@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::warning::Supabase public variables are not available to this workflow. Building in preview mode; live backend actions will remain unavailable until the native build receives the public configuration."
+            echo "::warning::Supabase public variables are not available to this workflow. Building without live backend configuration; live backend actions will remain unavailable until the native build receives the public configuration."
             exit 0
           fi
           if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
