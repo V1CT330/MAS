@@ -2063,7 +2063,7 @@ export default function App() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
-                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
+                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : COLORS.accentSoft }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
@@ -2079,7 +2079,7 @@ export default function App() {
               {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
-                  <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
+                  <View style={[styles.appIcon, { backgroundColor: app.iconUrl ? app.color : COLORS.accentSoft }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{app.name.slice(0, 2).toUpperCase()}</Text>}</View>
                   <View style={styles.appDetails}>
                     <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
                     <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
@@ -2922,6 +2922,7 @@ const styles = StyleSheet.create({
   appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 0, gap: 16 },
   appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
+  appIconFallbackText: { color: COLORS.accent, fontSize: 18, fontWeight: "600" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 16, paddingBottom: 8 },
