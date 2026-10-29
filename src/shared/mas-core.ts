@@ -118,3 +118,45 @@ export function formatBytes(bytes: number | null | undefined): string {
   }
   return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
+
+export type AsoListing = {
+  name?: string | null;
+  tagline?: string | null;
+  description?: string | null;
+  icon_url?: string | null;
+  screenshots?: readonly string[] | null;
+  banner_url?: string | null;
+  tags?: readonly string[] | null;
+  rating_avg?: number | null;
+  downloads?: number | null;
+};
+
+/** Canonical store-optimisation scoring shared by the WebApp and native APK. */
+export function asoReport(l: Partial<AsoListing>) {
+  const checks = [
+    { label: "Name between 3 and 30 characters", ok: (l.name?.length ?? 0) >= 3 && (l.name?.length ?? 0) <= 30, weight: 10 },
+    { label: "Tagline written (40+ characters)", ok: (l.tagline?.length ?? 0) >= 40, weight: 10 },
+    { label: "Description of 200+ characters", ok: (l.description?.length ?? 0) >= 200, weight: 20 },
+    { label: "Icon uploaded", ok: Boolean(l.icon_url), weight: 15 },
+    { label: "At least 3 screenshots", ok: (l.screenshots?.length ?? 0) >= 3, weight: 15 },
+    { label: "Feature banner uploaded", ok: Boolean(l.banner_url), weight: 5 },
+    { label: "3 or more tags", ok: (l.tags?.length ?? 0) >= 3, weight: 10 },
+  ];
+  const score = checks.reduce((sum, check) => sum + (check.ok ? check.weight : 0), 0);
+  return { score, checks, missing: checks.filter((check) => !check.ok).map((check) => check.label) };
+}
+
+export function visibilityScore(l: Partial<AsoListing>, reputation: number) {
+  const aso = asoReport(l).score;
+  const rating = (l.rating_avg ?? 0) * 8;
+  const traction = Math.min(20, Math.round((l.downloads ?? 0) / 5));
+  return Math.min(100, Math.round(aso * 0.5 + rating + traction + reputation * 0.2));
+}
+
+export function reputationTier(score: number) {
+  if (score >= 80) return "Elite";
+  if (score >= 60) return "Trusted";
+  if (score >= 35) return "Rising";
+  return "New";
+}
+
