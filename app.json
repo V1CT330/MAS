@@ -8,7 +8,8 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "mw.wealthgrid.mas",
-      "versionCode": 3
+      "versionCode": 3,
+      "edgeToEdgeEnabled": false
     },
     "ios": {
       "supportsTablet": true,
@@ -18,6 +19,11 @@
       "eas": {
         "projectId": "229fd641-5313-4f0e-af76-b22b120ee61b"
       }
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#FFFFFF",
+      "barStyle": "dark-content",
+      "enforceContrast": false
     }
   }
 }
