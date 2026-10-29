@@ -2338,9 +2338,11 @@ export default function App() {
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
                 ["♧", "Notifications", "Account and platform alerts.", "native:notifications"],
                 ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
+                ["◎", "Social community", "Explore posts, messages and collaboration.", "native:social"],
+                ["▦", "Developer space", "Publish and manage your products.", "native:develop"],
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2824,18 +2826,49 @@ export default function App() {
 
         <View style={styles.tabBar}>
           {([
-            ["Explore", "⌂"],
-            ["Social", "◎"],
-            ["Develop", "▦"],
-            ["Profile", "○"],
-          ] as [Tab, string][]).map(([name, icon]) => (
-            <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => { setUtilityScreen("none"); setSelectedApp(null); setDeveloperScreen(null); setTab(name); }}>
-              <View style={[styles.tabIconPill, tab === name && styles.tabIconPillActive]}>
-                <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
-              </View>
-              <Text style={[styles.tabLabel, tab === name && styles.tabLabelActive]}>{name}</Text>
-            </TouchableOpacity>
-          ))}
+            ["Explore", "▣"],
+            ["Library", "▤"],
+            ["Alerts", "♧"],
+            ["Account", "○"],
+          ] as [string, string][]).map(([name, icon]) => {
+            const active = name === "Explore"
+              ? tab === "Explore" && utilityScreen === "none" && developerScreen === null
+              : name === "Library"
+                ? utilityScreen === "library"
+                : name === "Alerts"
+                  ? utilityScreen === "notifications"
+                  : (tab === "Profile" || tab === "Social" || tab === "Develop") && utilityScreen !== "library" && utilityScreen !== "notifications";
+            return (
+              <TouchableOpacity
+                key={name}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                style={styles.tabItem}
+                onPress={() => {
+                  setSelectedApp(null);
+                  setDeveloperScreen(null);
+                  if (name === "Explore") {
+                    setUtilityScreen("none");
+                    setTab("Explore");
+                  } else if (name === "Library") {
+                    setTab("Profile");
+                    setUtilityScreen("library");
+                  } else if (name === "Alerts") {
+                    setTab("Profile");
+                    setUtilityScreen("notifications");
+                  } else {
+                    setUtilityScreen("none");
+                    setTab("Profile");
+                  }
+                }}
+              >
+                <View style={[styles.tabIconPill, active && styles.tabIconPillActive]}>
+                  <Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text>
+                </View>
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     </SafeAreaView>
