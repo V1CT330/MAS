@@ -27,6 +27,35 @@ export const SUBSCRIPTION_PRICE_MWK = 5000;
 export type ListingKind = "app" | "website";
 export type ListingStatus = "draft" | "pending" | "published" | "rejected";
 
+export type Listing = {
+  id: string;
+  developer_id: string;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  category: string;
+  kind: ListingKind;
+  icon_url: string | null;
+  screenshots: string[];
+  website_url: string | null;
+  price_mwk: number;
+  monetization?: string;
+  price_month_mwk?: number;
+  price_year_mwk?: number;
+  allow_donations?: boolean;
+  crypto_address?: string | null;
+  sponsored?: boolean;
+  status: ListingStatus;
+  featured?: boolean;
+  rejection_reason?: string | null;
+  downloads: number;
+  rating_avg: number;
+  rating_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export function normalizeSearch(value: string | null | undefined): string {
   return (value ?? "").trim().toLocaleLowerCase();
 }
