@@ -16,7 +16,7 @@ import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
-import { CATEGORIES, matchesSearch, matchesListingFilters, topByNumber, topByDate } from "./src/shared/mas-core";
+import { CATEGORIES, asoReport, matchesSearch, matchesListingFilters, topByNumber, topByDate } from "./src/shared/mas-core";
 import type { Listing } from "./src/shared/mas-core";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
@@ -54,20 +54,6 @@ const SEEDED_DEMO_DEVELOPER_IDS = [
 
 // The live Supabase project has no private kyc-docs bucket; keep manual ID upload disabled until it is provisioned safely.
 const MANUAL_KYC_UPLOAD_ENABLED = false;;
-
-const getListingQualityReport = (listing: any) => {
-  const checks = [
-    { label: "Name between 3 and 30 characters", ok: (listing.name?.length ?? 0) >= 3 && (listing.name?.length ?? 0) <= 30, weight: 10 },
-    { label: "Tagline written (40+ characters)", ok: (listing.tagline?.length ?? 0) >= 40, weight: 10 },
-    { label: "Description of 200+ characters", ok: (listing.description?.length ?? 0) >= 200, weight: 20 },
-    { label: "Icon uploaded", ok: Boolean(listing.icon_url), weight: 15 },
-    { label: "At least 3 screenshots", ok: (listing.screenshots?.length ?? 0) >= 3, weight: 15 },
-    { label: "Feature banner uploaded", ok: Boolean(listing.banner_url), weight: 5 },
-    { label: "5 or more keywords", ok: (listing.keywords?.length ?? 0) >= 5, weight: 15 },
-    { label: "3 or more tags", ok: (listing.tags?.length ?? 0) >= 3, weight: 10 },
-  ];
-  return { checks, score: checks.reduce((sum, check) => sum + (check.ok ? check.weight : 0), 0) };
-};
 
 type NativePreviewCard = { title: string; description: string; status: string; action: string };
 const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
@@ -2501,7 +2487,7 @@ export default function App() {
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Store readiness</Text><Text style={styles.infoText}>The checklist mirrors MAS store-quality requirements. Scores are guidance; a strong score does not guarantee approval.</Text></View>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => {
-                    const report = getListingQualityReport(item);
+                    const report = asoReport(item);
                     return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
                   })}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No listings to check yet. Create a product draft first.</Text> : null}
