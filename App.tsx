@@ -16,6 +16,7 @@ import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
+import { CATEGORIES, matchesSearch, matchesListingFilters, topByNumber, topByDate } from "./src/shared/mas-core";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
 type SocialSection = "Feed" | "Messages" | "Connections" | "Activity" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
@@ -1941,18 +1942,15 @@ export default function App() {
   }, [posts, socialSearchQuery]);
 
   const filteredApps = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return apps.filter((app) => {
-      const matchesQuery = !q || `${app.name} ${app.category} ${app.description}`.toLowerCase().includes(q);
-      const matchesCategory = category === "All" || app.category === category;
-      const matchesKind = kindFilter === "all" || (app.kind || "app") === kindFilter;
-      return matchesQuery && matchesCategory && matchesKind;
-    });
+    return apps.filter((app) =>
+      matchesSearch([app.name, app.category, app.description], query) &&
+      matchesListingFilters(app, { category, kind: kindFilter })
+    );
   }, [apps, query, category, kindFilter]);
 
-  const topCharts = useMemo(() => [...filteredApps].sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0)).slice(0, 8), [filteredApps]);
-  const topRated = useMemo(() => [...filteredApps].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 8), [filteredApps]);
-  const recentApps = useMemo(() => [...filteredApps].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")).slice(0, 8), [filteredApps]);
+  const topCharts = useMemo(() => topByNumber(filteredApps, (app) => app.downloads), [filteredApps]);
+  const topRated = useMemo(() => topByNumber(filteredApps, (app) => app.rating), [filteredApps]);
+  const recentApps = useMemo(() => topByDate(filteredApps, (app) => app.createdAt), [filteredApps]);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -2046,7 +2044,7 @@ export default function App() {
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {["All", "Business", "Education", "Entertainment", "Finance", "Health", "News", "Shopping", "Social", "Tools", "Transport", "Other"].map((item) => (
+                {["All", ...CATEGORIES].map((item) => (
                   <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
                     <Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text>
                   </TouchableOpacity>
