@@ -2837,8 +2837,8 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  app: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1, backgroundColor: "#FFFFFF" },
+  app: { flex: 1, backgroundColor: "#FFFFFF" },
   header: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
   headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
   headerLogo: { width: 28, height: 28, flexShrink: 0 },
@@ -2852,8 +2852,8 @@ const styles = StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, alignItems: "center", justifyContent: "center" },
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
-  content: { flex: 1 },
-  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12 },
+  content: { flex: 1, backgroundColor: "#FFFFFF" },
+  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12, backgroundColor: "#FFFFFF" },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
