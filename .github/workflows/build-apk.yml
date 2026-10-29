@@ -18,11 +18,11 @@ jobs:
     name: Compile installable Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Public client configuration only. Add these as GitHub Actions repository
-    # Variables; never put service-role keys or provider secrets in the mobile app.
+    # These are the MAS public client values only. Never put service-role keys
+    # or provider secrets in the mobile app.
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      EXPO_PUBLIC_SUPABASE_URL: https://hbwfgjpqgopearavplqb.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_7gCVgi4SoqzoAE4G0U3mGA_ag_o2g8w
     steps:
       - name: Check out native MAS
         uses: actions/checkout@v4
@@ -47,13 +47,13 @@ jobs:
           console.log("Expo slug and EAS project ID match the intended MAS project.");
           NODE
 
-      - name: Validate optional public Supabase configuration
+      - name: Validate public Supabase configuration
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
-            echo "::warning::Supabase public variables are not available to this workflow. Building without live backend configuration; live backend actions will remain unavailable until the native build receives the public configuration."
-            exit 0
+            echo "::error::Public Supabase configuration is missing."
+            exit 1
           fi
           if [[ ! "$EXPO_PUBLIC_SUPABASE_URL" =~ ^https://[^/]+\.supabase\.co$ ]]; then
             echo "::error::EXPO_PUBLIC_SUPABASE_URL must be the HTTPS URL for the intended Supabase project."
