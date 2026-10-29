@@ -23,30 +23,35 @@ type SocialSection = "Feed" | "Messages" | "Connections" | "Activity" | "Collabo
 const COLORS = {
   background: "#FFFFFF",
   surface: "#FFFFFF",
-  surfaceAlt: "#F5F7F6",
-  border: "#E5E7EB",
-  text: "#202124",
-  muted: "#6B7280",
+  surfaceAlt: "#F3F3F3",
+  border: "#E1E1E1",
+  text: "#17191C",
+  muted: "#808080",
   accent: "#188038",
-  accentSoft: "#E8F5E9",
+  accentSoft: "#E3F3E7",
   green: "#188038",
 };
 
-type StoreApp = { id: string; name: string; category: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; iconUrl?: string | null; createdAt?: string; };
+type StoreApp = { id: string; name: string; category: string; tagline?: string; description: string; mark: string; color: string; slug?: string; kind?: string; developer?: string; downloads?: number; rating?: number; ratingCount?: number; iconUrl?: string | null; createdAt?: string; };
 type FeedPost = { id: string; name: string; tag: string; text: string; createdAt?: string; authorId?: string; mediaUrl?: string | null; mediaType?: "image" | "video" | null };
 type SelectedMedia = { uri: string; type: "image" | "video"; fileName: string; mimeType: string };
 type UtilityScreen = "none" | "library" | "notifications" | "settings";
 
-const sampleApps: StoreApp[] = [
-  { id: "sample-redbot", name: "RedBot", category: "Education", description: "Explore Malawian laws with an AI learning assistant.", mark: "R", color: "#D84D55" },
-  { id: "sample-malawi-market", name: "Malawi Market", category: "Business", description: "Discover local products and growing businesses.", mark: "M", color: "#2B9D80" },
-  { id: "sample-cloud-pay", name: "Cloud Pay", category: "Finance", description: "A future-ready digital payments experience.", mark: "C", color: "#4C82E8" },
-];
+// These fixed developer IDs are the demo catalogue seeded by the prototype migration.
+// Keep demo listings out of the native live catalogue without deleting production data.
+const SEEDED_DEMO_DEVELOPER_IDS = [
+  "11111111-1111-4111-8111-111111111101",
+  "11111111-1111-4111-8111-111111111102",
+  "11111111-1111-4111-8111-111111111103",
+  "11111111-1111-4111-8111-111111111104",
+  "11111111-1111-4111-8111-111111111105",
+  "11111111-1111-4111-8111-111111111106",
+  "11111111-1111-4111-8111-111111111107",
+  "11111111-1111-4111-8111-111111111108",
+] as const
 
-const samplePosts: FeedPost[] = [
-  { id: "sample-mas-community", name: "MAS Community", tag: "Community update", text: "Welcome to the native MAS community. Connect with builders, share ideas and discover projects across Malawi." },
-  { id: "sample-startup-circle", name: "Startup Circle Malawi", tag: "Collaboration", text: "What problem in your community would you love to solve with technology? Share your idea and find collaborators." },
-];
+// The live Supabase project has no private kyc-docs bucket; keep manual ID upload disabled until it is provisioned safely.
+const MANUAL_KYC_UPLOAD_ENABLED = false;;
 
 const getListingQualityReport = (listing: any) => {
   const checks = [
@@ -91,6 +96,7 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
     { title: "Mobile client keys", description: "Only public Supabase client configuration belongs in the app. Keep service-role and provider secrets server-side.", status: "Security rule", action: "Review security rule" },
     { title: "Session handling", description: "Sessions are persisted securely through the configured native storage adapter; verify sign-in and sign-out on device.", status: "Test required", action: "Review account tests" },
     { title: "Row-level security", description: "Production data access depends on correct Supabase RLS policies and storage permissions.", status: "Backend check", action: "Review backend checks" },
+    { title: "Account security console", description: "Use the existing MAS security console for account-level controls that are not exposed natively.", status: "Secure web handoff", action: "Open security console" },
   ],
   "Store management": [
     { title: "Published catalogue", description: "Published listings are shown in Explore when the MAS backend is configured.", status: "Native", action: "Open Explore" },
@@ -101,19 +107,20 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
     { title: "Prepare a listing", description: "Get your product name, category, tagline, description and release information ready.", status: "Workflow", action: "Start a product draft" },
     { title: "Improve store quality", description: "Use concise descriptions, clear screenshots and accurate feature claims.", status: "Guidance", action: "Open quality checks" },
     { title: "Plan a release", description: "Check version details, release notes and package readiness before submission.", status: "Workflow", action: "Open publishing checklist" },
+    { title: "AI assistant", description: "Open the existing MAS assistant for tasks that require the connected web service. This native screen does not simulate AI answers.", status: "Secure web handoff", action: "Open assistant console" },
   ],
   "Team management": [
-    { title: "Team roles", description: "Plan who can manage listings, publish releases and view analytics.", status: "Integration pending", action: "Review team access" },
+    { title: "Team roles", description: "Invite teammates and manage their recorded role and status. Actual access still depends on backend membership enforcement.", status: "Native workflow", action: "Review team access" },
     { title: "Access review", description: "Only grant collaborators the permissions they need for their work.", status: "Security", action: "Review access guidance" },
   ],
   "Promote a product": [
     { title: "Product description", description: "Prepare a concise value proposition and the audience your product serves.", status: "Preparation", action: "Review listing" },
     { title: "Campaign assets", description: "Prepare original screenshots, a logo and promotional copy.", status: "Preparation", action: "Review asset requirements" },
-    { title: "Campaign analytics", description: "Promotion performance requires connected campaign and analytics services.", status: "Integration pending", action: "Review analytics requirements" },
+    { title: "Campaign analytics", description: "Create and manage native promotion campaigns and review server-reported impressions, clicks, spend and budget. Campaign approval and payment are separate server-side steps.", status: "Native campaign workflow", action: "Open promotion campaign manager" },
   ],
   "Spotlight": [
     { title: "Featured product readiness", description: "Keep your listing complete, current and easy to understand.", status: "Preparation", action: "Open quality checks" },
-    { title: "Feature submission", description: "Featured placement requires a connected submission and review workflow.", status: "Integration pending", action: "Review publishing checklist" },
+    { title: "Feature submission", description: "Submit a Spotlight application and track its review status in the native app.", status: "Native workflow", action: "Open Spotlight applications" },
   ],
   "My public profile": [
     { title: "Developer identity", description: "Your public profile helps people understand who builds and maintains a product.", status: "Profile", action: "Review profile" },
@@ -165,6 +172,15 @@ export default function App() {
   const [accountDisplayName, setAccountDisplayName] = useState("");
   const [accountDeveloperName, setAccountDeveloperName] = useState("");
   const [accountBio, setAccountBio] = useState("");
+  const [accountCompanyName, setAccountCompanyName] = useState("");
+  const [accountLocation, setAccountLocation] = useState("");
+  const [accountContactEmail, setAccountContactEmail] = useState("");
+  const [accountSkills, setAccountSkills] = useState("");
+  const [accountWebsiteUrl, setAccountWebsiteUrl] = useState("");
+  const [accountGithubUrl, setAccountGithubUrl] = useState("");
+  const [accountPortfolioUrl, setAccountPortfolioUrl] = useState("");
+  const [accountLinkedinUrl, setAccountLinkedinUrl] = useState("");
+  const [accountFacebookUrl, setAccountFacebookUrl] = useState("");
   const [accountAvatarUri, setAccountAvatarUri] = useState<string | null>(null);
   const [accountProfileSaving, setAccountProfileSaving] = useState(false);
   const [libraryData, setLibraryData] = useState<{ saved: any[]; installed: any[] }>({ saved: [], installed: [] });
@@ -184,12 +200,12 @@ export default function App() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageSending, setMessageSending] = useState(false);
   const [notice, setNotice] = useState("");
-  const [apps, setApps] = useState<StoreApp[]>(sampleApps);
-  const [posts, setPosts] = useState<FeedPost[]>(samplePosts);
+  const [apps, setApps] = useState<StoreApp[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [catalogueLoading, setCatalogueLoading] = useState(false);
-  const [catalogueSource, setCatalogueSource] = useState<"preview" | "live">("preview");
+  const [catalogueSource, setCatalogueSource] = useState<"unconfigured" | "live" | "error">("unconfigured");
   const [feedLoading, setFeedLoading] = useState(false);
-  const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
+  const [feedSource, setFeedSource] = useState<"unconfigured" | "live" | "error">("unconfigured");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
@@ -229,8 +245,42 @@ export default function App() {
   const [spotlightOpportunity, setSpotlightOpportunity] = useState("App Spotlight");
   const [spotlightListingId, setSpotlightListingId] = useState("");
   const [spotlightPitch, setSpotlightPitch] = useState("");
+  const [promotionListings, setPromotionListings] = useState<any[]>([]);
+  const [promotionCampaigns, setPromotionCampaigns] = useState<any[]>([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionSaving, setPromotionSaving] = useState(false);
+  const [promotionListingId, setPromotionListingId] = useState("");
+  const [promotionName, setPromotionName] = useState("");
+  const [promotionPlacement, setPromotionPlacement] = useState<"featured" | "search" | "banner">("featured");
+  const [promotionBudget, setPromotionBudget] = useState("10000");
+  const [promotionDays, setPromotionDays] = useState("7");
+  const [promotionLocation, setPromotionLocation] = useState("All Malawi");
+  const [featureRequests, setFeatureRequests] = useState<any[]>([]);
+  const [featureRequestsLoading, setFeatureRequestsLoading] = useState(false);
+  const [featureRequestSaving, setFeatureRequestSaving] = useState(false);
+  const [featureRequestTitle, setFeatureRequestTitle] = useState("");
+  const [featureRequestBody, setFeatureRequestBody] = useState("");
+  const [featureRequestVoteIds, setFeatureRequestVoteIds] = useState<string[]>([]);
+  const [featureRequestVotingId, setFeatureRequestVotingId] = useState<string | null>(null);
   const [betaTesters, setBetaTesters] = useState<any[]>([]);
   const [betaFeedback, setBetaFeedback] = useState<any[]>([]);
+  const [verificationPhone, setVerificationPhone] = useState("");
+  const [verificationFullName, setVerificationFullName] = useState("");
+  const [verificationIdType, setVerificationIdType] = useState("National ID");
+  const [verificationIdNumber, setVerificationIdNumber] = useState("");
+  const [verificationDocument, setVerificationDocument] = useState<{ uri: string; name: string; mimeType: string; size: number | null } | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState("none");
+  const [verificationSaving, setVerificationSaving] = useState(false);
+  const [diditLoading, setDiditLoading] = useState(false);
+  const [proSubscription, setProSubscription] = useState<any>(null);
+  const [proLoading, setProLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsProAllowed, setAnalyticsProAllowed] = useState(false);
+  const [analyticsStats, setAnalyticsStats] = useState<{
+    views: number; installs: number; viewsByDevice: Record<string, number>; installsByDevice: Record<string, number>;
+    viewsByCountry: Record<string, number>; installsByCountry: Record<string, number>; byListing: Record<string, { views: number; installs: number }>;
+  }>({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
   const [betaLoading, setBetaLoading] = useState(false);
   const [betaSaving, setBetaSaving] = useState(false);
   const [betaListingId, setBetaListingId] = useState("");
@@ -243,6 +293,261 @@ export default function App() {
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [portfolioType, setPortfolioType] = useState("website");
   const [portfolioUrl, setPortfolioUrl] = useState("");
+
+  useEffect(() => {
+    if (developerScreen !== "Developer resources") return;
+    let active = true;
+    const loadFeatureRequests = async () => {
+      if (!isSupabaseConfigured) {
+        setFeatureRequests([]);
+        setFeatureRequestVoteIds([]);
+        setFeatureRequestsLoading(false);
+        return;
+      }
+      setFeatureRequestsLoading(true);
+      const { data, error } = await supabase.from("feature_requests")
+        .select("id,title,body,status,vote_count,created_at")
+        .order("vote_count", { ascending: false }).limit(30);
+      if (!active) return;
+      setFeatureRequests(data ?? []);
+      if (error) {
+        setFeatureRequestVoteIds([]);
+        showNotice(error.message || "Could not load feature requests.");
+      } else {
+        const { data: authData } = await supabase.auth.getUser();
+        if (!active) return;
+        if (authData.user && data?.length) {
+          const { data: votes, error: votesError } = await supabase.from("feature_votes")
+            .select("request_id").eq("user_id", authData.user.id)
+            .in("request_id", data.map((item: any) => item.id));
+          if (!active) return;
+          setFeatureRequestVoteIds(votesError ? [] : (votes ?? []).map((vote: any) => vote.request_id));
+          if (votesError) showNotice(votesError.message || "Could not load your feature votes.");
+        } else {
+          setFeatureRequestVoteIds([]);
+        }
+      }
+      setFeatureRequestsLoading(false);
+    };
+    void loadFeatureRequests().catch(() => {
+      if (active) {
+        setFeatureRequestsLoading(false);
+        setFeatureRequestVoteIds([]);
+        showNotice("Could not load feature requests. Check your connection and try again.");
+      }
+    });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const submitFeatureRequest = async () => {
+    const title = featureRequestTitle.trim();
+    if (title.length < 5) { showNotice("Give your feature request a title of at least 5 characters."); return; }
+    if (!isSupabaseConfigured) { showNotice("Feature requests need the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit a feature request."); setTab("Profile"); return; }
+    setFeatureRequestSaving(true);
+    const { data, error } = await supabase.from("feature_requests")
+      .insert({ user_id: authData.user.id, title, body: featureRequestBody.trim() || null })
+      .select("id,title,body,status,vote_count,created_at").single();
+    setFeatureRequestSaving(false);
+    if (error || !data) { showNotice(error?.message || "Feature request was not submitted."); return; }
+    setFeatureRequests((items) => [data, ...items].sort((a,b) => Number(b.vote_count || 0) - Number(a.vote_count || 0)).slice(0,30));
+    setFeatureRequestTitle(""); setFeatureRequestBody("");
+    showNotice("Feature request submitted.");
+  };
+
+  const toggleFeatureRequestVote = async (item: any) => {
+    if (!isSupabaseConfigured) { showNotice("Feature voting needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to vote for a feature request."); setTab("Profile"); return; }
+    const alreadyVoted = featureRequestVoteIds.includes(item.id);
+    setFeatureRequestVotingId(item.id);
+    const result = alreadyVoted
+      ? await supabase.from("feature_votes").delete().eq("request_id", item.id).eq("user_id", authData.user.id)
+      : await supabase.from("feature_votes").insert({ request_id: item.id, user_id: authData.user.id });
+    if (result.error) {
+      setFeatureRequestVotingId(null);
+      showNotice(result.error.code === "23505" ? "You have already voted for this request." : result.error.message || "Could not update your vote.");
+      return;
+    }
+    const { data: refreshed, error: refreshError } = await supabase.from("feature_requests")
+      .select("vote_count").eq("id", item.id).single();
+    setFeatureRequestVotingId(null);
+    if (refreshError) { showNotice(refreshError.message || "Vote saved, but the count could not refresh."); return; }
+    setFeatureRequestVoteIds((ids) => alreadyVoted ? ids.filter((id) => id !== item.id) : [...ids, item.id]);
+    setFeatureRequests((items) => items.map((request) => request.id === item.id ? { ...request, vote_count: refreshed.vote_count } : request)
+      .sort((left, right) => Number(right.vote_count || 0) - Number(left.vote_count || 0)));
+    showNotice(alreadyVoted ? "Your vote was removed." : "Your vote was counted.");
+  };
+
+  useEffect(() => {
+    if (developerScreen !== "Promote a product") return;
+    let active = true;
+    const loadPromotions = async () => {
+      if (!isSupabaseConfigured) { setPromotionListings([]); setPromotionCampaigns([]); setPromotionLoading(false); return; }
+      setPromotionLoading(true);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (!active) return;
+      if (authError || !authData.user) {
+        setPromotionListings([]); setPromotionCampaigns([]); setPromotionLoading(false);
+        showNotice("Sign in to manage promotion campaigns."); return;
+      }
+      const [listingsResult, campaignsResult] = await Promise.all([
+        supabase.from("listings").select("id,name,status").eq("developer_id", authData.user.id).order("updated_at", { ascending: false }),
+        supabase.from("promotions").select("id,listing_id,name,kind,budget_mwk,spent_mwk,impressions,clicks,target_location,starts_at,ends_at,status,created_at").eq("owner_id", authData.user.id).order("created_at", { ascending: false }).limit(100),
+      ]);
+      if (!active) return;
+      setPromotionListings(listingsResult.data ?? []); setPromotionCampaigns(campaignsResult.data ?? []);
+      if (listingsResult.error) showNotice(listingsResult.error.message || "Could not load your products for promotion.");
+      if (campaignsResult.error) showNotice(campaignsResult.error.message || "Could not load your campaigns.");
+      setPromotionLoading(false);
+    };
+    void loadPromotions().catch(() => { if (active) { setPromotionLoading(false); showNotice("Could not load promotions. Check your connection and try again."); } });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  const submitPromotionCampaign = async () => {
+    if (!isSupabaseConfigured) { showNotice("Promotion campaigns need the MAS backend configuration."); return; }
+    if (!promotionListingId) { showNotice("Choose a product to promote."); return; }
+    const amount = Number(promotionBudget);
+    if (!Number.isFinite(amount) || amount < 1000) { showNotice("Set a campaign budget of at least MK1,000."); return; }
+    const days = Number(promotionDays);
+    if (!Number.isFinite(days) || days < 1 || days > 90) { showNotice("Campaign duration must be between 1 and 90 days."); return; }
+    if (!promotionListings.some((item) => item.id === promotionListingId)) { showNotice("Choose one of your own products."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit a campaign."); setTab("Profile"); return; }
+    setPromotionSaving(true);
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
+    const { data, error } = await supabase.from("promotions").insert({
+      owner_id: authData.user.id, listing_id: promotionListingId,
+      name: promotionName.trim() || "Promotion campaign", kind: promotionPlacement,
+      budget_mwk: amount, target_location: promotionLocation,
+      starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), status: "pending",
+    }).select("id,listing_id,name,kind,budget_mwk,spent_mwk,impressions,clicks,target_location,starts_at,ends_at,status,created_at").single();
+    setPromotionSaving(false);
+    if (error || !data) { showNotice(error?.message || "Campaign was not submitted."); return; }
+    setPromotionCampaigns((items) => [data, ...items]); setPromotionName("");
+    showNotice("Campaign submitted for review. No payment was taken by this action.");
+  };
+
+  const pausePromotionCampaign = async (campaign: any) => {
+    if (!isSupabaseConfigured) return;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to manage campaigns."); return; }
+    const { data, error } = await supabase.from("promotions").update({ status: "paused" })
+      .eq("id", campaign.id).eq("owner_id", authData.user.id).select("id,status").maybeSingle();
+    if (error || !data) { showNotice(error?.message || "Only the campaign owner can pause this campaign."); return; }
+    setPromotionCampaigns((items) => items.map((item) => item.id === campaign.id ? { ...item, status: "paused" } : item));
+    showNotice("Campaign paused.");
+  };
+
+  useEffect(() => {
+    if (developerScreen !== "Analytics" || !isSupabaseConfigured) return;
+    let active = true;
+    const loadAnalytics = async () => {
+      setAnalyticsLoading(true);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) { setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} }); setAnalyticsLoading(false); showNotice("Sign in to view product analytics."); }
+        return;
+      }
+      const { data: subscription, error: subscriptionError } = await supabase.from("subscriptions").select("status,current_period_end").eq("user_id", authData.user.id).maybeSingle();
+      if (!active) return;
+      if (subscriptionError) { setAnalyticsLoading(false); showNotice(subscriptionError.message || "Could not verify Developer Pro access."); return; }
+      const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : null;
+      const hasPro = (subscription?.status === "active" && (periodEnd === null || periodEnd > Date.now())) ||
+        (subscription?.status === "cancelled" && periodEnd !== null && periodEnd > Date.now());
+      setAnalyticsProAllowed(hasPro);
+      if (!hasPro) {
+        setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
+        setAnalyticsLoading(false);
+        return;
+      }
+      const { data: listings, error: listingsError } = await supabase.from("listings").select("id").eq("developer_id", authData.user.id);
+      if (!active) return;
+      if (listingsError) { setAnalyticsLoading(false); showNotice(listingsError.message || "Could not load your analytics listings."); return; }
+      const ids = (listings ?? []).map((item: any) => item.id).filter(Boolean);
+      if (!ids.length) {
+        setAnalyticsStats({ views: 0, installs: 0, viewsByDevice: {}, installsByDevice: {}, viewsByCountry: {}, installsByCountry: {}, byListing: {} });
+        setAnalyticsLoading(false);
+        return;
+      }
+      const days = Number(analyticsRange.replace("d", ""));
+      const end = new Date();
+      const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+      const startIso = start.toISOString();
+      const endIso = end.toISOString();
+      const [viewsResult, installsResult] = await Promise.all([
+        supabase.from("view_events").select("created_at,device,country,listing_id").in("listing_id", ids).gte("created_at", startIso).lte("created_at", endIso),
+        supabase.from("install_events").select("created_at,device,country,listing_id").in("listing_id", ids).gte("created_at", startIso).lte("created_at", endIso),
+      ]);
+      if (!active) return;
+      if (viewsResult.error || installsResult.error) {
+        setAnalyticsLoading(false);
+        showNotice(viewsResult.error?.message || installsResult.error?.message || "Could not load analytics events.");
+        return;
+      }
+      const aggregate = (rows: any[], key: "device" | "country") => rows.reduce((acc: Record<string, number>, row: any) => {
+        const label = String(row[key] || "Unknown");
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {});
+      const byListing: Record<string, { views: number; installs: number }> = {};
+      ids.forEach((id: string) => { byListing[id] = { views: 0, installs: 0 }; });
+      (viewsResult.data ?? []).forEach((row: any) => { if (byListing[row.listing_id]) byListing[row.listing_id].views += 1; });
+      (installsResult.data ?? []).forEach((row: any) => { if (byListing[row.listing_id]) byListing[row.listing_id].installs += 1; });
+      setAnalyticsStats({
+        views: (viewsResult.data ?? []).length,
+        installs: (installsResult.data ?? []).length,
+        viewsByDevice: aggregate(viewsResult.data ?? [], "device"),
+        installsByDevice: aggregate(installsResult.data ?? [], "device"),
+        viewsByCountry: aggregate(viewsResult.data ?? [], "country"),
+        installsByCountry: aggregate(installsResult.data ?? [], "country"),
+        byListing,
+      });
+      setAnalyticsLoading(false);
+    };
+    void loadAnalytics().catch(() => { if (active) { setAnalyticsLoading(false); showNotice("Could not load analytics."); } });
+    return () => { active = false; };
+  }, [developerScreen, analyticsRange]);
+
+  useEffect(() => {
+    if (developerScreen !== "Developer Pro" || !isSupabaseConfigured) return;
+    let active = true;
+    setProLoading(true);
+    void (async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) { setProSubscription(null); setProLoading(false); showNotice("Sign in to view your Developer Pro subscription."); }
+        return;
+      }
+      const { data, error } = await supabase.from("subscriptions").select("status,current_period_end").eq("user_id", authData.user.id).maybeSingle();
+      if (!active) return;
+      setProSubscription(data ?? null);
+      setProLoading(false);
+      if (error) showNotice(error.message || "Could not load Developer Pro status.");
+    })().catch(() => { if (active) { setProLoading(false); showNotice("Could not load Developer Pro status."); } });
+    return () => { active = false; };
+  }, [developerScreen]);
+
+  useEffect(() => {
+    if (developerScreen !== "Verification" || !isSupabaseConfigured) return;
+    let active = true;
+    void (async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        if (active) showNotice("Sign in to view your verification status.");
+        return;
+      }
+      const { data, error } = await supabase.from("profiles").select("phone,kyc_status").eq("id", authData.user.id).maybeSingle();
+      if (!active) return;
+      if (error) showNotice(error.message || "Could not load verification status.");
+      setVerificationPhone(data?.phone || "");
+      setVerificationStatus(data?.kyc_status || "none");
+    })().catch(() => { if (active) showNotice("Could not load verification status."); });
+    return () => { active = false; };
+  }, [developerScreen]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -279,25 +584,27 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    if (!isSupabaseConfigured) return () => { active = false; };
+    if (!isSupabaseConfigured) { setApps([]); setCatalogueSource("unconfigured"); setPosts([]); setFeedSource("unconfigured"); return () => { active = false; }; }
     setCatalogueLoading(true);
     Promise.resolve(supabase
       .from("listings")
       .select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,downloads,rating_avg,rating_count,created_at")
       .eq("status", "published")
+      .not("developer_id", "in", `(${SEEDED_DEMO_DEVELOPER_IDS.join(",")})`)
       .order("created_at", { ascending: false })
       .limit(100))
       .then(async ({ data, error }) => {
         if (!active) return;
-        if (!error && data?.length) {
-          const developerIds = [...new Set(data.map((item: any) => item.developer_id).filter(Boolean))];
+        if (!error) {
+          const listingRows = data ?? [];
+          const developerIds = [...new Set(listingRows.map((item: any) => item.developer_id).filter(Boolean))];
           const profileResult = developerIds.length
             ? await supabase.from("public_profiles").select("id,developer_name,display_name").in("id", developerIds)
             : { data: [] as any[] };
           const profiles = new Map((profileResult.data ?? []).map((profile: any) => [
             profile.id, profile.developer_name || profile.display_name || "MAS developer",
           ]));
-          const catalogue = await Promise.all(data.map(async (item: any) => {
+          const catalogue = await Promise.all(listingRows.map(async (item: any) => {
             const iconResult = item.icon_url
               ? await supabase.storage.from("app-assets").createSignedUrl(item.icon_url, 3600)
               : null;
@@ -305,7 +612,8 @@ export default function App() {
               id: item.id,
               name: item.name,
               category: item.category || "Other",
-              description: item.tagline || item.description || "Discover this project on MAS.",
+              tagline: item.tagline || item.category || "Discover this project on MAS.",
+              description: item.description || item.tagline || "Discover this project on MAS.",
               mark: String(item.name || "M").slice(0, 1).toUpperCase(),
               color: COLORS.accent,
               slug: item.slug,
@@ -315,15 +623,17 @@ export default function App() {
               createdAt: item.created_at,
               downloads: item.downloads ?? 0,
               rating: item.rating_avg ?? 0,
+              ratingCount: item.rating_count ?? 0,
             } satisfies StoreApp;
           }));
           if (!active) return;
           setCatalogueSource("live");
           setApps(catalogue);
         }
+        if (error) { setApps([]); setCatalogueSource("error"); showNotice(error.message || "Could not load the MAS catalogue."); }
         setCatalogueLoading(false);
       })
-      .catch(() => { if (active) setCatalogueLoading(false); });
+      .catch(() => { if (active) { setApps([]); setCatalogueSource("error"); setCatalogueLoading(false); showNotice("Could not load the MAS catalogue. Check your connection and try again."); } });
     setFeedLoading(true);
     Promise.resolve(
       supabase
@@ -333,15 +643,18 @@ export default function App() {
       .limit(30),
     ).then(async ({ data, error }) => {
         if (!active) return;
-        if (!error && data?.length) {
-          const ids = [...new Set(data.map((post: any) => post.author_id))];
+        if (!error) {
+          const postRows = data ?? [];
+          setFeedSource("live");
+          if (!postRows.length) { setPosts([]); setReactionCounts({}); setLikedPostIds([]); setFeedLoading(false); return; }
+          const ids = [...new Set(postRows.map((post: any) => post.author_id))];
           const { data: profiles } = await supabase
             .from("public_profiles")
             .select("id,display_name,developer_name")
             .in("id", ids);
           const names = new Map((profiles ?? []).map((profile: any) => [profile.id, profile.developer_name || profile.display_name || "MAS member"]));
           if (active) setFeedSource("live");
-          if (active) setPosts(data.map((post: any) => ({
+          if (active) setPosts(postRows.map((post: any) => ({
             id: post.id,
             authorId: post.author_id,
             name: String(names.get(post.author_id) || "MAS member"),
@@ -351,7 +664,7 @@ export default function App() {
             mediaUrl: post.media_url ?? null,
             mediaType: post.media_type ?? null,
           })));
-          const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", data.map((post: any) => post.id));
+          const { data: reactionRows } = await supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", postRows.map((post: any) => post.id));
           if (active && reactionRows) {
             const counts: Record<string, number> = {};
             reactionRows.forEach((reaction: any) => { counts[reaction.post_id] = (counts[reaction.post_id] ?? 0) + 1; });
@@ -359,10 +672,10 @@ export default function App() {
             const { data: currentUser } = await supabase.auth.getUser();
             if (currentUser.user) setLikedPostIds(reactionRows.filter((reaction: any) => reaction.user_id === currentUser.user?.id).map((reaction: any) => reaction.post_id));
           }
-        }
+        } else { setFeedSource("error"); setPosts([]); showNotice(error.message || "Could not load MAS Social."); }
         if (active) setFeedLoading(false);
       })
-      .catch(() => { if (active) setFeedLoading(false); });
+      .catch(() => { if (active) { setPosts([]); setFeedSource("error"); setFeedLoading(false); showNotice("Could not load MAS Social. Check your connection and try again."); } });
     return () => { active = false; };
   }, []);
 
@@ -375,11 +688,20 @@ export default function App() {
       const { data: authData } = await supabase.auth.getUser();
       if (!active) return;
       if (!authData.user) { setUtilityLoading(false); return; }
-      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url").eq("id", authData.user.id).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("display_name,developer_name,bio,avatar_url,company_name,location,contact_email,skills,website_url,github_url,portfolio_url,linkedin_url,facebook_url").eq("id", authData.user.id).maybeSingle();
       if (!active) return;
       setAccountDisplayName(data?.display_name || "");
       setAccountDeveloperName(data?.developer_name || "");
       setAccountBio(data?.bio || "");
+      setAccountCompanyName(data?.company_name || "");
+      setAccountLocation(data?.location || "");
+      setAccountContactEmail(data?.contact_email || "");
+      setAccountSkills(Array.isArray(data?.skills) ? data.skills.join(", ") : "");
+      setAccountWebsiteUrl(data?.website_url || "");
+      setAccountGithubUrl(data?.github_url || "");
+      setAccountPortfolioUrl(data?.portfolio_url || "");
+      setAccountLinkedinUrl(data?.linkedin_url || "");
+      setAccountFacebookUrl(data?.facebook_url || "");
       if (data?.avatar_url) {
         const { data: avatarData } = await supabase.storage.from("app-assets").createSignedUrl(data.avatar_url, 3600);
         if (active) setAccountAvatarUri(avatarData?.signedUrl ?? null);
@@ -449,7 +771,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const loadListingDetails = async () => {
-      if (!selectedApp || selectedApp.id.startsWith("sample-") || !isSupabaseConfigured) {
+      if (!selectedApp || !isSupabaseConfigured) {
         setSelectedAppDetails(null); setSelectedVersions([]); setSelectedReviews([]); setSelectedScreenshotUrls([]); setDetailLoading(false); return;
       }
       setDetailLoading(true);
@@ -479,9 +801,36 @@ export default function App() {
     const displayName = accountDisplayName.trim();
     const developerName = accountDeveloperName.trim();
     const bio = accountBio.trim();
+    const profileUrls = [
+      ["Website", accountWebsiteUrl], ["GitHub", accountGithubUrl], ["Portfolio", accountPortfolioUrl],
+      ["LinkedIn", accountLinkedinUrl], ["Facebook", accountFacebookUrl],
+    ] as [string, string][];
+    for (const [label, value] of profileUrls) {
+      if (value.trim() && !/^https:\/\//i.test(value.trim())) {
+        showNotice(`${label} URL must start with https://.`);
+        return;
+      }
+    }
+    if (accountContactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountContactEmail.trim())) {
+      showNotice("Enter a valid contact email address.");
+      return;
+    }
     if (displayName.length > 80 || developerName.length > 100 || bio.length > 300) { showNotice("Display name: max 80 characters; developer name: max 100; bio: max 300."); return; }
     setAccountProfileSaving(true);
-    const { error } = await supabase.from("profiles").update({ display_name: displayName || null, developer_name: developerName || null, bio: bio || null }).eq("id", authData.user.id);
+    const { error } = await supabase.from("profiles").update({
+      display_name: displayName || null,
+      developer_name: developerName || null,
+      bio: bio || null,
+      company_name: accountCompanyName.trim() || null,
+      location: accountLocation.trim() || null,
+      contact_email: accountContactEmail.trim() || null,
+      skills: accountSkills.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 30),
+      website_url: accountWebsiteUrl.trim() || null,
+      github_url: accountGithubUrl.trim() || null,
+      portfolio_url: accountPortfolioUrl.trim() || null,
+      linkedin_url: accountLinkedinUrl.trim() || null,
+      facebook_url: accountFacebookUrl.trim() || null,
+    }).eq("id", authData.user.id);
     setAccountProfileSaving(false);
     if (error) { showNotice(error.message || "Could not save your profile."); return; }
     showNotice("Profile saved.");
@@ -513,7 +862,7 @@ export default function App() {
   };
 
   const installSelectedApp = async () => {
-    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be installed."); return; }
+    if (!selectedApp) { showNotice("Choose a live MAS listing first."); return; }
     if (!isSupabaseConfigured) { showNotice("Install actions need the MAS backend configuration."); return; }
     const { data: authData } = await supabase.auth.getUser();
     const listing = selectedAppDetails;
@@ -538,7 +887,7 @@ export default function App() {
   };
 
   const submitSelectedReview = async () => {
-    if (!selectedApp || selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be reviewed."); return; }
+    if (!selectedApp) { showNotice("Choose a live MAS listing first."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) { showNotice("Sign in to post a review."); setSelectedApp(null); setTab("Profile"); return; }
     const { error } = await supabase.from("reviews").upsert({ listing_id: selectedApp.id, user_id: authData.user.id, rating: reviewRating, body: reviewDraft.trim() || null }, { onConflict: "listing_id,user_id" });
@@ -1354,6 +1703,125 @@ export default function App() {
     showNotice(status === "open" ? "Opportunity reopened." : status === "paused" ? "Opportunity paused." : "Opportunity closed.");
   };
 
+  const saveVerificationPhone = async () => {
+    const normalized = verificationPhone.trim();
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+      showNotice("Enter a valid international phone number, for example +265991234567.");
+      return;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to save your contact number."); return; }
+    setVerificationSaving(true);
+    const { error } = await supabase.from("profiles").update({ phone: normalized }).eq("id", authData.user.id);
+    setVerificationSaving(false);
+    showNotice(error ? (error.message || "Could not save your contact number.") : "Contact number saved.");
+  };
+
+  const chooseVerificationDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    if (asset.size && asset.size > 10 * 1024 * 1024) {
+      showNotice("Choose a document smaller than 10 MB.");
+      return;
+    }
+    setVerificationDocument({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType || (asset.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+      size: asset.size ?? null,
+    });
+  };
+
+  const submitManualVerification = async () => {
+    if (!MANUAL_KYC_UPLOAD_ENABLED) { showNotice("Manual ID upload is disabled until private KYC storage is configured. Use Didit verification instead."); return; }
+    const fullName = verificationFullName.trim();
+    const idNumber = verificationIdNumber.trim();
+    if (fullName.length < 3) { showNotice("Enter your full legal name."); return; }
+    if (idNumber.length < 4) { showNotice("Enter a valid document number."); return; }
+    if (!verificationDocument) { showNotice("Attach a national ID or passport image/PDF."); return; }
+    if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to submit verification."); setTab("Profile"); return; }
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("is_developer,kyc_status").eq("id", authData.user.id).maybeSingle();
+    if (profileError || !profile) { showNotice(profileError?.message || "Could not verify your developer account."); return; }
+    if (profile.is_developer !== true) { showNotice("Only developer accounts can submit identity verification."); return; }
+    if (profile.kyc_status === "approved") { setVerificationStatus("approved"); showNotice("Your identity is already verified."); return; }
+    if (profile.kyc_status === "pending") { setVerificationStatus("pending"); showNotice("Your verification is already pending review. Refresh status later."); return; }
+    setVerificationSaving(true);
+    try {
+      const response = await fetch(verificationDocument.uri);
+      const blob = await response.blob();
+      const safeName = verificationDocument.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${authData.user.id}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("kyc-docs").upload(path, blob, {
+        contentType: verificationDocument.mimeType,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      const { error: insertError } = await supabase.from("kyc_submissions").insert({
+        user_id: authData.user.id,
+        full_name: fullName,
+        id_type: verificationIdType,
+        id_number: idNumber,
+        document_url: path,
+        status: "pending",
+      });
+      if (insertError) throw insertError;
+      const { error: profileError } = await supabase.from("profiles").update({ kyc_status: "pending" }).eq("id", authData.user.id);
+      if (profileError) throw profileError;
+      setVerificationStatus("pending");
+      setVerificationDocument(null);
+      setVerificationIdNumber("");
+      showNotice("Verification submitted for manual review.");
+    } catch (error: any) {
+      showNotice(error?.message || "Could not submit verification.");
+    } finally {
+      setVerificationSaving(false);
+    }
+  };
+
+  const startDiditVerification = async () => {
+    if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) { showNotice("Your session has expired. Sign in again."); setTab("Profile"); return; }
+    setDiditLoading(true);
+    try {
+      const response = await fetch("https://malawian-app-store-j6pm.vercel.app/api/public/didit/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!response.ok) throw new Error(result.error || "Could not start Didit verification.");
+      if (!result.url) throw new Error("Didit did not return a verification link.");
+      const verificationUrl = new URL(result.url);
+      if (verificationUrl.protocol !== "https:" || !(verificationUrl.hostname === "verify.didit.me" || verificationUrl.hostname.endsWith(".didit.me"))) {
+        throw new Error("Didit returned an unexpected verification link.");
+      }
+      await Linking.openURL(verificationUrl.toString());
+      showNotice("Complete the secure Didit flow, then return here and refresh your status.");
+    } catch (error: any) {
+      showNotice(error?.message || "Could not start Didit verification.");
+    } finally {
+      setDiditLoading(false);
+    }
+  };
+
+  const refreshVerificationStatus = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) { showNotice("Sign in to refresh verification status."); return; }
+    const { data, error } = await supabase.from("profiles").select("phone,kyc_status").eq("id", authData.user.id).maybeSingle();
+    if (error) { showNotice(error.message || "Could not refresh verification status."); return; }
+    setVerificationPhone(data?.phone || "");
+    setVerificationStatus(data?.kyc_status || "none");
+    showNotice("Verification status refreshed.");
+  };
+
   const openConversation = async (recipientId: string) => {
     if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1497,16 +1965,20 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.app}>
         <View style={styles.header}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandMark}><Text style={styles.brandMarkText}>M</Text></View>
-            <View>
-              <Text style={styles.brand}>MAS</Text>
-              <Text style={styles.brandSub}>MALAWIAN APP STORE</Text>
-            </View>
+          <View style={styles.headerSearchBox}>
+            <Image accessibilityLabel="Malawian App Store logo" source={{ uri: "https://malawian-app-store-j6pm.vercel.app/favicon.png" }} style={styles.headerLogo} resizeMode="contain" />
+            <Text style={styles.headerSearchIcon}>⌕</Text>
+            <TextInput
+              accessibilityLabel="Search apps and websites"
+              placeholder="Search apps & websites"
+              placeholderTextColor={COLORS.muted}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.headerSearchInput}
+              returnKeyType="search"
+              maxLength={120}
+            />
           </View>
-          <TouchableOpacity accessibilityRole="button" style={styles.avatar} onPress={() => setTab("Profile")}>
-            {accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.avatarImage} resizeMode="cover" /> : <Text style={styles.avatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text>}
-          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
@@ -1525,7 +1997,7 @@ export default function App() {
                 </View>
               </View>
               <TouchableOpacity style={styles.primaryButton} onPress={async () => {
-                if (selectedApp.id.startsWith("sample-")) { showNotice("Sample listings cannot be saved. Connect to the live MAS catalogue first."); return; }
+                if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
                 if (authError || !authData.user) { showNotice("Sign in to save this listing to your library."); setSelectedApp(null); setTab("Profile"); return; }
@@ -1555,18 +2027,6 @@ export default function App() {
 
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
             <>
-              <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
-                <TextInput
-                  accessibilityLabel="Search apps and websites"
-                  placeholder="Search apps & websites"
-                  placeholderTextColor={COLORS.muted}
-                  value={query}
-                  onChangeText={setQuery}
-                  style={styles.searchInput}
-                  returnKeyType="search"
-                />
-              </View>
               <View style={styles.storeTabs}>
                 {([
                   ["all", "For you"],
@@ -1585,10 +2045,6 @@ export default function App() {
                 ))}
               </View>
 
-              <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>{kindFilter === "website" ? "Explore websites" : kindFilter === "app" ? "Explore apps" : "Explore apps & websites"}</Text>
-                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : "PREVIEW MODE"}</Text>
-              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", "Business", "Education", "Entertainment", "Finance", "Health", "News", "Shopping", "Social", "Tools", "Transport", "Other"].map((item) => (
                   <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
@@ -1597,43 +2053,41 @@ export default function App() {
                 ))}
               </ScrollView>
 
-              {!catalogueLoading && filteredApps.length > 0 ? [
+              {!catalogueLoading && filteredApps.length > 0 && !query.trim() && category === "All" && kindFilter === "all" ? [
+                { title: "Recommended for you", items: recentApps },
                 { title: "Top charts", items: topCharts },
                 { title: "Top rated", items: topRated },
-                { title: "Recently added", items: recentApps },
               ].map((shelf) => (
                 <View key={shelf.title} style={styles.nativeShelf}>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.sectionMeta}>MAS STORE</Text></View>
+                  <View style={styles.shelfHeading}><View style={styles.shelfHeadingCopy}><Text style={styles.sectionTitle}>{shelf.title}</Text><Text style={styles.shelfSubtitle}>{shelf.title === "Recommended for you" ? "Fresh from Malawian developers" : shelf.title === "Top charts" ? "Most popular this week" : "Loved by reviewers"}</Text></View><Text style={styles.shelfChevron}>›</Text></View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
                         <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
-                        <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.category} · {item.rating ? item.rating.toFixed(1) + " ★" : (item.kind || "app")}</Text>
+                        <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
               )) : null}
 
-              {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>{query.trim() || category !== "All" || kindFilter !== "all" ? `${filteredApps.length} result${filteredApps.length === 1 ? "" : "s"}` : "All listings"}</Text>
+                <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : ""}</Text>
+              </View>
+              {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
                   <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
                   <View style={styles.appDetails}>
-                    <Text style={styles.appName}>{app.name}</Text>
-                    <Text style={styles.appCategory}>{app.category}</Text>
-                    <Text style={styles.appDescription}>{app.description}</Text>
+                    <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
+                    <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
+                    <Text style={styles.appDescription}>{(app.ratingCount ?? 0) > 0 ? (app.rating ?? 0).toFixed(1) : "New"} ★  ·  {(app.downloads ?? 0).toLocaleString()} {app.kind === "website" ? "visits" : "installs"}</Text>
                   </View>
-                  <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
               )) : <Text style={styles.emptyText}>No apps match that search. Try another category or search term.</Text>}
 
-              <View style={styles.infoBanner}>
-                <Text style={styles.infoTitle}>Have an app idea?</Text>
-                <Text style={styles.infoText}>Build, publish and grow with Malawi's developer community.</Text>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => setTab("Develop")}><Text style={styles.secondaryButtonText}>Explore developer tools  →</Text></TouchableOpacity>
-              </View>
             </>
           )}
 
@@ -1688,7 +2142,7 @@ export default function App() {
                       showNotice("Your post is live on MAS Social.");
                     }}><Text style={styles.composeButtonText}>{posting ? "Publishing…" : "Publish post"}</Text></TouchableOpacity></View>
                   </View>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : "PREVIEW MODE"}</Text></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community feed</Text><Text style={styles.sectionMeta}>{feedLoading ? "SYNCING" : feedSource === "live" ? "MAS SOCIAL" : feedSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO SOCIAL POSTS" : "BACKEND NOT CONFIGURED"}</Text></View>
                   {filteredSocialPosts.map((post) => (
                     <View key={post.id || post.name} style={styles.postCard}>
                       <View style={styles.postHeader}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{post.name.charAt(0)}</Text></View><View style={styles.postIdentity}><Text style={styles.postName}>{post.name}</Text><Text style={styles.postTag}>{post.tag}</Text></View></View>
@@ -1811,7 +2265,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : "START A CONVERSATION"}</Text></View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{socialSection}</Text><Text style={styles.sectionMeta}>{feedSource === "live" ? "MAS SOCIAL" : feedSource === "error" ? "LOAD FAILED" : isSupabaseConfigured ? "NO SOCIAL POSTS" : "BACKEND NOT CONFIGURED"}</Text></View>
                   <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
                   <View style={styles.composeCard}>
                     <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
@@ -1834,7 +2288,7 @@ export default function App() {
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
-              <Text style={styles.pageIntro}>Manage your MAS developer account. Secure publishing, verification and payment flows open in the existing MAS web console.</Text>
+              <Text style={styles.pageIntro}>Manage listings, releases, reviews, analytics, team access, Spotlight applications and developer verification. Payment checkout and selected advanced tools hand off to the secure MAS web console.</Text>
               <View style={styles.developerStatus}><View style={styles.statusDot}/><Text style={styles.statusText}>Secure integration links enabled</Text></View>
               {[
                 ["▣", "Developer dashboard", "Publishing readiness, installs, views and performance.", "https://malawian-app-store-j6pm.vercel.app/console"],
@@ -1859,7 +2313,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -1920,6 +2374,15 @@ export default function App() {
                       <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Developer name (max 100 characters)</Text><TextInput value={accountDeveloperName} onChangeText={(value) => setAccountDeveloperName(value.slice(0,100))} placeholder="Your developer or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Bio (max 300 characters)</Text><TextInput value={accountBio} onChangeText={(value) => setAccountBio(value.slice(0,300))} placeholder="A short introduction" placeholderTextColor={COLORS.muted} multiline maxLength={300} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]} />
+                      <Text style={styles.fieldLabel}>Company / studio</Text><TextInput value={accountCompanyName} onChangeText={(value) => setAccountCompanyName(value.slice(0,120))} placeholder="Company or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Location</Text><TextInput value={accountLocation} onChangeText={(value) => setAccountLocation(value.slice(0,120))} placeholder="City, country" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Contact email</Text><TextInput value={accountContactEmail} onChangeText={setAccountContactEmail} autoCapitalize="none" keyboardType="email-address" placeholder="contact@example.com" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Skills (comma-separated)</Text><TextInput value={accountSkills} onChangeText={(value) => setAccountSkills(value.slice(0,800))} placeholder="React Native, design, backend" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Website (HTTPS)</Text><TextInput value={accountWebsiteUrl} onChangeText={setAccountWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.com" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>GitHub (HTTPS)</Text><TextInput value={accountGithubUrl} onChangeText={setAccountGithubUrl} autoCapitalize="none" keyboardType="url" placeholder="https://github.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Portfolio (HTTPS)</Text><TextInput value={accountPortfolioUrl} onChangeText={setAccountPortfolioUrl} autoCapitalize="none" keyboardType="url" placeholder="https://portfolio.example" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>LinkedIn (HTTPS)</Text><TextInput value={accountLinkedinUrl} onChangeText={setAccountLinkedinUrl} autoCapitalize="none" keyboardType="url" placeholder="https://linkedin.com/in/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                      <Text style={styles.fieldLabel}>Facebook (HTTPS)</Text><TextInput value={accountFacebookUrl} onChangeText={setAccountFacebookUrl} autoCapitalize="none" keyboardType="url" placeholder="https://facebook.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
                       {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
                     </View>
@@ -1960,7 +2423,7 @@ export default function App() {
                   {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
                   <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Save listing changes" : "Save product draft"}</Text></TouchableOpacity>
-                  <Text style={styles.disclaimer}>This saves a draft only. Native icon/APK upload, screenshot management, full readiness checks and submission are still required before the publishing workflow is complete.</Text>
+                  <Text style={styles.disclaimer}>Saving creates or updates your draft. From My applications, complete the required assets and listing checks, then submit eligible drafts for review. Upload and submission errors are shown in the app.</Text>
                 </View>
               ) : developerScreen === "Developer dashboard" ? (
                 <>
@@ -1972,9 +2435,36 @@ export default function App() {
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
                   {!developerLoading && !developerReviews.length ? <Text style={styles.emptyText}>No reviews have been posted for your products yet.</Text> : null}
                 </>
-              ) : developerScreen === "My applications" || developerScreen === "Analytics" || developerScreen === "Publishing checklist" ? (
+              ) : developerScreen === "Analytics" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Analytics" ? <Text style={styles.postTag}>{item.downloads ?? 0} downloads · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text> : null}{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
+                  <View style={styles.infoBanner}><Text style={styles.infoTitle}>Product analytics</Text><Text style={styles.infoText}>Live view and install events for your listings. Conversion is installs divided by views; repeated events may be counted separately.</Text></View>
+                  <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && styles.chipActive]}><Text style={[styles.chipText,analyticsRange === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : !analyticsProAllowed ? (
+                    <View style={styles.composeCard}>
+                      <Text style={styles.sectionTitle}>Advanced analytics requires Developer Pro</Text>
+                      <Text style={styles.toolDescription}>Your detailed view/install events and audience breakdowns are available while your Pro subscription is active or within its paid period.</Text>
+                      <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
+                    </View>
+                  ) : <>
+                    <View style={styles.devMetricGrid}>
+                      {[["Views",analyticsStats.views],["Installs",analyticsStats.installs],["Conversion",analyticsStats.views ? Math.round(analyticsStats.installs / analyticsStats.views * 100) + "%" : "—"],["Products",developerRows.length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{String(value)}</Text><Text style={styles.devMetricLabel}>{String(label)}</Text></View>)}
+                    </View>
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Performance by product</Text><Text style={styles.sectionMeta}>{analyticsRange}</Text></View>
+                    {developerRows.map((item) => {
+                      const metrics = analyticsStats.byListing[item.id] || { views: 0, installs: 0 };
+                      const conversion = metrics.views ? Math.round(metrics.installs / metrics.views * 100) : 0;
+                      return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{metrics.views} views · {metrics.installs} installs · {metrics.views ? conversion + "% conversion" : "No views in this period"}</Text><Text style={styles.postTag}>Lifetime: {item.downloads ?? 0} installs · {(item.rating_count ?? 0) > 0 ? Number(item.rating_avg).toFixed(1) + " ★" : "No ratings"}</Text></View></View>;
+                    })}
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Audience devices</Text></View>
+                    {Object.entries(analyticsStats.viewsByDevice).sort((a,b) => b[1]-a[1]).slice(0,5).map(([device,count]) => <View key={device} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{device}</Text><Text style={styles.toolDescription}>{count} views · {(analyticsStats.installsByDevice[device] || 0)} installs</Text></View></View>)}
+                    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Audience countries</Text></View>
+                    {Object.entries(analyticsStats.viewsByCountry).sort((a,b) => b[1]-a[1]).slice(0,5).map(([country,count]) => <View key={country} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{country}</Text><Text style={styles.toolDescription}>{count} views · {(analyticsStats.installsByCountry[country] || 0)} installs</Text></View></View>)}
+                    {!developerRows.length ? <Text style={styles.emptyText}>Publish a product to begin collecting analytics.</Text> : null}
+                    {!analyticsStats.views && !analyticsStats.installs && developerRows.length ? <Text style={styles.emptyText}>No tracked events in this period yet.</Text> : null}
+                  </>}
+                </>
+              ) : developerScreen === "My applications" || developerScreen === "Publishing checklist" ? (                <>
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
                   {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
@@ -2062,11 +2552,226 @@ export default function App() {
                   {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
                   {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
                 </>
+              ) : developerScreen === "Developer Pro" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer Pro · MK5,000/month</Text>
+                    <Text style={styles.infoText}>Professional tools for developers. Payment is completed through MAS's existing secure PayChangu checkout; this screen never handles card or mobile-money details.</Text>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>{proLoading ? "Checking subscription…" : proSubscription?.status === "active" ? "Subscription active" : proSubscription?.status === "cancelled" ? "Subscription cancelled" : "Free plan"}</Text>
+                      <Text style={styles.toolDescription}>{proSubscription?.current_period_end ? (proSubscription.status === "cancelled" ? "Access ends " : "Current period ends ") + new Date(proSubscription.current_period_end).toLocaleDateString() : proSubscription?.status === "active" ? "Your active plan is recorded in MAS." : "Activate Developer Pro to access paid developer features."}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open Developer Pro checkout."))}><Text style={styles.secondaryButtonText}>Manage plan →</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Included tools</Text>
+                    {[
+                      "Developer verification and a Verified Developer badge when approved",
+                      "Product publishing and release management",
+                      "Advanced analytics where available",
+                      "Product promotion and Spotlight application tools",
+                      "Kwacha checkout through the existing PayChangu workflow",
+                    ].map((item) => <Text key={item} style={styles.postTag}>✓  {item}</Text>)}
+                    <TouchableOpacity style={styles.primaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
+                    <Text style={styles.disclaimer}>The hosted checkout and cancellation actions remain on the MAS web service so payment validation and subscription changes stay server-side. If prompted, sign in to your MAS account in the browser.</Text>
+                  </View>
+                </>
+              ) : developerScreen === "Verification" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer verification</Text>
+                    <Text style={styles.infoText}>Submit your details for manual review or continue through Didit. Your status changes only when MAS confirms the result.</Text>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Current status: {verificationStatus.replace(/_/g, " ")}</Text>
+                      <Text style={styles.toolDescription}>Keep your contact number current. Identity documents are stored for verification review.</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => void refreshVerificationStatus()}><Text style={styles.secondaryButtonText}>Refresh</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>WhatsApp / contact number (international format)</Text>
+                    <TextInput value={verificationPhone} onChangeText={setVerificationPhone} keyboardType="phone-pad" placeholder="+265991234567" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                    <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton, verificationSaving && {opacity:0.5}]} onPress={() => void saveVerificationPhone()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Saving…" : "Save contact number"}</Text></TouchableOpacity>
+                  </View>
+                  {MANUAL_KYC_UPLOAD_ENABLED ? (
+                    <View style={styles.composeCard}>
+                      <Text style={styles.sectionTitle}>Manual identity review</Text>
+                      <Text style={styles.fieldLabel}>Full legal name</Text>
+                      <TextInput value={verificationFullName} onChangeText={setVerificationFullName} autoCapitalize="words" placeholder="As shown on your document" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                      <Text style={styles.fieldLabel}>Document type</Text>
+                      <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && styles.chipActive]}><Text style={[styles.chipText,verificationIdType === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                      <Text style={styles.fieldLabel}>Document number</Text>
+                      <TextInput value={verificationIdNumber} onChangeText={setVerificationIdNumber} autoCapitalize="characters" placeholder="Enter document number" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
+                      <TouchableOpacity style={styles.mediaAttachButton} onPress={() => void chooseVerificationDocument()}><Text style={styles.mediaAttachText}>{verificationDocument ? verificationDocument.name : "＋ Attach ID/passport image or PDF (max 10 MB)"}</Text></TouchableOpacity>
+                      {verificationDocument ? <TouchableOpacity onPress={() => setVerificationDocument(null)}><Text style={styles.removeMediaText}>Remove selected document</Text></TouchableOpacity> : null}
+                      <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton,verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.infoBanner}>
+                      <Text style={styles.infoTitle}>Manual ID upload unavailable</Text>
+                      <Text style={styles.infoText}>The private KYC document bucket is not configured in the live MAS backend. No identity document will be uploaded from this screen. Use the secure Didit verification flow below.</Text>
+                    </View>
+                  )}
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Automatic verification</Text>
+                    <Text style={styles.toolDescription}>Didit opens in a secure external page. MAS updates your status after the server confirms the result.</Text>
+                    <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
+                  </View>
+                  <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
+                </>
+              ) : developerScreen === "Console settings" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer console settings</Text>
+                    <Text style={styles.infoText}>Open the relevant account area below. Sensitive account, authentication, payment and identity changes remain protected by the existing MAS backend.</Text>
+                  </View>
+                  {[
+                    ["Public developer profile", "Edit your public developer information.", "My public profile"],
+                    ["Product listings", "Manage product drafts, releases and listing status.", "My applications"],
+                    ["Developer verification", "Review identity verification status and submission.", "Verification"],
+                    ["Developer Pro", "Review plan access and continue to secure hosted checkout.", "Developer Pro"],
+                    ["Wallet & earnings", "Review ledger readiness and payout safety.", "Developer wallet"],
+                    ["Security settings", "Manage account security in the existing secure workflow.", "Security"],
+                    ["Developer resources", "Read publishing guidance and submit feature requests.", "Developer resources"],
+                    ["Promotion campaigns", "Create and manage product promotion campaigns.", "Promote a product"],
+                  ].map(([title, description, target]) => (
+                    <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="button" onPress={() => setDeveloperScreen(target)}>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View><Text style={styles.chevron}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={styles.disclaimer}>Settings navigation is native. Provider-backed security changes and financial operations are not simulated in this screen.</Text>
+                </>
+              ) : developerScreen === "Developer wallet" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Wallet & earnings</Text>
+                    <Text style={styles.infoText}>Your developer wallet is not yet connected to a verified earnings ledger. No sample balance is shown as real money, and withdrawals are disabled until a secure ledger, identity checks, payout support, refunds and settlement rules are in place.</Text>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Wallet status</Text><Text style={styles.sectionMeta}>Setup pending</Text></View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Available balance</Text>
+                      <Text style={styles.toolDescription}>Your verified, withdrawable balance will appear when a real ledger is connected.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Pending funds</Text>
+                      <Text style={styles.toolDescription}>Funds awaiting settlement, delivery confirmation or refund checks.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.toolCard}>
+                    <View style={styles.toolCopy}>
+                      <Text style={styles.toolTitle}>Transaction history</Text>
+                      <Text style={styles.toolDescription}>Marketplace sales, fees, refunds and payouts will be listed only when backed by verified transaction records.</Text>
+                    </View>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Payment and payout safety</Text></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Developer Pro payments</Text><Text style={styles.toolDescription}>PayChangu checkout is handled by the secure hosted payment flow. A subscription payment is not developer earnings.</Text></View><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.secondaryButtonText}>View Pro</Text></TouchableOpacity></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Protected withdrawals</Text><Text style={styles.toolDescription}>Withdrawals are unavailable until identity and payout details are verified and eligible funds are supported by the ledger.</Text></View><Text style={styles.postTag}>Disabled</Text></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>One shared ledger</Text><Text style={styles.toolDescription}>Marketplace and eligible Social earnings need consistent transaction records, commissions, refunds and payout history.</Text></View></View>
+                  <Text style={styles.disclaimer}>No money movement is initiated from this screen. Balance, transaction history, settlement, refunds and withdrawals require server-authoritative financial records.</Text>
+                </>
+              ) : developerScreen === "Promote a product" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Promote your product</Text>
+                    <Text style={styles.infoText}>Create a campaign in MWK, choose a placement and target location, and submit it for review. Submitting a campaign does not charge you; payment and campaign approval remain separate server-side steps.</Text>
+                  </View>
+                  <View style={styles.composeCard}>
+                    <Text style={styles.fieldLabel}>Product</Text>
+                    {promotionListings.length ? promotionListings.map((listing) => (
+                      <TouchableOpacity key={listing.id} style={[styles.storeTab, promotionListingId === listing.id && styles.storeTabActive]} onPress={() => setPromotionListingId(listing.id)}>
+                        <Text style={[styles.storeTabText, promotionListingId === listing.id && styles.storeTabTextActive]}>{listing.name} · {listing.status}</Text>
+                      </TouchableOpacity>
+                    )) : <Text style={styles.emptyText}>{promotionLoading ? "Loading your products…" : "No products found for this account. Create a product listing first."}</Text>}
+                    <Text style={styles.fieldLabel}>Campaign name</Text>
+                    <TextInput accessibilityLabel="Campaign name" value={promotionName} onChangeText={(value) => setPromotionName(value.slice(0, 60))} maxLength={60} placeholder="Launch week promotion" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Placement</Text>
+                    <View style={styles.storeTabs}>
+                      {([["featured", "Featured"], ["search", "Search boost"], ["banner", "Store banner"]] as const).map(([value, label]) => (
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionPlacement === value && styles.storeTabActive]} onPress={() => setPromotionPlacement(value)}>
+                          <Text style={[styles.storeTabText, promotionPlacement === value && styles.storeTabTextActive]}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.fieldLabel}>Budget (MWK; minimum 1,000)</Text>
+                    <TextInput accessibilityLabel="Campaign budget in MWK" value={promotionBudget} onChangeText={(value) => setPromotionBudget(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Duration (1–90 days)</Text>
+                    <TextInput accessibilityLabel="Campaign duration in days" value={promotionDays} onChangeText={(value) => setPromotionDays(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Target location</Text>
+                    <View style={styles.storeTabs}>
+                      {["All Malawi", "Lilongwe", "Blantyre", "Mzuzu", "Zomba"].map((value) => (
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionLocation === value && styles.storeTabActive]} onPress={() => setPromotionLocation(value)}>
+                          <Text style={[styles.storeTabText, promotionLocation === value && styles.storeTabTextActive]}>{value}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TouchableOpacity accessibilityRole="button" disabled={promotionSaving || promotionLoading || !promotionListings.length} style={[styles.primaryButton, (promotionSaving || promotionLoading || !promotionListings.length) && { opacity: 0.5 }]} onPress={() => void submitPromotionCampaign()}>
+                      <Text style={styles.primaryButtonText}>{promotionSaving ? "Submitting campaign…" : "Submit campaign for review"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your campaigns</Text><Text style={styles.sectionMeta}>{promotionCampaigns.length}</Text></View>
+                  {promotionLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
+                    <View key={campaign.id} style={styles.toolCard}>
+                      <View style={styles.toolCopy}>
+                        <Text style={styles.toolTitle}>{campaign.name || "Promotion campaign"}</Text>
+                        <Text style={styles.toolDescription}>{String(campaign.kind || "featured")} · {campaign.target_location || "All Malawi"} · MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text>
+                        <Text style={styles.postTag}>Status: {campaign.status || "pending"} · {campaign.ends_at ? "Ends " + new Date(campaign.ends_at).toLocaleDateString() : "No end date"}</Text>
+                        <View style={styles.detailStats}>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>{Number(campaign.impressions || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Views</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>{Number(campaign.clicks || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Clicks</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>MK{Number(campaign.spent_mwk || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Spent</Text></View>
+                          <View style={styles.detailStat}><Text style={styles.detailStatValue}>MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Budget</Text></View>
+                        </View>
+                      </View>
+                      {campaign.status !== "paused" && campaign.status !== "rejected" && campaign.status !== "completed" ? <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => void pausePromotionCampaign(campaign)}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : null}
+                    </View>
+                  )) : <Text style={styles.emptyText}>No campaigns yet. Submit a campaign above to start the review process.</Text>}
+                  <Text style={styles.disclaimer}>Impressions, clicks, approval and billing are not fabricated in this app. They will only be shown when the MAS backend provides verified campaign metrics.</Text>
+                </>
+              ) : developerScreen === "Developer resources" ? (
+                <>
+                  <View style={styles.infoBanner}>
+                    <Text style={styles.infoTitle}>Developer resources</Text>
+                    <Text style={styles.infoText}>Publishing guidance, design standards, release preparation and FAQs. Submit a feature request to the shared MAS portal.</Text>
+                  </View>
+                  {[
+                    ["Publishing guidelines", "Every listing is reviewed. Use a clear title and description, real screenshots, an appropriate icon, and a signed app build or secure HTTPS website URL. Never misrepresent functionality or collect data without consent."],
+                    ["Design and media", "Use a square product icon and genuine product screenshots. Keep screenshot text readable on small phones and make the first screenshot demonstrate the core task."],
+                    ["Versioning and updates", "Use semantic versions such as 1.4.2. Include release notes for each update and test a new release before publishing it to all users."],
+                    ["Security and privacy", "Request only necessary permissions, protect credentials, validate uploads, and keep payment-provider secrets on the server. Do not expose identity documents or private storage URLs."],
+                    ["Review and verification", "Submit complete listing information and required verification. Review outcomes are decided by MAS backend and moderation workflows, not by the client."],
+                  ].map(([title, body]) => (
+                    <View key={title} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{body}</Text></View></View>
+                  ))}
+                  <View style={styles.composeCard}>
+                    <Text style={styles.sectionTitle}>Request a feature</Text>
+                    <Text style={styles.fieldLabel}>Title (at least 5 characters)</Text>
+                    <TextInput accessibilityLabel="Feature request title" value={featureRequestTitle} onChangeText={(value) => setFeatureRequestTitle(value.slice(0,100))} maxLength={100} placeholder="What should MAS support?" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <Text style={styles.fieldLabel}>Details (optional)</Text>
+                    <TextInput accessibilityLabel="Feature request details" value={featureRequestBody} onChangeText={(value) => setFeatureRequestBody(value.slice(0,2000))} maxLength={2000} multiline numberOfLines={4} textAlignVertical="top" placeholder="Explain the problem and how the feature would help." placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:100}]} />
+                    <TouchableOpacity accessibilityRole="button" disabled={featureRequestSaving} style={[styles.primaryButton,featureRequestSaving&&{opacity:0.5}]} onPress={() => void submitFeatureRequest()}>
+                      <Text style={styles.primaryButtonText}>{featureRequestSaving ? "Submitting…" : "Submit feature request"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community requests</Text><Text style={styles.sectionMeta}>{featureRequests.length}</Text></View>
+                  {featureRequestsLoading ? <ActivityIndicator color={COLORS.accent} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
+                    <View key={item.id} style={styles.toolCard}>
+                      <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title}</Text><Text style={styles.toolDescription}>{item.body || "No additional details."}</Text><Text style={styles.postTag}>{item.status || "open"} · {Number(item.vote_count || 0)} votes · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View>
+                      <TouchableOpacity accessibilityRole="button" disabled={featureRequestVotingId === item.id} onPress={() => void toggleFeatureRequestVote(item)} style={[styles.secondaryButton, featureRequestVotingId === item.id && { opacity: 0.5 }]}><Text style={styles.secondaryButtonText}>{featureRequestVotingId === item.id ? "Saving…" : featureRequestVoteIds.includes(item.id) ? "Remove vote" : "Vote"}</Text></TouchableOpacity>
+                    </View>
+                  )) : <Text style={styles.emptyText}>No feature requests found yet.</Text>}
+                  <Text style={styles.disclaimer}>Feature requests and votes are stored in the shared MAS backend. Voting requires sign-in; review status remains controlled by the MAS moderation workflow.</Text>
+                </>
               ) : nativeDeveloperPreviews[developerScreen] ? (
                 <>
                   <View style={styles.infoBanner}>
-                    <Text style={styles.infoTitle}>Native workspace preview</Text>
-                    <Text style={styles.infoText}>This screen is now available in the Android app. Items marked integration pending still need their live backend or provider connection before they can perform real account actions.</Text>
+                    <Text style={styles.infoTitle}>{developerScreen === "Developer resources" ? "Developer resources" : "Native workspace guidance"}</Text>
+                    <Text style={styles.infoText}>{developerScreen === "Developer resources" ? "Practical publishing, listing-quality and security guidance for building on MAS." : "Use these checklists to prepare your workflow. Actions requiring a live provider or backend are explicitly identified and are not presented as completed."}</Text>
                   </View>
                   {nativeDeveloperPreviews[developerScreen].map((item) => (
                     <View key={item.title} style={styles.toolCard}>
@@ -2076,21 +2781,35 @@ export default function App() {
                         <Text style={styles.postTag}>{item.status}</Text>
                       </View>
                       <TouchableOpacity accessibilityRole="button" onPress={() => {
-                        if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
+                        if (item.action === "Open assistant console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/assistant").catch(() => showNotice("Could not open the MAS assistant. Check your connection and try again."));
+                        else if (item.action === "Open promotion console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open the promotion console. Check your connection and try again."));
+                        else if (item.action === "Open promotion campaign manager") setDeveloperScreen("Promote a product");
+                        else if (item.action === "Open security console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/security").catch(() => showNotice("Could not open the security console. Check your connection and try again."));
+                        else if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
                         else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Open My applications") setDeveloperScreen("My applications");
                         else if (item.action === "Start a product draft") setDeveloperScreen("Publish a product");
                         else if (item.action === "Open quality checks") setDeveloperScreen("Quality checks");
                         else if (item.action === "Open publishing checklist") setDeveloperScreen("Publishing checklist");
+                        else if (item.action === "Review team access") setDeveloperScreen("Team management");
+                        else if (item.action === "Open Spotlight applications") setDeveloperScreen("Spotlight");
+                        else if (item.action === "Review security notes" || item.action === "Review security rule") setDeveloperScreen("Security");
+                        else if (item.action === "Open public profile") setDeveloperScreen("My public profile");
+                        else if (item.action === "Open My applications" || item.action === "Review listing screens" || item.action === "Review store test") setDeveloperScreen("My applications");
+                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
+                        else if (item.action === "Open Social" || item.action === "Review Social test") { setDeveloperScreen(null); setSocialSection("Feed"); setTab("Social"); }
+                        else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
+                        else if (item.action === "Record test status" || item.action === "Review account test") setDeveloperScreen("Testing");
+                        else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
                         else showNotice(item.status === "Integration pending" || item.status === "Backend check" || item.status === "Integration test" ? "This action needs its backend integration and device testing before it can be marked complete." : "Review the checklist above and verify it during native app testing.");
                       }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
                     </View>
                   ))}
-                  <Text style={styles.disclaimer}>These are native preparation and checklist screens, not claims that campaign, team permissions or provider workflows are already connected. Live integrations will be completed in the final integration phase.</Text>
+                  <Text style={styles.disclaimer}>This workspace combines native workflows with clearly labeled guidance for tasks that still require a secure hosted provider or production backend. Campaign approval, payments, identity decisions and privileged moderation remain server-authoritative.</Text>
                 </>
               ) : null}
-              <Text style={styles.disclaimer}>Only screens marked native are rebuilt in this app. Payment, identity verification and wallet transactions remain integration work and will not be treated as complete until their native screens and backend workflows are implemented and tested.</Text>
+              <Text style={styles.disclaimer}>Payment settlement, identity-provider decisions and wallet transactions remain server-authoritative. Hosted checkout and selected provider workflows open securely in the MAS web console; all native and hosted journeys still require final end-to-end acceptance testing.</Text>
             </>
           ) : null}
           <View style={styles.bottomSpace}/>
@@ -2120,8 +2839,12 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   app: { flex: 1, backgroundColor: COLORS.background },
-  header: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  header: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
+  headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  headerLogo: { width: 28, height: 28, flexShrink: 0 },
+  
+  headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
+  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 14 },
   brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
@@ -2130,38 +2853,44 @@ const styles = StyleSheet.create({
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
   content: { flex: 1 },
-  contentInner: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12 },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
   heroText: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 10, marginBottom: 18 },
-  searchBox: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
+  searchBox: { minHeight: 40, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, backgroundColor: "#F3F3F3", borderRadius: 24, borderWidth: 1, borderColor: "#E1E1E1" },
   searchIcon: { color: COLORS.muted, fontSize: 25, marginRight: 8 },
-  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 10 },
-  storeTabs: { flexDirection: "row", gap: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 12, marginBottom: 14 },
-  storeTab: { paddingTop: 9, paddingBottom: 11, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 0, minHeight: 40 },
+  storeTabs: { flexDirection: "row", gap: 24, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 0, marginBottom: 12 },
+  storeTab: { paddingTop: 4, paddingBottom: 10, borderBottomWidth: 3, borderBottomColor: "transparent" },
   storeTabActive: { borderBottomColor: COLORS.accent },
-  storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "600" },
+  storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "500" },
   storeTabTextActive: { color: COLORS.accent, fontWeight: "700" },
-  sectionHeading: { marginTop: 25, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: "800" },
+  sectionHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shelfHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  shelfHeadingCopy: { flex: 1 },
+  shelfSubtitle: { color: COLORS.muted, fontSize: 12, marginTop: 2 },
+  shelfChevron: { color: COLORS.muted, fontSize: 24, lineHeight: 28 },
+  appNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  kindGlyph: { color: COLORS.muted, fontSize: 12 },
+  sectionTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600" },
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
   chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
   chipActive: { borderColor: "#CDE8D2", backgroundColor: "#E8F5E9" },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
   chipTextActive: { color: "#188038" },
-  appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 16, borderWidth: 1, borderColor: "#ECEFF1", backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
-  appIcon: { width: 53, height: 53, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 0, gap: 16 },
+  appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 14, paddingBottom: 8 },
   nativeShelfItem: { width: 104 },
-  nativeShelfIcon: { width: 92, height: 92, borderRadius: 19, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
+  nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
   nativeShelfIconImage: { width: "100%", height: "100%" },
-  nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
-  nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
+  nativeShelfName: { color: COLORS.text, fontSize: 13, fontWeight: "500" },
+  nativeShelfMeta: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
   fieldLabel: { color: COLORS.text, fontSize: 11, fontWeight: "800", marginTop: 12, marginBottom: 6 },
   formInput: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13 },
   devMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 15 },
@@ -2174,7 +2903,7 @@ const styles = StyleSheet.create({
   detailIconText: { color: "#FFFFFF", fontSize: 46, fontWeight: "900" },
   detailTitle: { color: COLORS.text, fontSize: 25, fontWeight: "900", marginTop: 16, textAlign: "center" },
   detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
-  listingScreenshot: { width: 220, height: 390, borderRadius: 14, backgroundColor: "#F5F7F6", borderWidth: 1, borderColor: "#E5E7EB", marginRight: 10 },
+  listingScreenshot: { width: 220, height: 390, borderRadius: 14, backgroundColor: "#F3F3F3", borderWidth: 1, borderColor: "#E1E1E1", marginRight: 10 },
   detailDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
   detailStats: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-around", gap: 8, marginTop: 22, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
   ratingRow: { flexDirection: "row", gap: 10, marginTop: 10 },
@@ -2184,9 +2913,9 @@ const styles = StyleSheet.create({
   detailStatValue: { color: COLORS.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
   detailStatLabel: { color: COLORS.muted, fontSize: 10, marginTop: 5 },
   appDetails: { flex: 1 },
-  appName: { color: COLORS.text, fontWeight: "800", fontSize: 14 },
-  appCategory: { color: COLORS.accent, fontSize: 10, fontWeight: "800", marginTop: 3 },
-  appDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
+  appName: { color: COLORS.text, fontWeight: "500", fontSize: 15 },
+  appCategory: { color: COLORS.muted, fontSize: 12, fontWeight: "400", marginTop: 3 },
+  appDescription: { color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 4 },
   chevron: { color: COLORS.muted, fontSize: 25, paddingHorizontal: 2 },
   emptyText: { color: COLORS.muted, padding: 18, textAlign: "center" },
   infoBanner: { padding: 17, marginTop: 15, backgroundColor: "#F7FBF7", borderWidth: 1, borderColor: "#DDEFE0", borderRadius: 16 },
