@@ -17,6 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 import { CATEGORIES, matchesSearch, matchesListingFilters, topByNumber, topByDate } from "./src/shared/mas-core";
+import type { Listing } from "./src/shared/mas-core";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
 type SocialSection = "Feed" | "Messages" | "Connections" | "Activity" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
@@ -597,7 +598,8 @@ export default function App() {
       .then(async ({ data, error }) => {
         if (!active) return;
         if (!error) {
-          const listingRows = data ?? [];
+          type CatalogueListing = Pick<Listing, "id" | "developer_id" | "slug" | "name" | "tagline" | "description" | "category" | "kind" | "icon_url" | "downloads" | "rating_avg" | "rating_count" | "created_at">;
+          const listingRows = (data ?? []) as CatalogueListing[];
           const developerIds = [...new Set(listingRows.map((item: any) => item.developer_id).filter(Boolean))];
           const profileResult = developerIds.length
             ? await supabase.from("public_profiles").select("id,developer_name,display_name").in("id", developerIds)
@@ -605,7 +607,7 @@ export default function App() {
           const profiles = new Map((profileResult.data ?? []).map((profile: any) => [
             profile.id, profile.developer_name || profile.display_name || "MAS developer",
           ]));
-          const catalogue = await Promise.all(listingRows.map(async (item: any) => {
+          const catalogue = await Promise.all(listingRows.map(async (item) => {
             const iconResult = item.icon_url
               ? await supabase.storage.from("app-assets").createSignedUrl(item.icon_url, 3600)
               : null;
