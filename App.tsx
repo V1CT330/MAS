@@ -2080,7 +2080,7 @@ export default function App() {
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
-            <View style={[styles.drawerPanel, { width: drawerWidth, paddingTop: Math.max(16, (StatusBar.currentHeight ?? 0) + 8), paddingBottom: windowHeight < 520 ? 12 : 20 }]}>
+            <View style={[styles.drawerPanel, { width: drawerWidth, maxWidth: isTabletLayout ? 420 : 360, paddingTop: Math.max(16, (StatusBar.currentHeight ?? 0) + 8), paddingBottom: windowHeight < 520 ? 12 : 20 }]}>
               <View style={styles.drawerHeader}>
                 <Text style={styles.drawerTitle}>Malawian App Store</Text>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setDrawerOpen(false)}>
@@ -3039,7 +3039,7 @@ export default function App() {
 
         {notice ? <View accessibilityLiveRegion="polite" style={styles.toast}><Text style={styles.toastText}>{notice}</Text></View> : null}
 
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { paddingBottom: windowHeight < 520 ? 2 : 8 }]}>
           {([
             ["Explore", "apps"],
             ["Library", "book"],
