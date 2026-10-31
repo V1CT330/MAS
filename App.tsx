@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  useWindowDimensions,
   SafeAreaView,
   ActivityIndicator,
   Image,
@@ -132,6 +133,11 @@ function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book"
 }
 
 export default function App() {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isCompactWidth = windowWidth < 360;
+  const isLargeScreen = windowWidth >= 600;
+  const horizontalPadding = isCompactWidth ? 10 : isLargeScreen ? 24 : 14;
+  const bottomBarPadding = Math.max(4, Math.min(12, Math.round(windowHeight * 0.012)));
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [sectionPostDraft, setSectionPostDraft] = useState("");
@@ -2052,8 +2058,9 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <ExpoStatusBar style="dark" />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.app}>
-        <View style={styles.header}>
+      <View style={[styles.app, isLargeScreen && styles.appLargeScreen]}>
+        <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
+
           <View style={styles.headerSearchBox}>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
               <NativeIcon name="menu" color={COLORS.text} size={20} />
@@ -2075,7 +2082,7 @@ export default function App() {
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
-            <View style={styles.drawerPanel}>
+            <View style={[styles.drawerPanel, { width: Math.min(windowWidth * 0.88, 340), paddingTop: Math.max(20, (StatusBar.currentHeight ?? 0) + 12), paddingBottom: Math.max(16, Math.round(windowHeight * 0.02)) }]}>
               <View style={styles.drawerHeader}>
                 <Text style={styles.drawerTitle}>Malawian App Store</Text>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setDrawerOpen(false)}>
@@ -2137,7 +2144,7 @@ export default function App() {
           </View>
         </Modal>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { paddingHorizontal: horizontalPadding, paddingBottom: Math.max(12, Math.round(windowHeight * 0.02)), width: "100%", maxWidth: isLargeScreen ? 1000 : undefined, alignSelf: "center" }]} keyboardShouldPersistTaps="handled">
           {selectedApp ? (
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={styles.secondaryButtonText}>← Back to store</Text></TouchableOpacity>
@@ -3034,7 +3041,7 @@ export default function App() {
 
         {notice ? <View accessibilityLiveRegion="polite" style={styles.toast}><Text style={styles.toastText}>{notice}</Text></View> : null}
 
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
           {([
             ["Explore", "apps"],
             ["Library", "book"],
@@ -3087,7 +3094,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  app: { flex: 1, backgroundColor: "#FFFFFF" },
+  app: { flex: 1, width: "100%", backgroundColor: "#FFFFFF" },
+  appLargeScreen: { maxWidth: 1100, alignSelf: "center" },
   header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
   headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
   headerMenuButton: { width: 26, height: 30, alignItems: "center", justifyContent: "center" },
@@ -3102,7 +3110,7 @@ const styles = StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, alignItems: "center", justifyContent: "center" },
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
-  content: { flex: 1, backgroundColor: "#FFFFFF" },
+  content: { flex: 1, width: "100%", backgroundColor: "#FFFFFF" },
   contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12, backgroundColor: "#FFFFFF" },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
@@ -3235,9 +3243,9 @@ const styles = StyleSheet.create({
   primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4 },
+  tabBar: { width: "100%", flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 56, gap: 2, paddingVertical: 3 },
-  tabIconPill: { width: 64, height: 28, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  tabIconPill: { width: "80%", maxWidth: 64, minWidth: 42, height: 28, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
   tabIconPillActive: { backgroundColor: COLORS.accentSoft },
   tabIcon: { color: COLORS.muted, fontSize: 20, lineHeight: 22 },
   tabActive: { color: COLORS.accent },
