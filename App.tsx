@@ -2553,7 +2553,7 @@ export default function App() {
                 ["grid", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
-                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{icon}</Text></View>
+                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><NativeIcon name={icon as any} color={accentColor} size={21} /></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
