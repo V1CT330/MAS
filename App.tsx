@@ -2058,7 +2058,7 @@ export default function App() {
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
               <NativeIcon name="menu" color={COLORS.text} size={20} />
             </TouchableOpacity>
-            <Image accessibilityLabel="Malawian App Store logo" source={{ uri: "https://malawian-app-store-j6pm.vercel.app/favicon.png" }} style={styles.headerLogo} resizeMode="contain" />
+            <Image accessibilityLabel="Malawian App Store logo" source={require("./assets/mas-logo-mark.png")} style={styles.headerLogo} resizeMode="contain" />
             <NativeIcon name="search" color={COLORS.muted} size={18} />
             <TextInput
               accessibilityLabel="Search apps and websites"
