@@ -2039,7 +2039,12 @@ export default function App() {
       setUtilityScreen("settings");
     } else {
       setUtilityScreen("none");
-      setTab(destination === "Account" ? "Profile" : destination);
+      if (destination === "Develop") {
+        setTab("Develop");
+        setDeveloperScreen("Developer dashboard");
+      } else {
+        setTab(destination === "Account" ? "Profile" : destination);
+      }
     }
   };
 
@@ -2077,6 +2082,7 @@ export default function App() {
                   <Text style={styles.drawerClose}>×</Text>
                 </TouchableOpacity>
               </View>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">
               <Text style={styles.drawerSection}>NAVIGATION</Text>
               {([
                 ["Explore", "apps", "Explore apps and websites"],
@@ -2096,9 +2102,36 @@ export default function App() {
                   <Text style={styles.drawerChevron}>›</Text>
                 </TouchableOpacity>
               ))}
+              <Text style={styles.drawerSection}>DEVELOPER SPACE</Text>
+              {([
+                ["Developer dashboard", "Overview and publishing status"],
+                ["Publish a product", "Create an app or website listing"],
+                ["My applications", "Manage your products and releases"],
+                ["Analytics", "Views, installs and performance"],
+                ["Verification", "Developer identity status"],
+                ["Developer Pro", "Subscription and benefits"],
+                ["Developer wallet", "Earnings and wallet information"],
+                ["Console settings", "Developer preferences"],
+              ] as const).map(([label, description]) => (
+                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
+                  setDrawerOpen(false);
+                  setSelectedApp(null);
+                  setUtilityScreen("none");
+                  setTab("Develop");
+                  setDeveloperScreen(label);
+                }}>
+                  <NativeIcon name="settings" color={accentColor} size={19} />
+                  <View style={styles.drawerItemCopy}>
+                    <Text style={styles.drawerItemTitle}>{label}</Text>
+                    <Text style={styles.drawerItemDescription}>{description}</Text>
+                  </View>
+                  <Text style={styles.drawerChevron}>›</Text>
+                </TouchableOpacity>
+              ))}
               <View style={styles.drawerFooter}>
                 <Text style={styles.drawerFooterText}>Built for Malawi · Powered by Wealth Grid Finance</Text>
               </View>
+              </ScrollView>
             </View>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close navigation menu" style={styles.drawerBackdrop} onPress={() => setDrawerOpen(false)} />
           </View>
@@ -3224,7 +3257,7 @@ const styles = StyleSheet.create({
   accentCheck: { marginLeft: "auto", fontWeight: "900" },
   drawerRoot: { flex: 1, flexDirection: "row", backgroundColor: "rgba(0,0,0,0.35)" },
   drawerBackdrop: { flex: 1 },
-  drawerPanel: { width: "82%", maxWidth: 340, backgroundColor: "#FFFFFF", paddingTop: 26, paddingHorizontal: 16, paddingBottom: 20, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
+  drawerPanel: { width: "82%", maxWidth: 340, height: "100%", backgroundColor: "#FFFFFF", paddingTop: 26, paddingHorizontal: 16, paddingBottom: 20, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
   drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   drawerTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
   drawerClose: { color: COLORS.muted, fontSize: 30, lineHeight: 32, paddingHorizontal: 6 },
