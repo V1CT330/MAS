@@ -2344,7 +2344,7 @@ export default function App() {
                       {conversationLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 12 }} /> : null}
                       {conversationPreviews.map((conversation) => (
                         <TouchableOpacity key={conversation.userId} style={styles.toolCard} onPress={() => void openConversation(conversation.userId)}>
-                          <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]Text}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
+                          <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
                           <View style={styles.toolCopy}>
                             <Text style={styles.toolTitle}>{conversation.name}{conversation.unread ? ` · ${conversation.unread} unread` : ""}</Text>
                             <Text numberOfLines={1} style={styles.toolDescription}>{conversation.body || "Open private conversation"}</Text>
@@ -2358,7 +2358,7 @@ export default function App() {
                           <Text style={styles.emptyText}>No conversations yet. Start one by selecting Message on a member's Social post.</Text>
                           {posts.filter((post) => post.authorId).map((post) => (
                             <TouchableOpacity key={post.authorId} style={styles.toolCard} onPress={() => post.authorId ? void openConversation(post.authorId) : undefined}>
-                              <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]Text}>{post.name.slice(0,1).toUpperCase()}</Text></View>
+                              <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{post.name.slice(0,1).toUpperCase()}</Text></View>
                               <View style={styles.toolCopy}><Text style={styles.toolTitle}>{post.name}</Text><Text style={styles.toolDescription}>Start a private conversation</Text></View><Text style={styles.chevron}>›</Text>
                             </TouchableOpacity>
                           ))}
@@ -2387,7 +2387,7 @@ export default function App() {
                   {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Connect the MAS backend to load live connections.</Text> : null}
                   {socialConnectionsLoading ? <ActivityIndicator color={accentColor} /> : socialConnections.map((connection) => (
                     <View key={connection.id} style={styles.toolCard}>
-                      <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]Text}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
+                      <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{connection.otherName}</Text>
                         <Text style={styles.toolDescription}>{connection.direction === "incoming" ? "Incoming request" : "Request sent"} · {connection.status}</Text>
@@ -2552,7 +2552,7 @@ export default function App() {
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
-                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]Text}>{icon}</Text></View>
+                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
