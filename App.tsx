@@ -119,8 +119,9 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   ],
 };
 
-function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book" | "bell" | "user" | "users" | "grid" | "settings"; color: string; size?: number }) {
+function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book" | "bell" | "user" | "users" | "grid" | "settings" | "search"; color: string; size?: number }) {
   const line = { backgroundColor: color, borderRadius: 2 } as const;
+  if (name === "search") return <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}><View style={{ width: size*0.62, height: size*0.62, borderWidth: 1.8, borderColor: color, borderRadius: size, marginRight: 4, marginBottom: 4 }} /><View style={{ position: "absolute", width: size*0.38, height: 1.8, backgroundColor: color, right: 0, bottom: 2, transform: [{ rotate: "45deg" }] }} /></View>;
   if (name === "menu") return <View style={{ width: size, height: size, justifyContent: "center", gap: 4 }}><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /></View>;
   if (name === "apps" || name === "grid") return <View style={{ width: size, height: size, flexDirection: "row", flexWrap: "wrap", gap: 3, alignContent: "center", justifyContent: "center" }}>{[0,1,2,3].map((i)=><View key={i} style={{width:(size-5)/2,height:(size-5)/2,borderWidth:1.8,borderColor:color,borderRadius:2}} />)}</View>;
   if (name === "book") return <View style={{ width: size*0.78, height: size, borderWidth:1.8,borderColor:color,borderRadius:3,flexDirection:"row" }}><View style={{width:2,backgroundColor:color,marginLeft:4,marginRight:3}}/><View style={{flex:1}}/></View>;
@@ -2053,7 +2054,7 @@ export default function App() {
               <NativeIcon name="menu" color={COLORS.text} size={20} />
             </TouchableOpacity>
             <Image accessibilityLabel="Malawian App Store logo" source={{ uri: "https://malawian-app-store-j6pm.vercel.app/favicon.png" }} style={styles.headerLogo} resizeMode="contain" />
-            <Text style={styles.headerSearchIcon}>⌕</Text>
+            <NativeIcon name="search" color={COLORS.muted} size={18} />
             <TextInput
               accessibilityLabel="Search apps and websites"
               placeholder="Search apps & websites"
@@ -2069,7 +2070,6 @@ export default function App() {
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close navigation menu" style={styles.drawerBackdrop} onPress={() => setDrawerOpen(false)} />
             <View style={styles.drawerPanel}>
               <View style={styles.drawerHeader}>
                 <Text style={styles.drawerTitle}>Malawian App Store</Text>
@@ -2100,6 +2100,7 @@ export default function App() {
                 <Text style={styles.drawerFooterText}>Built for Malawi · Powered by Wealth Grid Finance</Text>
               </View>
             </View>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close navigation menu" style={styles.drawerBackdrop} onPress={() => setDrawerOpen(false)} />
           </View>
         </Modal>
 
@@ -2118,7 +2119,7 @@ export default function App() {
                   <View style={styles.detailStat}><Text style={styles.detailStatValue}>{selectedApp.developer || "MAS developer"}</Text><Text style={styles.detailStatLabel}>Developer</Text></View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.primaryButton} onPress={async () => {
+              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={async () => {
                 if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
