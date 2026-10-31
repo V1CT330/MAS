@@ -2550,7 +2550,7 @@ export default function App() {
                 ["settings", "Account settings", "Manage your account preferences.", "native:settings"],
                 ["users", "Social community", "Explore posts, messages and collaboration.", "native:social"],
                 ["grid", "Developer space", "Publish and manage your products.", "native:develop"],
-                ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
+                ["grid", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{icon}</Text></View>
