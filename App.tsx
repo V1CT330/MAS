@@ -219,7 +219,7 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [accentColor, setAccentColor] = useState(accentColor);
+  const [accentColor, setAccentColor] = useState(COLORS.accent);
   const [accentLoaded, setAccentLoaded] = useState(false);
   const [postDraft, setPostDraft] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
