@@ -39,6 +39,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Prepare square native launcher artwork
+        run: npm run prepare:native-assets
       - name: Expo project health check
         run: npx --yes expo-doctor
       - name: TypeScript check
