@@ -576,6 +576,12 @@ export default function App() {
       try {
         const callback = new URL(url);
         const code = callback.searchParams.get("code");
+        const callbackError = callback.searchParams.get("error_description") || callback.searchParams.get("error");
+        if (callbackError) {
+          showNotice(decodeURIComponent(callbackError.replace(/\+/g, " ")));
+          setAuthLoading(false);
+          return;
+        }
         if (code && callback.protocol === "mw.wealthgrid.mas:") {
           setAuthLoading(true);
           const { error } = await supabase.auth.exchangeCodeForSession(code);
