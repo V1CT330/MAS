@@ -2141,7 +2141,7 @@ export default function App() {
                   setTab("Develop");
                   setDeveloperScreen(label);
                 }}>
-                  <NativeIcon name="settings" color={accentColor} size={19} />
+                  <NativeIcon name={label === "Developer dashboard" || label === "Store management" ? "grid" : label === "Publish a product" || label === "Testing" ? "apps" : label === "My applications" || label === "Publishing checklist" || label === "Developer resources" ? "book" : label === "Analytics" || label === "Promote a product" ? "search" : label === "Verification" || label === "My public profile" ? "user" : label === "Team management" || label === "Reviews" || label === "Developer assistant" ? "users" : "settings"} color={accentColor} size={19} />
                   <View style={styles.drawerItemCopy}>
                     <Text style={styles.drawerItemTitle}>{label}</Text>
                     <Text style={styles.drawerItemDescription}>{description}</Text>
