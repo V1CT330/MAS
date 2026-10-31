@@ -11,7 +11,7 @@
       "versionCode": 4,
       "edgeToEdgeEnabled": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/mas-logo-mark-square.svg",
+        "foregroundImage": "./assets/mas-logo-mark-square.png",
         "backgroundColor": "#FFFFFF"
       }
     },
@@ -29,7 +29,7 @@
       "barStyle": "dark-content",
       "enforceContrast": false
     },
-    "icon": "./assets/mas-logo-mark-square.svg",
+    "icon": "./assets/mas-logo-mark-square.png",
     "splash": {
       "image": "./assets/mas-logo.png",
       "resizeMode": "contain",
