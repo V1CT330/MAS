@@ -2,7 +2,7 @@ name: Build native MAS Android APK
 
 on:
   push:
-    branches: [main, native/expo-foundation]
+    branches: [main, native/expo-foundation, responsive-device-layout]
   workflow_dispatch:
 
 permissions:
