@@ -13,7 +13,7 @@ on:
       - 'tsconfig.json'
       - '.github/workflows/native-check.yml'
   push:
-    branches: [main, native/expo-foundation]
+    branches: [main, native/expo-foundation, responsive-device-layout]
     paths:
       - '**.tsx'
       - '**.ts'
@@ -39,6 +39,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Prepare square native launcher artwork
+        run: npm run prepare:native-assets
       - name: Expo project health check
         run: npx --yes expo-doctor
       - name: TypeScript check

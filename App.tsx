@@ -13,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
@@ -127,11 +128,16 @@ function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book"
   if (name === "book") return <View style={{ width: size*0.78, height: size, borderWidth:1.8,borderColor:color,borderRadius:3,flexDirection:"row" }}><View style={{width:2,backgroundColor:color,marginLeft:4,marginRight:3}}/><View style={{flex:1}}/></View>;
   if (name === "bell") return <View style={{width:size*0.82,height:size*0.9,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.68,height:size*0.68,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size/2,borderTopRightRadius:size/2,borderBottomLeftRadius:4,borderBottomRightRadius:4}}/><View style={{width:size*0.94,height:2,backgroundColor:color,marginTop:1}}/><View style={{width:4,height:4,borderRadius:2,backgroundColor:color,marginTop:1}}/></View>;
   if (name === "user") return <View style={{width:size,height:size,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.34,height:size*0.34,borderRadius:size,borderWidth:1.8,borderColor:color,marginBottom:2}}/><View style={{width:size*0.82,height:size*0.4,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size,borderTopRightRadius:size,borderBottomWidth:0}}/></View>;
-  if (name === "users") return <View style={{width:size,height:size,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:2}}><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/></View>;
+  if (name === "users") return <View style={{width:size,height:size,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:2}}><View style={{alignItems:"center",justifyContent:"flex-end",height:size*0.9,width:size*0.43}}><View style={{width:size*0.28,height:size*0.28,borderRadius:size,borderWidth:1.6,borderColor:color}}/><View style={{width:size*0.42,height:size*0.3,borderWidth:1.6,borderColor:color,borderTopLeftRadius:size,borderTopRightRadius:size,borderBottomWidth:0,marginTop:2}}/></View><View style={{alignItems:"center",justifyContent:"flex-end",height:size*0.9,width:size*0.43}}><View style={{width:size*0.28,height:size*0.28,borderRadius:size,borderWidth:1.6,borderColor:color}}/><View style={{width:size*0.42,height:size*0.3,borderWidth:1.6,borderColor:color,borderTopLeftRadius:size,borderTopRightRadius:size,borderBottomWidth:0,marginTop:2}}/></View></View>;
+  if (name === "settings") return <View style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}><View style={{width:size*0.72,height:size*0.72,borderRadius:size,borderWidth:2,borderColor:color,alignItems:"center",justifyContent:"center"}}><View style={{width:size*0.24,height:size*0.24,borderRadius:size,borderWidth:1.8,borderColor:color}}/></View></View>;
   return <View style={{width:size,height:size,justifyContent:"center",gap:4}}><View style={{height:2,width:size,backgroundColor:color}}/><View style={{height:2,width:size*0.72,backgroundColor:color}}/><View style={{height:2,width:size*0.86,backgroundColor:color}}/></View>;
 }
 
 export default function App() {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTabletLayout = windowWidth >= 768;
+  const contentMaxWidth = isTabletLayout ? 1120 : 960;
+  const drawerWidth = Math.min(isTabletLayout ? 420 : 360, windowWidth * 0.88);
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [sectionPostDraft, setSectionPostDraft] = useState("");
@@ -570,6 +576,12 @@ export default function App() {
       try {
         const callback = new URL(url);
         const code = callback.searchParams.get("code");
+        const callbackError = callback.searchParams.get("error_description") || callback.searchParams.get("error");
+        if (callbackError) {
+          showNotice(decodeURIComponent(callbackError.replace(/\+/g, " ")));
+          setAuthLoading(false);
+          return;
+        }
         if (code && callback.protocol === "mw.wealthgrid.mas:") {
           setAuthLoading(true);
           const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -577,8 +589,9 @@ export default function App() {
           else showNotice("You are signed in to MAS.");
           setAuthLoading(false);
         }
-      } catch {
+      } catch (error) {
         setAuthLoading(false);
+        showNotice(error instanceof Error ? error.message : "Could not complete the sign-in callback.");
       }
     };
     Linking.getInitialURL().then((url) => { if (url) void handleUrl(url); });
@@ -624,7 +637,7 @@ export default function App() {
               tagline: item.tagline || item.category || "Discover this project on MAS.",
               description: item.description || item.tagline || "Discover this project on MAS.",
               mark: String(item.name || "M").slice(0, 1).toUpperCase(),
-              color: COLORS.accent,
+              color: accentColor,
               slug: item.slug,
               kind: item.kind,
               developer: String(profiles.get(item.developer_id) || "MAS developer"),
@@ -2002,6 +2015,9 @@ export default function App() {
           options: { emailRedirectTo: "mw.wealthgrid.mas://auth/callback" },
         });
         if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error("An account may already exist for this email. Try signing in or use password recovery.");
+        }
         setAuthPassword("");
         if (data.session) {
           setUserEmail(data.user?.email ?? email);
@@ -2053,7 +2069,7 @@ export default function App() {
       <ExpoStatusBar style="dark" />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.app}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: windowWidth < 360 ? 8 : 12 }]}>
           <View style={styles.headerSearchBox}>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
               <NativeIcon name="menu" color={COLORS.text} size={20} />
@@ -2075,14 +2091,14 @@ export default function App() {
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
-            <View style={styles.drawerPanel}>
+            <View style={[styles.drawerPanel, { width: drawerWidth, maxWidth: isTabletLayout ? 420 : 360, paddingTop: Math.max(16, (StatusBar.currentHeight ?? 0) + 8), paddingBottom: windowHeight < 520 ? 12 : 20 }]}>
               <View style={styles.drawerHeader}>
                 <Text style={styles.drawerTitle}>Malawian App Store</Text>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setDrawerOpen(false)}>
                   <Text style={styles.drawerClose}>×</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">
+              <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.drawerSection}>NAVIGATION</Text>
               {([
                 ["Explore", "apps", "Explore apps and websites"],
@@ -2093,7 +2109,7 @@ export default function App() {
                 ["Develop", "grid", "Developer space"],
                 ["Settings", "settings", "Appearance and preferences"],
               ] as const).map(([label, icon, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => navigateDrawer(label)}>
+                <TouchableOpacity key={label} accessibilityRole="button" style={[styles.drawerItem, { paddingVertical: windowHeight < 600 ? 9 : 13 }]} onPress={() => navigateDrawer(label)}>
                   <NativeIcon name={icon} color={accentColor} size={20} />
                   <View style={styles.drawerItemCopy}>
                     <Text style={styles.drawerItemTitle}>{label}</Text>
@@ -2112,15 +2128,27 @@ export default function App() {
                 ["Developer Pro", "Subscription and benefits"],
                 ["Developer wallet", "Earnings and wallet information"],
                 ["Console settings", "Developer preferences"],
+                ["Reviews", "Customer feedback and replies"],
+                ["Publishing checklist", "Release readiness"],
+                ["Quality checks", "Product quality and policy"],
+                ["Developer resources", "Guides and support"],
+                ["Testing", "Release and account testing"],
+                ["Team management", "Team members and roles"],
+                ["Promote a product", "Campaigns and promotion"],
+                ["Spotlight", "Featured product applications"],
+                ["My public profile", "Your developer profile"],
+                ["Security", "Account and app security"],
+                ["Store management", "Manage product listings"],
+                ["Developer assistant", "Help with developer workflows"],
               ] as const).map(([label, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
+                <TouchableOpacity key={label} accessibilityRole="button" style={[styles.drawerItem, { paddingVertical: windowHeight < 600 ? 9 : 13 }]} onPress={() => {
                   setDrawerOpen(false);
                   setSelectedApp(null);
                   setUtilityScreen("none");
                   setTab("Develop");
                   setDeveloperScreen(label);
                 }}>
-                  <NativeIcon name="settings" color={accentColor} size={19} />
+                  <NativeIcon name={label === "Developer dashboard" || label === "Store management" ? "grid" : label === "Publish a product" || label === "Testing" ? "apps" : label === "My applications" || label === "Publishing checklist" || label === "Developer resources" ? "book" : label === "Analytics" || label === "Promote a product" ? "search" : label === "Verification" || label === "My public profile" ? "user" : label === "Team management" || label === "Reviews" || label === "Developer assistant" ? "users" : "settings"} color={accentColor} size={19} />
                   <View style={styles.drawerItemCopy}>
                     <Text style={styles.drawerItemTitle}>{label}</Text>
                     <Text style={styles.drawerItemDescription}>{description}</Text>
@@ -2137,14 +2165,14 @@ export default function App() {
           </View>
         </Modal>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", paddingHorizontal: windowWidth < 360 ? 8 : 12 }]} keyboardShouldPersistTaps="handled">
           {selectedApp ? (
             <>
-              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={styles.secondaryButtonText}>← Back to store</Text></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>← Back to store</Text></TouchableOpacity>
               <View style={styles.detailHero}>
                 <View style={[styles.detailIcon, { backgroundColor: selectedApp.color }]}>{selectedApp.iconUrl ? <Image source={{ uri: selectedApp.iconUrl }} style={styles.detailIconImage} resizeMode="cover" /> : <Text style={styles.detailIconText}>{selectedApp.mark}</Text>}</View>
                 <Text style={styles.detailTitle}>{selectedApp.name}</Text>
-                <Text style={styles.detailCategory}>{selectedApp.category} · {selectedApp.kind === "website" ? "Website" : "App"}</Text>
+                <Text style={[styles.detailCategory,{color:accentColor}]}>{selectedApp.category} · {selectedApp.kind === "website" ? "Website" : "App"}</Text>
                 <Text style={styles.detailDescription}>{selectedApp.description || "Discover this project from a Malawian developer."}</Text>
                 <View style={styles.detailStats}>
                   <View style={styles.detailStat}><Text style={styles.detailStatValue}>{(selectedApp.rating ?? 0) > 0 ? (selectedApp.rating ?? 0).toFixed(1) : "New"}</Text><Text style={styles.detailStatLabel}>Rating</Text></View>
@@ -2152,7 +2180,7 @@ export default function App() {
                   <View style={styles.detailStat}><Text style={styles.detailStatValue}>{selectedApp.developer || "MAS developer"}</Text><Text style={styles.detailStatLabel}>Developer</Text></View>
                 </View>
               </View>
-              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={async () => {
+              <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={async () => {
                 if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -2160,10 +2188,10 @@ export default function App() {
                 const { error } = await supabase.from("wishlist").insert({ user_id: authData.user.id, listing_id: selectedApp.id });
                 showNotice(error ? (error.code === "23505" ? "This listing is already saved." : error.message || "Could not save listing.") : "Saved to your library.");
               }}><Text style={styles.primaryButtonText}>＋ Save to my library</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => void installSelectedApp()} disabled={detailLoading}>
+              <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => void installSelectedApp()} disabled={detailLoading}>
                 <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website" : "Download / install"}</Text>
               </TouchableOpacity>
-              {detailLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {detailLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : null}
               {selectedAppDetails ? <>
                 <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>About this listing</Text><Text style={styles.sectionMeta}>{selectedAppDetails.price_mwk > 0 ? "MK" + Number(selectedAppDetails.price_mwk).toLocaleString() : "FREE"}</Text></View>
                 <Text style={styles.detailDescription}>{selectedAppDetails.description || selectedAppDetails.tagline || selectedApp.description}</Text>
@@ -2176,7 +2204,7 @@ export default function App() {
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Reviews</Text><Text style={styles.sectionMeta}>{selectedReviews.length}</Text></View>
               {selectedReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{"★".repeat(Math.max(1, Math.min(5, Number(review.rating) || 1)))} · {review.rating}/5</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{new Date(review.created_at).toLocaleDateString()}</Text></View></View>)}
               {!detailLoading && !selectedReviews.length ? <Text style={styles.emptyText}>No reviews yet. Be the first to review this listing.</Text> : null}
-              <View style={styles.composeCard}><Text style={styles.toolTitle}>Write a review</Text><View style={styles.ratingRow}>{[1,2,3,4,5].map((value) => <TouchableOpacity key={value} onPress={() => setReviewRating(value)}><Text style={[styles.ratingStar, value <= reviewRating && styles.ratingStarActive]}>★</Text></TouchableOpacity>)}</View><TextInput accessibilityLabel="Write a listing review" placeholder="Share your experience (optional)…" placeholderTextColor={COLORS.muted} value={reviewDraft} onChangeText={(value) => setReviewDraft(value.slice(0, 2000))} multiline maxLength={2000} style={styles.commentInput}/><TouchableOpacity style={[styles.composeButton,{alignSelf:"flex-end",marginTop:10}]} onPress={() => void submitSelectedReview()}><Text style={styles.composeButtonText}>Submit review</Text></TouchableOpacity></View>
+              <View style={styles.composeCard}><Text style={styles.toolTitle}>Write a review</Text><View style={styles.ratingRow}>{[1,2,3,4,5].map((value) => <TouchableOpacity key={value} onPress={() => setReviewRating(value)}><Text style={[styles.ratingStar, value <= reviewRating && styles.ratingStarActive]}>★</Text></TouchableOpacity>)}</View><TextInput accessibilityLabel="Write a listing review" placeholder="Share your experience (optional)…" placeholderTextColor={COLORS.muted} value={reviewDraft} onChangeText={(value) => setReviewDraft(value.slice(0, 2000))} multiline maxLength={2000} style={styles.commentInput}/><TouchableOpacity style={[[styles.composeButton,{backgroundColor:accentColor}],{alignSelf:"flex-end",marginTop:10}]} onPress={() => void submitSelectedReview()}><Text style={styles.composeButtonText}>Submit review</Text></TouchableOpacity></View>
               <Text style={styles.disclaimer}>Downloads open through a short-lived signed link. Reviews and installs use the MAS backend policies.</Text>
             </>
           ) : null}
@@ -2192,19 +2220,19 @@ export default function App() {
                   <TouchableOpacity
                     key={key}
                     onPress={() => setKindFilter(key)}
-                    style={[styles.storeTab, kindFilter === key && styles.storeTabActive]}
+                    style={[styles.storeTab, kindFilter === key && [styles.storeTabActive,{borderBottomColor:accentColor}]]}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: kindFilter === key }}
                   >
-                    <Text style={[styles.storeTabText, kindFilter === key && styles.storeTabTextActive]}>{label}</Text>
+                    <Text style={[styles.storeTabText, kindFilter === key && [styles.storeTabTextActive,{color:accentColor}]]}>{label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", ...CATEGORIES].map((item) => (
-                  <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
-                    <Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text>
+                  <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}>
+                    <Text style={[styles.chipText, category === item && [styles.chipTextActive,{color:accentColor}]]}>{item}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -2219,7 +2247,7 @@ export default function App() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
-                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : COLORS.accentSoft }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
+                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : (accentColor + "18") }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, [styles.appIconFallbackText,{color:accentColor}]]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
@@ -2232,10 +2260,10 @@ export default function App() {
                 <Text style={styles.sectionTitle}>{query.trim() || category !== "All" || kindFilter !== "all" ? `${filteredApps.length} result${filteredApps.length === 1 ? "" : "s"}` : "All listings"}</Text>
                 <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : ""}</Text>
               </View>
-              {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {catalogueLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
-                  <View style={[styles.appIcon, { backgroundColor: app.iconUrl ? app.color : COLORS.accentSoft }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{app.name.slice(0, 2).toUpperCase()}</Text>}</View>
+                  <View style={[styles.appIcon, { backgroundColor: app.iconUrl ? app.color : (accentColor + "18") }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, [styles.appIconFallbackText,{color:accentColor}]]}>{app.name.slice(0, 2).toUpperCase()}</Text>}</View>
                   <View style={styles.appDetails}>
                     <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
                     <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
@@ -2254,13 +2282,13 @@ export default function App() {
 
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Social" && (
             <>
-              <View style={styles.sectionHeading}><Text style={styles.pageTitle}>Social</Text><TouchableOpacity accessibilityRole="button" onPress={() => { setSocialSearchOpen((open) => !open); if (socialSearchOpen) setSocialSearchQuery(""); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{socialSearchOpen ? "Close search" : "⌕ Search"}</Text></TouchableOpacity></View>
+              <View style={styles.sectionHeading}><Text style={styles.pageTitle}>Social</Text><TouchableOpacity accessibilityRole="button" onPress={() => { setSocialSearchOpen((open) => !open); if (socialSearchOpen) setSocialSearchQuery(""); }} style={styles.secondaryButton}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>{socialSearchOpen ? "Close search" : "⌕ Search"}</Text></TouchableOpacity></View>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
               {socialSearchOpen ? <View style={[styles.searchBox,{marginBottom:12}]}><Text style={styles.searchIcon}>⌕</Text><TextInput accessibilityLabel="Search Social posts" placeholder="Search posts and members" placeholderTextColor={COLORS.muted} value={socialSearchQuery} onChangeText={setSocialSearchQuery} style={styles.searchInput} returnKeyType="search" /></View> : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {(["Feed", "Messages", "Connections", "Activity", "Collabo", "Investors", "Grants", "Crowdfund"] as SocialSection[]).map((item) => (
-                  <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && styles.chipActive]}>
-                    <Text style={[styles.chipText, socialSection === item && styles.chipTextActive]}>{item}</Text>
+                  <TouchableOpacity key={item} onPress={() => setSocialSection(item)} style={[styles.chip, socialSection === item && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}>
+                    <Text style={[styles.chipText, socialSection === item && [styles.chipTextActive,{color:accentColor}]]}>{item}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -2273,7 +2301,7 @@ export default function App() {
                     </TouchableOpacity>
                     {selectedMedia ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{selectedMedia.fileName}</Text><TouchableOpacity onPress={() => setSelectedMedia(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                     <TextInput accessibilityLabel="Write a Social post" placeholder="What are you building or thinking about?" placeholderTextColor={COLORS.muted} value={postDraft} onChangeText={setPostDraft} multiline maxLength={2000} style={styles.postComposerInput} />
-                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{postDraft.length}/2000</Text><TouchableOpacity disabled={posting || !postDraft.trim()} style={[styles.composeButton, (posting || !postDraft.trim()) && { opacity: 0.5 }]} onPress={async () => {
+                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{postDraft.length}/2000</Text><TouchableOpacity disabled={posting || !postDraft.trim()} style={[[styles.composeButton,{backgroundColor:accentColor}], (posting || !postDraft.trim()) && { opacity: 0.5 }]} onPress={async () => {
                       if (!isSupabaseConfigured) { showNotice("Live posting is unavailable until Supabase is configured."); return; }
                       setPosting(true);
                       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -2310,7 +2338,7 @@ export default function App() {
                       <Text style={styles.postText}>{post.text.replace(/^\[(COLLABO|INVESTORS|GRANTS|CROWDFUND)\]\s*/, "")}</Text>
                       {post.mediaUrl && post.mediaType === "image" ? <Image accessibilityLabel="Post attachment" source={{ uri: post.mediaUrl }} style={styles.postMediaImage} resizeMode="cover" /> : null}
                       {post.mediaUrl && post.mediaType === "video" ? <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(post.mediaUrl!)}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity> : null}
-                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: accentColor }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={accentColor} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[[styles.composeButton,{backgroundColor:accentColor}], { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
                     </View>
                   ))}
                 </>
@@ -2320,10 +2348,10 @@ export default function App() {
                   {!activeConversationUserId ? (
                     <>
                       <Text style={styles.disclaimer}>Choose a member from a Social post to open a private conversation.</Text>
-                      {conversationLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 12 }} /> : null}
+                      {conversationLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 12 }} /> : null}
                       {conversationPreviews.map((conversation) => (
                         <TouchableOpacity key={conversation.userId} style={styles.toolCard} onPress={() => void openConversation(conversation.userId)}>
-                          <View style={styles.toolIcon}><Text style={styles.toolIconText}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
+                          <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
                           <View style={styles.toolCopy}>
                             <Text style={styles.toolTitle}>{conversation.name}{conversation.unread ? ` · ${conversation.unread} unread` : ""}</Text>
                             <Text numberOfLines={1} style={styles.toolDescription}>{conversation.body || "Open private conversation"}</Text>
@@ -2337,7 +2365,7 @@ export default function App() {
                           <Text style={styles.emptyText}>No conversations yet. Start one by selecting Message on a member's Social post.</Text>
                           {posts.filter((post) => post.authorId).map((post) => (
                             <TouchableOpacity key={post.authorId} style={styles.toolCard} onPress={() => post.authorId ? void openConversation(post.authorId) : undefined}>
-                              <View style={styles.toolIcon}><Text style={styles.toolIconText}>{post.name.slice(0,1).toUpperCase()}</Text></View>
+                              <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{post.name.slice(0,1).toUpperCase()}</Text></View>
                               <View style={styles.toolCopy}><Text style={styles.toolTitle}>{post.name}</Text><Text style={styles.toolDescription}>Start a private conversation</Text></View><Text style={styles.chevron}>›</Text>
                             </TouchableOpacity>
                           ))}
@@ -2346,16 +2374,16 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <TouchableOpacity style={styles.secondaryButton} onPress={() => { setActiveConversationUserId(null); setMessages([]); }}><Text style={styles.secondaryButtonText}>← All conversations</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.secondaryButton} onPress={() => { setActiveConversationUserId(null); setMessages([]); }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>← All conversations</Text></TouchableOpacity>
                       <View style={styles.messageThread}>
-                        {messagesLoading ? <ActivityIndicator color={COLORS.accent} /> : messages.length ? messages.map((message) => (
+                        {messagesLoading ? <ActivityIndicator color={accentColor} /> : messages.length ? messages.map((message) => (
                           <View key={message.id} style={[styles.messageBubble, message.sender_id === currentUserId ? styles.messageOwn : styles.messageOther]}>
                             <Text style={styles.messageBody}>{message.body}</Text><Text style={styles.messageTime}>{new Date(message.created_at).toLocaleString()}</Text>
                           </View>
                         )) : <Text style={styles.emptyText}>No messages yet. Start the conversation below.</Text>}
                       </View>
                       <TextInput accessibilityLabel="Write a direct message" placeholder="Write a private message…" placeholderTextColor={COLORS.muted} value={messageDraft} onChangeText={(value) => setMessageDraft(value.slice(0,4000))} multiline maxLength={4000} style={styles.commentInput}/>
-                      <TouchableOpacity disabled={messageSending || !messageDraft.trim()} style={[styles.composeButton,{alignSelf:"flex-end",marginTop:8},(messageSending || !messageDraft.trim()) && {opacity:0.5}]} onPress={() => void sendDirectMessage()}><Text style={styles.composeButtonText}>{messageSending ? "Sending…" : "Send message"}</Text></TouchableOpacity>
+                      <TouchableOpacity disabled={messageSending || !messageDraft.trim()} style={[[styles.composeButton,{backgroundColor:accentColor}],{alignSelf:"flex-end",marginTop:8},(messageSending || !messageDraft.trim()) && {opacity:0.5}]} onPress={() => void sendDirectMessage()}><Text style={styles.composeButtonText}>{messageSending ? "Sending…" : "Send message"}</Text></TouchableOpacity>
                     </>
                   )}
                 </>
@@ -2364,15 +2392,15 @@ export default function App() {
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Connections</Text><Text style={styles.sectionMeta}>MEMBER NETWORK</Text></View>
                   <Text style={styles.pageIntro}>Review incoming requests and manage the people you have connected with.</Text>
                   {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Connect the MAS backend to load live connections.</Text> : null}
-                  {socialConnectionsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialConnections.map((connection) => (
+                  {socialConnectionsLoading ? <ActivityIndicator color={accentColor} /> : socialConnections.map((connection) => (
                     <View key={connection.id} style={styles.toolCard}>
-                      <View style={styles.toolIcon}><Text style={styles.toolIconText}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
+                      <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><Text style={[styles.toolIconText,{color:accentColor}]}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{connection.otherName}</Text>
                         <Text style={styles.toolDescription}>{connection.direction === "incoming" ? "Incoming request" : "Request sent"} · {connection.status}</Text>
                         <Text style={styles.postTag}>{connection.created_at ? new Date(connection.created_at).toLocaleDateString() : ""}</Text>
                       </View>
-                      {connection.status === "pending" && connection.direction === "incoming" ? <View style={{gap:8,alignItems:"flex-end"}}><TouchableOpacity onPress={() => void respondToConnection(connection,"accepted")}><Text style={styles.secondaryButtonText}>Accept</Text></TouchableOpacity><TouchableOpacity onPress={() => void respondToConnection(connection,"declined")}><Text style={styles.removeMediaText}>Decline</Text></TouchableOpacity></View> : connection.status === "accepted" ? <TouchableOpacity onPress={() => void openConversation(connection.otherUserId)}><Text style={styles.secondaryButtonText}>Message</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void removeConnection(connection)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity>}
+                      {connection.status === "pending" && connection.direction === "incoming" ? <View style={{gap:8,alignItems:"flex-end"}}><TouchableOpacity onPress={() => void respondToConnection(connection,"accepted")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Accept</Text></TouchableOpacity><TouchableOpacity onPress={() => void respondToConnection(connection,"declined")}><Text style={styles.removeMediaText}>Decline</Text></TouchableOpacity></View> : connection.status === "accepted" ? <TouchableOpacity onPress={() => void openConversation(connection.otherUserId)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Message</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void removeConnection(connection)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity>}
                     </View>
                   ))}
                   {!socialConnectionsLoading && !socialConnections.length ? <Text style={styles.emptyText}>No connection requests yet. Visit the Feed and connect with a member.</Text> : null}
@@ -2381,8 +2409,8 @@ export default function App() {
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Social activity</Text><Text style={styles.sectionMeta}>{socialNotifications.filter((item) => !item.read).length} UNREAD</Text></View>
                   <Text style={styles.pageIntro}>Reactions, comments, connection requests and messages are separate from store notifications.</Text>
-                  {socialNotificationsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialNotifications.map((item) => (
-                    <TouchableOpacity key={item.id} style={[styles.toolCard,!item.read && {backgroundColor:COLORS.accentSoft}]} onPress={() => !item.read ? void markSocialNotificationRead(item) : undefined}>
+                  {socialNotificationsLoading ? <ActivityIndicator color={accentColor} /> : socialNotifications.map((item) => (
+                    <TouchableOpacity key={item.id} style={[styles.toolCard,!item.read && {backgroundColor:(accentColor + "18")}]} onPress={() => !item.read ? void markSocialNotificationRead(item) : undefined}>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "Social activity"}</Text><Text style={styles.toolDescription}>{item.body || ""}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>
                       <Text style={styles.chevron}>{item.read ? "✓" : "•"}</Text>
                     </TouchableOpacity>
@@ -2399,17 +2427,17 @@ export default function App() {
                     <Text style={styles.fieldLabel}>Industry *</Text>
                     <TextInput value={investmentIndustry} onChangeText={(value) => setInvestmentIndustry(value.slice(0,80))} placeholder="Technology, agriculture…" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <Text style={styles.fieldLabel}>Stage</Text>
-                    <View style={styles.chips}>{([["idea","Idea"],["prototype","Prototype"],["early_revenue","Early revenue"],["growth","Growth"],["established","Established"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setInvestmentStage(value)} style={[styles.chip,investmentStage === value && styles.chipActive]}><Text style={[styles.chipText,investmentStage === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}>{([["idea","Idea"],["prototype","Prototype"],["early_revenue","Early revenue"],["growth","Growth"],["established","Established"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setInvestmentStage(value)} style={[styles.chip,investmentStage === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,investmentStage === value && [styles.chipTextActive,{color:accentColor}]]}>{label}</Text></TouchableOpacity>)}</View>
                     <Text style={styles.fieldLabel}>Funding goal (optional)</Text>
                     <TextInput value={investmentGoal} onChangeText={(value) => setInvestmentGoal(value.replace(/[^0-9.]/g,"").slice(0,18))} keyboardType="decimal-pad" placeholder="Amount requested" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
-                    <View style={styles.chips}>{(["MWK","USD","ZAR","GBP","EUR"]).map((value) => <TouchableOpacity key={value} onPress={() => setInvestmentCurrency(value)} style={[styles.chip,investmentCurrency === value && styles.chipActive]}><Text style={[styles.chipText,investmentCurrency === value && styles.chipTextActive]}>{value}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}>{(["MWK","USD","ZAR","GBP","EUR"]).map((value) => <TouchableOpacity key={value} onPress={() => setInvestmentCurrency(value)} style={[styles.chip,investmentCurrency === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,investmentCurrency === value && [styles.chipTextActive,{color:accentColor}]]}>{value}</Text></TouchableOpacity>)}</View>
                     <Text style={styles.fieldLabel}>Description *</Text>
                     <TextInput value={investmentDescription} onChangeText={(value) => setInvestmentDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="Explain the opportunity, traction and what support you need…" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]}/>
                     <Text style={styles.fieldLabel}>Use of funds</Text>
                     <TextInput value={investmentUse} onChangeText={(value) => setInvestmentUse(value.slice(0,1000))} multiline maxLength={1000} placeholder="How would the funds be used?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
-                    <TouchableOpacity disabled={investmentSaving} style={[styles.primaryButton,investmentSaving && {opacity:0.5}]} onPress={() => void publishInvestmentOpportunity()}><Text style={styles.primaryButtonText}>{investmentSaving ? "Publishing…" : "Publish opportunity"}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={investmentSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],investmentSaving && {opacity:0.5}]} onPress={() => void publishInvestmentOpportunity()}><Text style={styles.primaryButtonText}>{investmentSaving ? "Publishing…" : "Publish opportunity"}</Text></TouchableOpacity>
                   </View>
-                  {investmentLoading ? <ActivityIndicator color={COLORS.accent} /> : investmentOpportunities.map((item) => (
+                  {investmentLoading ? <ActivityIndicator color={accentColor} /> : investmentOpportunities.map((item) => (
                     <View key={item.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{item.title}</Text>
@@ -2419,7 +2447,7 @@ export default function App() {
                         {item.use_of_funds ? <Text style={styles.postTag}>Use of funds: {item.use_of_funds}</Text> : null}
                         <Text style={styles.postTag}>Status: {item.status}</Text>
                       </View>
-                      {item.isOwner ? <View style={{gap:8,alignItems:"flex-end"}}>{item.status === "open" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"paused")}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : item.status === "paused" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"open")}><Text style={styles.secondaryButtonText}>Reopen</Text></TouchableOpacity> : null}{item.status !== "closed" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"closed")}><Text style={styles.removeMediaText}>Close</Text></TouchableOpacity> : null}</View> : <TouchableOpacity onPress={() => void openConversation(item.founder_id)}><Text style={styles.secondaryButtonText}>Contact founder</Text></TouchableOpacity>}
+                      {item.isOwner ? <View style={{gap:8,alignItems:"flex-end"}}>{item.status === "open" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"paused")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Pause</Text></TouchableOpacity> : item.status === "paused" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"open")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Reopen</Text></TouchableOpacity> : null}{item.status !== "closed" ? <TouchableOpacity onPress={() => void changeInvestmentStatus(item,"closed")}><Text style={styles.removeMediaText}>Close</Text></TouchableOpacity> : null}</View> : <TouchableOpacity onPress={() => void openConversation(item.founder_id)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Contact founder</Text></TouchableOpacity>}
                     </View>
                   ))}
                   {!investmentLoading && !investmentOpportunities.length ? <Text style={styles.emptyText}>No open opportunities yet. Publish the first one.</Text> : null}
@@ -2430,7 +2458,7 @@ export default function App() {
                   <Text style={styles.pageIntro}>{socialSection === "Collabo" ? "Share what you are building, find teammates and connect with collaborators." : socialSection === "Grants" ? "Share grant announcements, funding calls and questions with the MAS community." : "Describe your project, funding goal and what supporters can help you achieve."}</Text>
                   <View style={styles.composeCard}>
                     <TextInput accessibilityLabel={"Write a " + socialSection + " post"} placeholder={socialSection === "Grants" ? "Grant name, eligibility, deadline or question…" : socialSection === "Crowdfund" ? "Project goal, amount needed and how funds will be used…" : "Project, skills needed and how people can collaborate…"} placeholderTextColor={COLORS.muted} value={sectionPostDraft} onChangeText={(value) => setSectionPostDraft(value.slice(0, 3000))} multiline maxLength={3000} style={styles.postComposerInput} />
-                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{sectionPostDraft.length}/3000</Text><TouchableOpacity disabled={sectionPosting || sectionPostDraft.trim().length < 20} style={[styles.composeButton, (sectionPosting || sectionPostDraft.trim().length < 20) && { opacity: 0.5 }]} onPress={() => void publishSocialSectionPost()}><Text style={styles.composeButtonText}>{sectionPosting ? "Publishing…" : "Publish to " + socialSection}</Text></TouchableOpacity></View>
+                    <View style={styles.composeFooter}><Text style={styles.composeLimit}>{sectionPostDraft.length}/3000</Text><TouchableOpacity disabled={sectionPosting || sectionPostDraft.trim().length < 20} style={[[styles.composeButton,{backgroundColor:accentColor}], (sectionPosting || sectionPostDraft.trim().length < 20) && { opacity: 0.5 }]} onPress={() => void publishSocialSectionPost()}><Text style={styles.composeButtonText}>{sectionPosting ? "Publishing…" : "Publish to " + socialSection}</Text></TouchableOpacity></View>
                   </View>
                   {filteredSocialPosts.filter((post) => post.text.startsWith("[" + socialSection.toUpperCase() + "] ")).map((post) => (
                     <View key={post.id} style={styles.postCard}>
@@ -2475,7 +2503,7 @@ export default function App() {
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
-                  <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
+                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><NativeIcon name={icon as any} color={accentColor} size={21} /></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
@@ -2488,9 +2516,9 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in or create an account to connect your MAS profile." : "Account sign-in needs the MAS backend configuration in this build.")}</Text>
+              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={[styles.profileAvatar,{backgroundColor:accentColor}]} resizeMode="cover" /> : <View style={[styles.profileAvatar,{backgroundColor:accentColor}]}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in or create an account to connect your MAS profile." : "Account sign-in needs the MAS backend configuration in this build.")}</Text>
                 {userEmail ? (
-                  <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); } }); }}>
+                  <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); } }); }}>
                     <Text style={styles.primaryButtonText}>Sign out</Text>
                   </TouchableOpacity>
                 ) : (
@@ -2505,7 +2533,7 @@ export default function App() {
                     </View>
                     <TextInput accessibilityLabel="Email address" value={authEmail} onChangeText={setAuthEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" textContentType="emailAddress" placeholder="Email address" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                     <TextInput accessibilityLabel="Password" value={authPassword} onChangeText={setAuthPassword} secureTextEntry textContentType={authMode === "signup" ? "newPassword" : "password"} autoCapitalize="none" placeholder="Password (at least 6 characters)" placeholderTextColor={COLORS.muted} style={styles.formInput} />
-                    <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, { backgroundColor: accentColor }, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={() => void handleEmailAuth()}>
+                    <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={() => void handleEmailAuth()}>
                       <Text style={styles.primaryButtonText}>{authLoading ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in with email"}</Text>
                     </TouchableOpacity>
                     <Text style={styles.authDivider}>OR</Text>
@@ -2517,21 +2545,21 @@ export default function App() {
                       if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } }
                       else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); }
                     }}>
-                      <Text style={[styles.secondaryButtonText, { color: accentColor }]}>{authLoading ? "Connecting…" : "Continue with Google"}</Text>
+                      <Text style={[[styles.secondaryButtonText,{color:accentColor}], { color: accentColor }]}>{authLoading ? "Connecting…" : "Continue with Google"}</Text>
                     </TouchableOpacity>
                   </View>
                 )}</View>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
-                ["▤", "My library", "Your saved apps and library.", "native:library"],
-                ["♧", "Notifications", "Account and platform alerts.", "native:notifications"],
-                ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
-                ["◎", "Social community", "Explore posts, messages and collaboration.", "native:social"],
-                ["▦", "Developer space", "Publish and manage your products.", "native:develop"],
-                ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
+                ["book", "My library", "Your saved apps and library.", "native:library"],
+                ["bell", "Notifications", "Account and platform alerts.", "native:notifications"],
+                ["settings", "Account settings", "Manage your account preferences.", "native:settings"],
+                ["users", "Social community", "Explore posts, messages and collaboration.", "native:social"],
+                ["grid", "Developer space", "Publish and manage your products.", "native:develop"],
+                ["grid", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
                 <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
-                  <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
+                  <View style={[styles.toolIcon,{backgroundColor:accentColor+"18"}]}><NativeIcon name={icon as any} color={accentColor} size={21} /></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
@@ -2541,7 +2569,7 @@ export default function App() {
           )}
           {!selectedApp && utilityScreen !== "none" ? (
             <>
-              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setUtilityScreen("none")}><Text style={styles.secondaryButtonText}>← Back</Text></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setUtilityScreen("none")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>← Back</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{utilityScreen === "library" ? "My library" : utilityScreen === "notifications" ? "Notifications" : "Account settings"}</Text>
               <Text style={styles.pageIntro}>{utilityScreen === "library" ? "Your saved listings and installed-app history." : utilityScreen === "notifications" ? "Updates for your MAS account and activity." : "Manage your MAS account on this device."}</Text>
               {utilityScreen === "settings" ? (
@@ -2556,6 +2584,8 @@ export default function App() {
                       { name: "Orange", value: "#EA580C" },
                       { name: "Purple", value: "#9333EA" },
                       { name: "Black", value: "#171717" },
+                      { name: "Teal", value: "#0F766E" },
+                      { name: "Pink", value: "#DB2777" },
                     ].map((preset) => (
                       <TouchableOpacity key={preset.value} accessibilityRole="button" accessibilityState={{ selected: accentColor.toLowerCase() === preset.value.toLowerCase() }} onPress={() => setAccentColor(preset.value)} style={[styles.accentChoice, accentColor.toLowerCase() === preset.value.toLowerCase() && { borderColor: preset.value, backgroundColor: `${preset.value}12` }]}>
                         <View style={[styles.accentSwatch, { backgroundColor: preset.value }]} />
@@ -2569,7 +2599,7 @@ export default function App() {
               {utilityScreen === "library" ? (
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Saved listings</Text><Text style={styles.sectionMeta}>{libraryData.saved.length}</Text></View>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : libraryData.saved.map((entry, index) => <View key={entry.listing_id || index} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => { const l = entry.listings; if (l) { setSelectedApp({ id: l.id, name: l.name, category: l.category || "Other", description: l.description || "", mark: (l.name || "M").slice(0,1), color: COLORS.accent, slug: l.slug, kind: l.kind }); setUtilityScreen("none"); } }}><Text style={styles.toolTitle}>{entry.listings?.name || "Saved listing"}</Text><Text style={styles.toolDescription}>{entry.listings?.category || "MAS Store listing"}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Library actions need the MAS backend configuration."); return; } const { data: authData, error: authError } = await supabase.auth.getUser(); if (authError || !authData.user) { showNotice("Sign in to manage your library."); return; } const { error } = await supabase.from("wishlist").delete().eq("user_id", authData.user.id).eq("listing_id", entry.listing_id); if (error) { showNotice(error.message || "Could not remove this saved listing."); return; } setLibraryData((current) => ({ ...current, saved: current.saved.filter((item) => item.listing_id !== entry.listing_id) })); showNotice("Removed from your library."); }}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : libraryData.saved.map((entry, index) => <View key={entry.listing_id || index} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => { const l = entry.listings; if (l) { setSelectedApp({ id: l.id, name: l.name, category: l.category || "Other", description: l.description || "", mark: (l.name || "M").slice(0,1), color: accentColor, slug: l.slug, kind: l.kind }); setUtilityScreen("none"); } }}><Text style={styles.toolTitle}>{entry.listings?.name || "Saved listing"}</Text><Text style={styles.toolDescription}>{entry.listings?.category || "MAS Store listing"}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Library actions need the MAS backend configuration."); return; } const { data: authData, error: authError } = await supabase.auth.getUser(); if (authError || !authData.user) { showNotice("Sign in to manage your library."); return; } const { error } = await supabase.from("wishlist").delete().eq("user_id", authData.user.id).eq("listing_id", entry.listing_id); if (error) { showNotice(error.message || "Could not remove this saved listing."); return; } setLibraryData((current) => ({ ...current, saved: current.saved.filter((item) => item.listing_id !== entry.listing_id) })); showNotice("Removed from your library."); }}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
                   {!utilityLoading && !libraryData.saved.length ? <Text style={styles.emptyText}>You have no saved listings yet.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Installed apps</Text><Text style={styles.sectionMeta}>{libraryData.installed.length}</Text></View>
                   {libraryData.installed.map((entry, index) => <View key={entry.id || index} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{entry.listings?.name || "Installed listing"}</Text><Text style={styles.toolDescription}>Added {entry.installed_at ? new Date(entry.installed_at).toLocaleDateString() : "to your library"}</Text></View></View>)}
@@ -2578,16 +2608,16 @@ export default function App() {
                 </>
               ) : utilityScreen === "notifications" ? (
                 <>
-                  <TouchableOpacity style={styles.secondaryButton} onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", data.user.id).eq("read", false); if (error) showNotice("Could not mark notifications as read."); else { setNotificationItems((items) => items.map((item) => ({ ...item, read: true }))); showNotice("All notifications marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark all as read</Text></TouchableOpacity>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : notificationItems.map((item) => <View key={item.id} style={[styles.toolCard, !item.read && { backgroundColor: COLORS.accentSoft }]}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "MAS notification"}</Text><Text style={styles.toolDescription}>{item.body || "Platform update"}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>{!item.read ? <TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("id", item.id).eq("user_id", data.user.id); if (error) showNotice(error.message || "Could not update this notification."); else { setNotificationItems((items) => items.map((current) => current.id === item.id ? { ...current, read: true } : current)); showNotice("Notification marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark read</Text></TouchableOpacity> : <Text style={styles.chevron}>✓</Text>}</View>)}
+                  <TouchableOpacity style={styles.secondaryButton} onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", data.user.id).eq("read", false); if (error) showNotice("Could not mark notifications as read."); else { setNotificationItems((items) => items.map((item) => ({ ...item, read: true }))); showNotice("All notifications marked as read."); } }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Mark all as read</Text></TouchableOpacity>
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : notificationItems.map((item) => <View key={item.id} style={[styles.toolCard, !item.read && { backgroundColor: (accentColor + "18") }]}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "MAS notification"}</Text><Text style={styles.toolDescription}>{item.body || "Platform update"}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>{!item.read ? <TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("id", item.id).eq("user_id", data.user.id); if (error) showNotice(error.message || "Could not update this notification."); else { setNotificationItems((items) => items.map((current) => current.id === item.id ? { ...current, read: true } : current)); showNotice("Notification marked as read."); } }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Mark read</Text></TouchableOpacity> : <Text style={styles.chevron}>✓</Text>}</View>)}
                   {!utilityLoading && !notificationItems.length ? <Text style={styles.emptyText}>You have no notifications yet.</Text> : null}
                   {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Notifications need the public MAS backend configuration.</Text> : null}
                 </>
               ) : (
                 <>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : isSupabaseConfigured ? (
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : isSupabaseConfigured ? (
                     <View style={styles.composeCard}>
-                      <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={styles.secondaryButtonText}>Change profile photo</Text></TouchableOpacity></View>
+                      <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={[styles.profileAvatar,{backgroundColor:accentColor}]} resizeMode="cover" /> : <View style={[styles.profileAvatar,{backgroundColor:accentColor}]}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Change profile photo</Text></TouchableOpacity></View>
                       <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Developer name (max 100 characters)</Text><TextInput value={accountDeveloperName} onChangeText={(value) => setAccountDeveloperName(value.slice(0,100))} placeholder="Your developer or studio name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Bio (max 300 characters)</Text><TextInput value={accountBio} onChangeText={(value) => setAccountBio(value.slice(0,300))} placeholder="A short introduction" placeholderTextColor={COLORS.muted} multiline maxLength={300} style={[styles.formInput,{minHeight:100,textAlignVertical:"top"}]} />
@@ -2600,8 +2630,8 @@ export default function App() {
                       <Text style={styles.fieldLabel}>Portfolio (HTTPS)</Text><TextInput value={accountPortfolioUrl} onChangeText={setAccountPortfolioUrl} autoCapitalize="none" keyboardType="url" placeholder="https://portfolio.example" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>LinkedIn (HTTPS)</Text><TextInput value={accountLinkedinUrl} onChangeText={setAccountLinkedinUrl} autoCapitalize="none" keyboardType="url" placeholder="https://linkedin.com/in/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Facebook (HTTPS)</Text><TextInput value={accountFacebookUrl} onChangeText={setAccountFacebookUrl} autoCapitalize="none" keyboardType="url" placeholder="https://facebook.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
-                      <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
-                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
+                      <TouchableOpacity disabled={accountProfileSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
+                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
                     </View>
                   ) : <Text style={styles.disclaimer}>Account settings are unavailable until the public MAS backend configuration is added to this build.</Text>}
                 </>
@@ -2610,16 +2640,16 @@ export default function App() {
           ) : null}
           {!selectedApp && utilityScreen === "none" && developerScreen !== null ? (
             <>
-              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setDeveloperScreen(null)}><Text style={styles.secondaryButtonText}>← Back to developer space</Text></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setDeveloperScreen(null)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>← Back to developer space</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{developerScreen}</Text>
               <Text style={styles.pageIntro}>{developerScreen === "Developer dashboard" ? "A live overview of your products and publishing status." : developerScreen === "Publish a product" ? (editingListingId ? "Edit your product listing and save the changes." : "Create a native product draft. Complete the listing details and release assets before review.") : developerScreen === "My applications" ? "Manage products owned by your developer account." : developerScreen === "Analytics" ? "A summary of the listings currently attached to your developer account." : developerScreen === "Reviews" ? "Review feedback associated with your products." : "Check the readiness of your product drafts."}</Text>
               {developerScreen === "Publish a product" ? (
                 <View style={styles.composeCard}>
-                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setEditingListingStatus(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftBanner(null); setExistingBannerUrl(null); setDraftReleaseFile(null); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags(""); setDraftVersion("1.0.0"); setDraftChangelog("First release"); }}><Text style={styles.secondaryButtonText}>Cancel editing</Text></TouchableOpacity> : null}
-                  <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && styles.storeTabActive]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && styles.storeTabTextActive]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && styles.storeTabActive]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && styles.storeTabTextActive]}>Website</Text></TouchableOpacity></View>
+                  {editingListingId ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { setEditingListingId(null); setEditingListingStatus(null); setDraftName(""); setDraftTagline(""); setDraftDescription(""); setDraftWebsiteUrl(""); setDraftIcon(null); setDraftBanner(null); setExistingBannerUrl(null); setDraftReleaseFile(null); setDraftScreenshots([]); setExistingScreenshots([]); setDraftKeywords(""); setDraftTags(""); setDraftVersion("1.0.0"); setDraftChangelog("First release"); }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Cancel editing</Text></TouchableOpacity> : null}
+                  <Text style={styles.fieldLabel}>Product type</Text><View style={styles.storeTabs}><TouchableOpacity style={[styles.storeTab,draftKind === "app" && [styles.storeTabActive,{borderBottomColor:accentColor}]]} onPress={() => setDraftKind("app")}><Text style={[styles.storeTabText,draftKind === "app" && [styles.storeTabTextActive,{color:accentColor}]]}>Android app</Text></TouchableOpacity><TouchableOpacity style={[styles.storeTab,draftKind === "website" && [styles.storeTabActive,{borderBottomColor:accentColor}]]} onPress={() => setDraftKind("website")}><Text style={[styles.storeTabText,draftKind === "website" && [styles.storeTabTextActive,{color:accentColor}]]}>Website</Text></TouchableOpacity></View>
                   <Text style={styles.fieldLabel}>Product name *</Text><TextInput value={draftName} onChangeText={(value) => setDraftName(value.slice(0,100))} placeholder="e.g. Mlimi Connect" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   <Text style={styles.fieldLabel}>Short tagline</Text><TextInput value={draftTagline} onChangeText={(value) => setDraftTagline(value.slice(0,160))} placeholder="A short description" placeholderTextColor={COLORS.muted} style={styles.formInput} />
-                  <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && styles.chipActive]}><Text style={[styles.chipText,draftCategory === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</ScrollView>
+                  <Text style={styles.fieldLabel}>Category</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{["Business","Education","Entertainment","Finance","Health","News","Shopping","Social","Tools","Transport","Other"].map((item) => <TouchableOpacity key={item} onPress={() => setDraftCategory(item)} style={[styles.chip,draftCategory === item && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,draftCategory === item && [styles.chipTextActive,{color:accentColor}]]}>{item}</Text></TouchableOpacity>)}</ScrollView>
                   {draftKind === "website" ? <><Text style={styles.fieldLabel}>Website URL *</Text><TextInput value={draftWebsiteUrl} onChangeText={setDraftWebsiteUrl} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput} /></> : <>
                     <Text style={styles.fieldLabel}>Android release file (APK or ZIP)</Text>
                     <TouchableOpacity accessibilityRole="button" style={styles.mediaAttachButton} onPress={() => void chooseDraftReleaseFile()}><Text style={styles.mediaAttachText}>{draftReleaseFile ? `Release selected · ${draftReleaseFile.name}` : "＋ Choose APK or ZIP release"}</Text></TouchableOpacity>
@@ -2639,28 +2669,28 @@ export default function App() {
                   <Text style={styles.fieldLabel}>Tags (comma-separated, up to 8)</Text><TextInput value={draftTags} onChangeText={(value) => setDraftTags(value.slice(0,300))} placeholder="startup, local, useful" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                   {draftIcon ? <View style={styles.selectedMedia}><Text style={styles.selectedMediaText}>{draftIcon.fileName}</Text><TouchableOpacity onPress={() => setDraftIcon(null)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View> : null}
                   <Text style={styles.fieldLabel}>Description *</Text><TextInput value={draftDescription} onChangeText={(value) => setDraftDescription(value.slice(0,4000))} multiline maxLength={4000} placeholder="What does your product do and who is it for?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:120,textAlignVertical:"top"}]} />
-                  <TouchableOpacity disabled={draftSaving} style={[styles.primaryButton,draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Save listing changes" : "Save product draft"}</Text></TouchableOpacity>
+                  <TouchableOpacity disabled={draftSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],draftSaving && {opacity:0.5}]} onPress={() => void createNativeDraft()}><Text style={styles.primaryButtonText}>{draftSaving ? "Saving…" : editingListingId ? "Save listing changes" : "Save product draft"}</Text></TouchableOpacity>
                   <Text style={styles.disclaimer}>Saving creates or updates your draft. From My applications, complete the required assets and listing checks, then submit eligible drafts for review. Upload and submission errors are shown in the app.</Text>
                 </View>
               ) : developerScreen === "Developer dashboard" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
-                  <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
+                  <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>View all products →</Text></TouchableOpacity>
                 </>
               ) : developerScreen === "Reviews" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[[styles.composeButton,{backgroundColor:accentColor}], { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
                   {!developerLoading && !developerReviews.length ? <Text style={styles.emptyText}>No reviews have been posted for your products yet.</Text> : null}
                 </>
               ) : developerScreen === "Analytics" ? (
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Product analytics</Text><Text style={styles.infoText}>Live view and install events for your listings. Conversion is installs divided by views; repeated events may be counted separately.</Text></View>
-                  <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && styles.chipActive]}><Text style={[styles.chipText,analyticsRange === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
-                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : !analyticsProAllowed ? (
+                  <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,analyticsRange === value && [styles.chipTextActive,{color:accentColor}]]}>{label}</Text></TouchableOpacity>)}</View>
+                  {analyticsLoading ? <ActivityIndicator color={accentColor}/> : !analyticsProAllowed ? (
                     <View style={styles.composeCard}>
                       <Text style={styles.sectionTitle}>Advanced analytics requires Developer Pro</Text>
                       <Text style={styles.toolDescription}>Your detailed view/install events and audience breakdowns are available while your Pro subscription is active or within its paid period.</Text>
-                      <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
+                      <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
                     </View>
                   ) : <>
                     <View style={styles.devMetricGrid}>
@@ -2681,38 +2711,38 @@ export default function App() {
                   </>}
                 </>
               ) : developerScreen === "My applications" || developerScreen === "Publishing checklist" ? (                <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
-                  {developerScreen === "My applications" ? <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
+                  {developerScreen === "My applications" ? <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
               ) : null}
               {developerScreen === "My public profile" ? (
                 <>
-                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.profileCard}><View style={[styles.profileAvatar,{backgroundColor:accentColor}]}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Open Social</Text></TouchableOpacity></View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Portfolio projects</Text><Text style={styles.sectionMeta}>{portfolioProjects.length}</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Project name *</Text>
                     <TextInput value={portfolioTitle} onChangeText={(value) => setPortfolioTitle(value.slice(0,100))} placeholder="Project or product name" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <Text style={styles.fieldLabel}>Project type</Text>
-                    <View style={styles.chips}>{([["app","App"],["website","Website"],["game","Game"],["tool","Tool"],["other","Other"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setPortfolioType(value)} style={[styles.chip,portfolioType === value && styles.chipActive]}><Text style={[styles.chipText,portfolioType === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}>{([["app","App"],["website","Website"],["game","Game"],["tool","Tool"],["other","Other"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setPortfolioType(value)} style={[styles.chip,portfolioType === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,portfolioType === value && [styles.chipTextActive,{color:accentColor}]]}>{label}</Text></TouchableOpacity>)}</View>
                     <Text style={styles.fieldLabel}>HTTPS URL *</Text>
                     <TextInput value={portfolioUrl} onChangeText={(value) => setPortfolioUrl(value.slice(0,1000))} autoCapitalize="none" keyboardType="url" placeholder="https://example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <Text style={styles.fieldLabel}>Short description</Text>
                     <TextInput value={portfolioDescription} onChangeText={(value) => setPortfolioDescription(value.slice(0,500))} multiline maxLength={500} placeholder="What did you build?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
-                    <TouchableOpacity disabled={portfolioSaving} style={[styles.primaryButton,portfolioSaving && {opacity:0.5}]} onPress={() => void addPortfolioProject()}><Text style={styles.primaryButtonText}>{portfolioSaving ? "Adding…" : "Add portfolio project"}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={portfolioSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],portfolioSaving && {opacity:0.5}]} onPress={() => void addPortfolioProject()}><Text style={styles.primaryButtonText}>{portfolioSaving ? "Adding…" : "Add portfolio project"}</Text></TouchableOpacity>
                   </View>
-                  {portfolioLoading ? <ActivityIndicator color={COLORS.accent}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
+                  {portfolioLoading ? <ActivityIndicator color={accentColor}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
                   {!portfolioLoading && !portfolioProjects.length ? <Text style={styles.emptyText}>Add projects built outside MAS to showcase your work.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Published products</Text><Text style={styles.sectionMeta}>{developerRows.filter((item) => item.status === "published").length}</Text></View>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
                   {!developerLoading && !developerRows.some((item) => item.status === "published") ? <Text style={styles.emptyText}>Published products will appear on your profile when they are approved.</Text> : null}
                 </>
               ) : developerScreen === "Quality checks" ? (
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Store readiness</Text><Text style={styles.infoText}>The checklist mirrors MAS store-quality requirements. Scores are guidance; a strong score does not guarantee approval.</Text></View>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => {
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.map((item) => {
                     const report = asoReport(item);
-                    return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
+                    return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Edit listing</Text></TouchableOpacity> : null}</View>;
                   })}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No listings to check yet. Create a product draft first.</Text> : null}
                 </>
@@ -2721,19 +2751,19 @@ export default function App() {
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Release testing workspace</Text><Text style={styles.infoText}>Manage tester lists and triage submitted feedback. Email delivery and private release distribution remain separate integration tasks.</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Product to test *</Text>
-                    <View style={styles.chips}>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setBetaListingId(listing.id)} style={[styles.chip,betaListingId === listing.id && styles.chipActive]}><Text style={[styles.chipText,betaListingId === listing.id && styles.chipTextActive]}>{listing.name}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setBetaListingId(listing.id)} style={[styles.chip,betaListingId === listing.id && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,betaListingId === listing.id && [styles.chipTextActive,{color:accentColor}]]}>{listing.name}</Text></TouchableOpacity>)}</View>
                     {!developerRows.length ? <Text style={styles.emptyText}>Create a product listing before adding testers.</Text> : null}
                     <Text style={styles.fieldLabel}>Tester email</Text>
                     <TextInput value={betaTesterEmail} onChangeText={(value) => setBetaTesterEmail(value.slice(0,255))} autoCapitalize="none" keyboardType="email-address" placeholder="tester@example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <Text style={styles.fieldLabel}>Test channel</Text>
-                    <View style={styles.chips}>{(["private","public"]).map((value) => <TouchableOpacity key={value} onPress={() => setBetaChannel(value)} style={[styles.chip,betaChannel === value && styles.chipActive]}><Text style={[styles.chipText,betaChannel === value && styles.chipTextActive]}>{value === "private" ? "Private test" : "Public test"}</Text></TouchableOpacity>)}</View>
-                    <TouchableOpacity disabled={betaSaving || !developerRows.length} style={[styles.primaryButton,(betaSaving || !developerRows.length) && {opacity:0.5}]} onPress={() => void addBetaTester()}><Text style={styles.primaryButtonText}>{betaSaving ? "Adding tester…" : "Add tester"}</Text></TouchableOpacity>
+                    <View style={styles.chips}>{(["private","public"]).map((value) => <TouchableOpacity key={value} onPress={() => setBetaChannel(value)} style={[styles.chip,betaChannel === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,betaChannel === value && [styles.chipTextActive,{color:accentColor}]]}>{value === "private" ? "Private test" : "Public test"}</Text></TouchableOpacity>)}</View>
+                    <TouchableOpacity disabled={betaSaving || !developerRows.length} style={[[styles.primaryButton,{backgroundColor:accentColor}],(betaSaving || !developerRows.length) && {opacity:0.5}]} onPress={() => void addBetaTester()}><Text style={styles.primaryButtonText}>{betaSaving ? "Adding tester…" : "Add tester"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester list</Text><Text style={styles.sectionMeta}>{betaTesters.length}</Text></View>
-                  {betaLoading ? <ActivityIndicator color={COLORS.accent}/> : betaTesters.map((tester) => <View key={tester.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{tester.email}</Text><Text style={styles.toolDescription}>{developerRows.find((listing) => listing.id === tester.listing_id)?.name || "MAS product"} · {tester.channel} test</Text><Text style={styles.postTag}>{tester.status} · {tester.created_at ? new Date(tester.created_at).toLocaleDateString() : ""}</Text></View><TouchableOpacity onPress={async () => { const next = tester.status === "active" ? "invited" : "active"; const { error } = await supabase.from("beta_testers").update({status:next}).eq("id",tester.id); if (error) showNotice(error.message || "Could not update tester status."); else { setBetaTesters((items) => items.map((item) => item.id === tester.id ? {...item,status:next} : item)); showNotice("Tester status updated."); } }}><Text style={styles.secondaryButtonText}>{tester.status === "active" ? "Set invited" : "Mark active"}</Text></TouchableOpacity></View>)}
+                  {betaLoading ? <ActivityIndicator color={accentColor}/> : betaTesters.map((tester) => <View key={tester.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{tester.email}</Text><Text style={styles.toolDescription}>{developerRows.find((listing) => listing.id === tester.listing_id)?.name || "MAS product"} · {tester.channel} test</Text><Text style={styles.postTag}>{tester.status} · {tester.created_at ? new Date(tester.created_at).toLocaleDateString() : ""}</Text></View><TouchableOpacity onPress={async () => { const next = tester.status === "active" ? "invited" : "active"; const { error } = await supabase.from("beta_testers").update({status:next}).eq("id",tester.id); if (error) showNotice(error.message || "Could not update tester status."); else { setBetaTesters((items) => items.map((item) => item.id === tester.id ? {...item,status:next} : item)); showNotice("Tester status updated."); } }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>{tester.status === "active" ? "Set invited" : "Mark active"}</Text></TouchableOpacity></View>)}
                   {!betaLoading && !betaTesters.length ? <Text style={styles.emptyText}>No beta testers have been added yet.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester feedback</Text><Text style={styles.sectionMeta}>{betaFeedback.length}</Text></View>
-                  {betaFeedback.map((feedback) => <View key={feedback.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{feedback.kind} · {feedback.severity}</Text><Text style={styles.toolDescription}>{feedback.body}</Text><Text style={styles.postTag}>{developerRows.find((listing) => listing.id === feedback.listing_id)?.name || "MAS product"} · {feedback.status}</Text></View>{feedback.status !== "resolved" ? <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"resolved")}><Text style={styles.secondaryButtonText}>Resolve</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"open")}><Text style={styles.secondaryButtonText}>Reopen</Text></TouchableOpacity>}</View>)}
+                  {betaFeedback.map((feedback) => <View key={feedback.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{feedback.kind} · {feedback.severity}</Text><Text style={styles.toolDescription}>{feedback.body}</Text><Text style={styles.postTag}>{developerRows.find((listing) => listing.id === feedback.listing_id)?.name || "MAS product"} · {feedback.status}</Text></View>{feedback.status !== "resolved" ? <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"resolved")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Resolve</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"open")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Reopen</Text></TouchableOpacity>}</View>)}
                   {!betaLoading && !betaFeedback.length ? <Text style={styles.emptyText}>No beta feedback has been submitted yet.</Text> : null}
                 </>
               ) : developerScreen === "Team management" ? (
@@ -2743,11 +2773,11 @@ export default function App() {
                     <Text style={styles.fieldLabel}>Teammate email</Text>
                     <TextInput value={teamEmail} onChangeText={(value) => setTeamEmail(value.slice(0,255))} autoCapitalize="none" keyboardType="email-address" placeholder="teammate@example.mw" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                     <Text style={styles.fieldLabel}>Role</Text>
-                    <View style={styles.chips}>{([["admin","Admin"],["editor","Editor"],["viewer","Viewer"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setTeamRole(value)} style={[styles.chip,teamRole === value && styles.chipActive]}><Text style={[styles.chipText,teamRole === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
-                    <TouchableOpacity disabled={teamSaving} style={[styles.primaryButton,teamSaving && {opacity:0.5}]} onPress={() => void inviteTeamMember()}><Text style={styles.primaryButtonText}>{teamSaving ? "Inviting…" : "Invite teammate"}</Text></TouchableOpacity>
+                    <View style={styles.chips}>{([["admin","Admin"],["editor","Editor"],["viewer","Viewer"]] as [string,string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setTeamRole(value)} style={[styles.chip,teamRole === value && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,teamRole === value && [styles.chipTextActive,{color:accentColor}]]}>{label}</Text></TouchableOpacity>)}</View>
+                    <TouchableOpacity disabled={teamSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],teamSaving && {opacity:0.5}]} onPress={() => void inviteTeamMember()}><Text style={styles.primaryButtonText}>{teamSaving ? "Inviting…" : "Invite teammate"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Members</Text><Text style={styles.sectionMeta}>{teamMembers.length}</Text></View>
-                  {teamLoading ? <ActivityIndicator color={COLORS.accent}/> : teamMembers.map((member) => <View key={member.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{member.email}</Text><Text style={styles.toolDescription}>Role: {member.role} · Status: {member.status}</Text><Text style={styles.postTag}>{member.created_at ? new Date(member.created_at).toLocaleDateString() : ""}</Text><View style={styles.chips}>{(["admin","editor","viewer"]).map((role) => <TouchableOpacity key={role} onPress={() => role !== member.role ? void updateTeamMember(member,{role}) : undefined} style={[styles.chip,member.role === role && styles.chipActive]}><Text style={[styles.chipText,member.role === role && styles.chipTextActive]}>{role}</Text></TouchableOpacity>)}</View></View><View style={{gap:8,alignItems:"flex-end"}}>{member.status !== "active" ? <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"active"})}><Text style={styles.secondaryButtonText}>Activate</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"invited"})}><Text style={styles.secondaryButtonText}>Deactivate</Text></TouchableOpacity>}<TouchableOpacity onPress={() => void removeTeamMember(member)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View></View>)}
+                  {teamLoading ? <ActivityIndicator color={accentColor}/> : teamMembers.map((member) => <View key={member.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{member.email}</Text><Text style={styles.toolDescription}>Role: {member.role} · Status: {member.status}</Text><Text style={styles.postTag}>{member.created_at ? new Date(member.created_at).toLocaleDateString() : ""}</Text><View style={styles.chips}>{(["admin","editor","viewer"]).map((role) => <TouchableOpacity key={role} onPress={() => role !== member.role ? void updateTeamMember(member,{role}) : undefined} style={[styles.chip,member.role === role && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,member.role === role && [styles.chipTextActive,{color:accentColor}]]}>{role}</Text></TouchableOpacity>)}</View></View><View style={{gap:8,alignItems:"flex-end"}}>{member.status !== "active" ? <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"active"})}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Activate</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"invited"})}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Deactivate</Text></TouchableOpacity>}<TouchableOpacity onPress={() => void removeTeamMember(member)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View></View>)}
                   {!teamLoading && !teamMembers.length ? <Text style={styles.emptyText}>No team members yet. Invite a collaborator to start.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Activity log</Text><Text style={styles.sectionMeta}>{teamActivity.length}</Text></View>
                   {teamActivity.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.action}</Text>{item.target ? <Text style={styles.toolDescription}>{item.target}</Text> : null}<Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View></View>)}
@@ -2758,15 +2788,15 @@ export default function App() {
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Feature opportunities</Text><Text style={styles.infoText}>Apply for App Spotlight, Developer Spotlight, Project Spotlight, podcast features or Made in Malawi features. Applications are reviewed by MAS; submission does not guarantee selection.</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Opportunity</Text>
-                    <View style={styles.chips}>{(["App Spotlight","Developer Spotlight","Project Spotlight","Podcast feature","Made in Malawi feature"]).map((item) => <TouchableOpacity key={item} onPress={() => setSpotlightOpportunity(item)} style={[styles.chip,spotlightOpportunity === item && styles.chipActive]}><Text style={[styles.chipText,spotlightOpportunity === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}>{(["App Spotlight","Developer Spotlight","Project Spotlight","Podcast feature","Made in Malawi feature"]).map((item) => <TouchableOpacity key={item} onPress={() => setSpotlightOpportunity(item)} style={[styles.chip,spotlightOpportunity === item && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,spotlightOpportunity === item && [styles.chipTextActive,{color:accentColor}]]}>{item}</Text></TouchableOpacity>)}</View>
                     <Text style={styles.fieldLabel}>Product (optional)</Text>
-                    <View style={styles.chips}><TouchableOpacity onPress={() => setSpotlightListingId("")} style={[styles.chip,!spotlightListingId && styles.chipActive]}><Text style={[styles.chipText,!spotlightListingId && styles.chipTextActive]}>No specific product</Text></TouchableOpacity>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setSpotlightListingId(listing.id)} style={[styles.chip,spotlightListingId === listing.id && styles.chipActive]}><Text style={[styles.chipText,spotlightListingId === listing.id && styles.chipTextActive]}>{listing.name}</Text></TouchableOpacity>)}</View>
+                    <View style={styles.chips}><TouchableOpacity onPress={() => setSpotlightListingId("")} style={[styles.chip,!spotlightListingId && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,!spotlightListingId && [styles.chipTextActive,{color:accentColor}]]}>No specific product</Text></TouchableOpacity>{developerRows.map((listing) => <TouchableOpacity key={listing.id} onPress={() => setSpotlightListingId(listing.id)} style={[styles.chip,spotlightListingId === listing.id && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,spotlightListingId === listing.id && [styles.chipTextActive,{color:accentColor}]]}>{listing.name}</Text></TouchableOpacity>)}</View>
                     <Text style={styles.fieldLabel}>Pitch (at least 30 characters)</Text>
                     <TextInput value={spotlightPitch} onChangeText={(value) => setSpotlightPitch(value.slice(0,800))} multiline maxLength={800} placeholder="What are you building, who is it for in Malawi, and why should it be featured?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:110,textAlignVertical:"top"}]}/>
-                    <TouchableOpacity disabled={spotlightSaving} style={[styles.primaryButton,spotlightSaving && {opacity:0.5}]} onPress={() => void submitSpotlightApplication()}><Text style={styles.primaryButtonText}>{spotlightSaving ? "Submitting…" : "Submit application"}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={spotlightSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],spotlightSaving && {opacity:0.5}]} onPress={() => void submitSpotlightApplication()}><Text style={styles.primaryButtonText}>{spotlightSaving ? "Submitting…" : "Submit application"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your applications</Text><Text style={styles.sectionMeta}>{spotlightApplications.length}</Text></View>
-                  {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
+                  {spotlightLoading ? <ActivityIndicator color={accentColor}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
                   {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
                 </>
               ) : developerScreen === "Developer Pro" ? (
@@ -2780,7 +2810,7 @@ export default function App() {
                       <Text style={styles.toolTitle}>{proLoading ? "Checking subscription…" : proSubscription?.status === "active" ? "Subscription active" : proSubscription?.status === "cancelled" ? "Subscription cancelled" : "Free plan"}</Text>
                       <Text style={styles.toolDescription}>{proSubscription?.current_period_end ? (proSubscription.status === "cancelled" ? "Access ends " : "Current period ends ") + new Date(proSubscription.current_period_end).toLocaleDateString() : proSubscription?.status === "active" ? "Your active plan is recorded in MAS." : "Activate Developer Pro to access paid developer features."}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open Developer Pro checkout."))}><Text style={styles.secondaryButtonText}>Manage plan →</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open Developer Pro checkout."))}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Manage plan →</Text></TouchableOpacity>
                   </View>
                   <View style={styles.composeCard}>
                     <Text style={styles.sectionTitle}>Included tools</Text>
@@ -2791,7 +2821,7 @@ export default function App() {
                       "Product promotion and Spotlight application tools",
                       "Kwacha checkout through the existing PayChangu workflow",
                     ].map((item) => <Text key={item} style={styles.postTag}>✓  {item}</Text>)}
-                    <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
+                    <TouchableOpacity style={[[styles.primaryButton,{backgroundColor:accentColor}], { backgroundColor: accentColor }]} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
                     <Text style={styles.disclaimer}>The hosted checkout and cancellation actions remain on the MAS web service so payment validation and subscription changes stay server-side. If prompted, sign in to your MAS account in the browser.</Text>
                   </View>
                 </>
@@ -2806,12 +2836,12 @@ export default function App() {
                       <Text style={styles.toolTitle}>Current status: {verificationStatus.replace(/_/g, " ")}</Text>
                       <Text style={styles.toolDescription}>Keep your contact number current. Identity documents are stored for verification review.</Text>
                     </View>
-                    <TouchableOpacity onPress={() => void refreshVerificationStatus()}><Text style={styles.secondaryButtonText}>Refresh</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => void refreshVerificationStatus()}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Refresh</Text></TouchableOpacity>
                   </View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>WhatsApp / contact number (international format)</Text>
                     <TextInput value={verificationPhone} onChangeText={setVerificationPhone} keyboardType="phone-pad" placeholder="+265991234567" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
-                    <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton, verificationSaving && {opacity:0.5}]} onPress={() => void saveVerificationPhone()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Saving…" : "Save contact number"}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={verificationSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}], verificationSaving && {opacity:0.5}]} onPress={() => void saveVerificationPhone()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Saving…" : "Save contact number"}</Text></TouchableOpacity>
                   </View>
                   {MANUAL_KYC_UPLOAD_ENABLED ? (
                     <View style={styles.composeCard}>
@@ -2819,12 +2849,12 @@ export default function App() {
                       <Text style={styles.fieldLabel}>Full legal name</Text>
                       <TextInput value={verificationFullName} onChangeText={setVerificationFullName} autoCapitalize="words" placeholder="As shown on your document" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                       <Text style={styles.fieldLabel}>Document type</Text>
-                      <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && styles.chipActive]}><Text style={[styles.chipText,verificationIdType === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}</View>
+                      <View style={styles.chips}>{(["National ID","Passport","Driver's license"] as string[]).map((item) => <TouchableOpacity key={item} onPress={() => setVerificationIdType(item)} style={[styles.chip,verificationIdType === item && [styles.chipActive,{borderColor:accentColor,backgroundColor:accentColor+"18"}]]}><Text style={[styles.chipText,verificationIdType === item && [styles.chipTextActive,{color:accentColor}]]}>{item}</Text></TouchableOpacity>)}</View>
                       <Text style={styles.fieldLabel}>Document number</Text>
                       <TextInput value={verificationIdNumber} onChangeText={setVerificationIdNumber} autoCapitalize="characters" placeholder="Enter document number" placeholderTextColor={COLORS.muted} style={styles.formInput}/>
                       <TouchableOpacity style={styles.mediaAttachButton} onPress={() => void chooseVerificationDocument()}><Text style={styles.mediaAttachText}>{verificationDocument ? verificationDocument.name : "＋ Attach ID/passport image or PDF (max 10 MB)"}</Text></TouchableOpacity>
                       {verificationDocument ? <TouchableOpacity onPress={() => setVerificationDocument(null)}><Text style={styles.removeMediaText}>Remove selected document</Text></TouchableOpacity> : null}
-                      <TouchableOpacity disabled={verificationSaving} style={[styles.primaryButton,verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
+                      <TouchableOpacity disabled={verificationSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],verificationSaving && {opacity:0.5}]} onPress={() => void submitManualVerification()}><Text style={styles.primaryButtonText}>{verificationSaving ? "Submitting…" : "Submit for manual review"}</Text></TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.infoBanner}>
@@ -2835,7 +2865,7 @@ export default function App() {
                   <View style={styles.composeCard}>
                     <Text style={styles.sectionTitle}>Automatic verification</Text>
                     <Text style={styles.toolDescription}>Didit opens in a secure external page. MAS updates your status after the server confirms the result.</Text>
-                    <TouchableOpacity disabled={diditLoading} style={[styles.primaryButton,diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={diditLoading} style={[[styles.primaryButton,{backgroundColor:accentColor}],diditLoading && {opacity:0.5}]} onPress={() => void startDiditVerification()}><Text style={styles.primaryButtonText}>{diditLoading ? "Preparing secure verification…" : "Verify with Didit"}</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.disclaimer}>Never share verification documents through Social or direct messages. If an upload fails, your submission has not been confirmed.</Text>
                 </>
@@ -2887,7 +2917,7 @@ export default function App() {
                     </View>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Payment and payout safety</Text></View>
-                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Developer Pro payments</Text><Text style={styles.toolDescription}>PayChangu checkout is handled by the secure hosted payment flow. A subscription payment is not developer earnings.</Text></View><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.secondaryButtonText}>View Pro</Text></TouchableOpacity></View>
+                  <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Developer Pro payments</Text><Text style={styles.toolDescription}>PayChangu checkout is handled by the secure hosted payment flow. A subscription payment is not developer earnings.</Text></View><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>View Pro</Text></TouchableOpacity></View>
                   <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>Protected withdrawals</Text><Text style={styles.toolDescription}>Withdrawals are unavailable until identity and payout details are verified and eligible funds are supported by the ledger.</Text></View><Text style={styles.postTag}>Disabled</Text></View>
                   <View style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>One shared ledger</Text><Text style={styles.toolDescription}>Marketplace and eligible Social earnings need consistent transaction records, commissions, refunds and payout history.</Text></View></View>
                   <Text style={styles.disclaimer}>No money movement is initiated from this screen. Balance, transaction history, settlement, refunds and withdrawals require server-authoritative financial records.</Text>
@@ -2901,8 +2931,8 @@ export default function App() {
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Product</Text>
                     {promotionListings.length ? promotionListings.map((listing) => (
-                      <TouchableOpacity key={listing.id} style={[styles.storeTab, promotionListingId === listing.id && styles.storeTabActive]} onPress={() => setPromotionListingId(listing.id)}>
-                        <Text style={[styles.storeTabText, promotionListingId === listing.id && styles.storeTabTextActive]}>{listing.name} · {listing.status}</Text>
+                      <TouchableOpacity key={listing.id} style={[styles.storeTab, promotionListingId === listing.id && [styles.storeTabActive,{borderBottomColor:accentColor}]]} onPress={() => setPromotionListingId(listing.id)}>
+                        <Text style={[styles.storeTabText, promotionListingId === listing.id && [styles.storeTabTextActive,{color:accentColor}]]}>{listing.name} · {listing.status}</Text>
                       </TouchableOpacity>
                     )) : <Text style={styles.emptyText}>{promotionLoading ? "Loading your products…" : "No products found for this account. Create a product listing first."}</Text>}
                     <Text style={styles.fieldLabel}>Campaign name</Text>
@@ -2910,8 +2940,8 @@ export default function App() {
                     <Text style={styles.fieldLabel}>Placement</Text>
                     <View style={styles.storeTabs}>
                       {([["featured", "Featured"], ["search", "Search boost"], ["banner", "Store banner"]] as const).map(([value, label]) => (
-                        <TouchableOpacity key={value} style={[styles.storeTab, promotionPlacement === value && styles.storeTabActive]} onPress={() => setPromotionPlacement(value)}>
-                          <Text style={[styles.storeTabText, promotionPlacement === value && styles.storeTabTextActive]}>{label}</Text>
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionPlacement === value && [styles.storeTabActive,{borderBottomColor:accentColor}]]} onPress={() => setPromotionPlacement(value)}>
+                          <Text style={[styles.storeTabText, promotionPlacement === value && [styles.storeTabTextActive,{color:accentColor}]]}>{label}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -2922,17 +2952,17 @@ export default function App() {
                     <Text style={styles.fieldLabel}>Target location</Text>
                     <View style={styles.storeTabs}>
                       {["All Malawi", "Lilongwe", "Blantyre", "Mzuzu", "Zomba"].map((value) => (
-                        <TouchableOpacity key={value} style={[styles.storeTab, promotionLocation === value && styles.storeTabActive]} onPress={() => setPromotionLocation(value)}>
-                          <Text style={[styles.storeTabText, promotionLocation === value && styles.storeTabTextActive]}>{value}</Text>
+                        <TouchableOpacity key={value} style={[styles.storeTab, promotionLocation === value && [styles.storeTabActive,{borderBottomColor:accentColor}]]} onPress={() => setPromotionLocation(value)}>
+                          <Text style={[styles.storeTabText, promotionLocation === value && [styles.storeTabTextActive,{color:accentColor}]]}>{value}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <TouchableOpacity accessibilityRole="button" disabled={promotionSaving || promotionLoading || !promotionListings.length} style={[styles.primaryButton, (promotionSaving || promotionLoading || !promotionListings.length) && { opacity: 0.5 }]} onPress={() => void submitPromotionCampaign()}>
+                    <TouchableOpacity accessibilityRole="button" disabled={promotionSaving || promotionLoading || !promotionListings.length} style={[[styles.primaryButton,{backgroundColor:accentColor}], (promotionSaving || promotionLoading || !promotionListings.length) && { opacity: 0.5 }]} onPress={() => void submitPromotionCampaign()}>
                       <Text style={styles.primaryButtonText}>{promotionSaving ? "Submitting campaign…" : "Submit campaign for review"}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your campaigns</Text><Text style={styles.sectionMeta}>{promotionCampaigns.length}</Text></View>
-                  {promotionLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
+                  {promotionLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
                     <View key={campaign.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{campaign.name || "Promotion campaign"}</Text>
@@ -2945,7 +2975,7 @@ export default function App() {
                           <View style={styles.detailStat}><Text style={styles.detailStatValue}>MK{Number(campaign.budget_mwk || 0).toLocaleString()}</Text><Text style={styles.detailStatLabel}>Budget</Text></View>
                         </View>
                       </View>
-                      {campaign.status !== "paused" && campaign.status !== "rejected" && campaign.status !== "completed" ? <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => void pausePromotionCampaign(campaign)}><Text style={styles.secondaryButtonText}>Pause</Text></TouchableOpacity> : null}
+                      {campaign.status !== "paused" && campaign.status !== "rejected" && campaign.status !== "completed" ? <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => void pausePromotionCampaign(campaign)}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Pause</Text></TouchableOpacity> : null}
                     </View>
                   )) : <Text style={styles.emptyText}>No campaigns yet. Submit a campaign above to start the review process.</Text>}
                   <Text style={styles.disclaimer}>Impressions, clicks, approval and billing are not fabricated in this app. They will only be shown when the MAS backend provides verified campaign metrics.</Text>
@@ -2971,15 +3001,15 @@ export default function App() {
                     <TextInput accessibilityLabel="Feature request title" value={featureRequestTitle} onChangeText={(value) => setFeatureRequestTitle(value.slice(0,100))} maxLength={100} placeholder="What should MAS support?" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                     <Text style={styles.fieldLabel}>Details (optional)</Text>
                     <TextInput accessibilityLabel="Feature request details" value={featureRequestBody} onChangeText={(value) => setFeatureRequestBody(value.slice(0,2000))} maxLength={2000} multiline numberOfLines={4} textAlignVertical="top" placeholder="Explain the problem and how the feature would help." placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:100}]} />
-                    <TouchableOpacity accessibilityRole="button" disabled={featureRequestSaving} style={[styles.primaryButton,featureRequestSaving&&{opacity:0.5}]} onPress={() => void submitFeatureRequest()}>
+                    <TouchableOpacity accessibilityRole="button" disabled={featureRequestSaving} style={[[styles.primaryButton,{backgroundColor:accentColor}],featureRequestSaving&&{opacity:0.5}]} onPress={() => void submitFeatureRequest()}>
                       <Text style={styles.primaryButtonText}>{featureRequestSaving ? "Submitting…" : "Submit feature request"}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community requests</Text><Text style={styles.sectionMeta}>{featureRequests.length}</Text></View>
-                  {featureRequestsLoading ? <ActivityIndicator color={COLORS.accent} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
+                  {featureRequestsLoading ? <ActivityIndicator color={accentColor} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
                     <View key={item.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title}</Text><Text style={styles.toolDescription}>{item.body || "No additional details."}</Text><Text style={styles.postTag}>{item.status || "open"} · {Number(item.vote_count || 0)} votes · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View>
-                      <TouchableOpacity accessibilityRole="button" disabled={featureRequestVotingId === item.id} onPress={() => void toggleFeatureRequestVote(item)} style={[styles.secondaryButton, featureRequestVotingId === item.id && { opacity: 0.5 }]}><Text style={styles.secondaryButtonText}>{featureRequestVotingId === item.id ? "Saving…" : featureRequestVoteIds.includes(item.id) ? "Remove vote" : "Vote"}</Text></TouchableOpacity>
+                      <TouchableOpacity accessibilityRole="button" disabled={featureRequestVotingId === item.id} onPress={() => void toggleFeatureRequestVote(item)} style={[styles.secondaryButton, featureRequestVotingId === item.id && { opacity: 0.5 }]}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>{featureRequestVotingId === item.id ? "Saving…" : featureRequestVoteIds.includes(item.id) ? "Remove vote" : "Vote"}</Text></TouchableOpacity>
                     </View>
                   )) : <Text style={styles.emptyText}>No feature requests found yet.</Text>}
                   <Text style={styles.disclaimer}>Feature requests and votes are stored in the shared MAS backend. Voting requires sign-in; review status remains controlled by the MAS moderation workflow.</Text>
@@ -3020,7 +3050,7 @@ export default function App() {
                         else if (item.action === "Record test status" || item.action === "Review account test") setDeveloperScreen("Testing");
                         else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
                         else showNotice(item.status === "Integration pending" || item.status === "Backend check" || item.status === "Integration test" ? "This action needs its backend integration and device testing before it can be marked complete." : "Review the checklist above and verify it during native app testing.");
-                      }}><Text style={styles.secondaryButtonText}>Review →</Text></TouchableOpacity>
+                      }}><Text style={[styles.secondaryButtonText,{color:accentColor}]}>Review →</Text></TouchableOpacity>
                     </View>
                   ))}
                   <Text style={styles.disclaimer}>This workspace combines native workflows with clearly labeled guidance for tasks that still require a secure hosted provider or production backend. Campaign approval, payments, identity decisions and privileged moderation remain server-authoritative.</Text>
@@ -3034,7 +3064,7 @@ export default function App() {
 
         {notice ? <View accessibilityLiveRegion="polite" style={styles.toast}><Text style={styles.toastText}>{notice}</Text></View> : null}
 
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { paddingBottom: windowHeight < 520 ? 2 : 8 }]}>
           {([
             ["Explore", "apps"],
             ["Library", "book"],
@@ -3072,10 +3102,10 @@ export default function App() {
                   }
                 }}
               >
-                <View style={[styles.tabIconPill, active && styles.tabIconPillActive, active && { backgroundColor: `${accentColor}18` }]}>
+                <View style={[styles.tabIconPill, active && [styles.tabIconPillActive,{backgroundColor:accentColor+"18"}], active && { backgroundColor: `${accentColor}18` }]}>
                   <NativeIcon name={icon} color={active ? accentColor : COLORS.muted} size={21} />
                 </View>
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
+                <Text style={[styles.tabLabel, active && [styles.tabLabelActive,{color:accentColor}]]}>{name}</Text>
               </TouchableOpacity>
             );
           })}
@@ -3088,13 +3118,13 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
   app: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
-  headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
-  headerMenuButton: { width: 26, height: 30, alignItems: "center", justifyContent: "center" },
-  headerLogo: { width: 28, height: 28, flexShrink: 0 },
+  header: { minHeight: 56, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
+  headerSearchBox: { minHeight: 44, flex: 1, minWidth: 0, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  headerMenuButton: { width: 32, height: 36, flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  headerLogo: { width: 30, height: 30, flexShrink: 0 },
   
   headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
-  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 16 },
+  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 42, paddingVertical: 0, color: COLORS.text, fontSize: 15 },
   brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
@@ -3103,7 +3133,7 @@ const styles = StyleSheet.create({
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
   content: { flex: 1, backgroundColor: "#FFFFFF" },
-  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12, backgroundColor: "#FFFFFF" },
+  contentInner: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 28, backgroundColor: "#FFFFFF" },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
@@ -3235,7 +3265,7 @@ const styles = StyleSheet.create({
   primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4 },
+  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4, minHeight: 64 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 56, gap: 2, paddingVertical: 3 },
   tabIconPill: { width: 64, height: 28, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
   tabIconPillActive: { backgroundColor: COLORS.accentSoft },
@@ -3256,8 +3286,8 @@ const styles = StyleSheet.create({
   accentChoiceText: { color: COLORS.text, fontSize: 11, fontWeight: "600" },
   accentCheck: { marginLeft: "auto", fontWeight: "900" },
   drawerRoot: { flex: 1, flexDirection: "row", backgroundColor: "rgba(0,0,0,0.35)" },
-  drawerBackdrop: { flex: 1 },
-  drawerPanel: { width: "82%", maxWidth: 340, height: "100%", backgroundColor: "#FFFFFF", paddingTop: 26, paddingHorizontal: 16, paddingBottom: 20, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
+  drawerBackdrop: { flex: 1, minWidth: 0 },
+  drawerPanel: { width: "82%", maxWidth: 420, minWidth: 0, height: "100%", flexShrink: 0, backgroundColor: "#FFFFFF", paddingTop: 18, paddingHorizontal: 16, paddingBottom: 12, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
   drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   drawerTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
   drawerClose: { color: COLORS.muted, fontSize: 30, lineHeight: 32, paddingHorizontal: 6 },
