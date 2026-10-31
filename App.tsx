@@ -219,7 +219,7 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [accentColor, setAccentColor] = useState(COLORS.accent);
+  const [accentColor, setAccentColor] = useState(accentColor);
   const [accentLoaded, setAccentLoaded] = useState(false);
   const [postDraft, setPostDraft] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
@@ -582,8 +582,9 @@ export default function App() {
           else showNotice("You are signed in to MAS.");
           setAuthLoading(false);
         }
-      } catch {
+      } catch (error) {
         setAuthLoading(false);
+        showNotice(error instanceof Error ? error.message : "Could not complete the sign-in callback.");
       }
     };
     Linking.getInitialURL().then((url) => { if (url) void handleUrl(url); });
@@ -629,7 +630,7 @@ export default function App() {
               tagline: item.tagline || item.category || "Discover this project on MAS.",
               description: item.description || item.tagline || "Discover this project on MAS.",
               mark: String(item.name || "M").slice(0, 1).toUpperCase(),
-              color: COLORS.accent,
+              color: accentColor,
               slug: item.slug,
               kind: item.kind,
               developer: String(profiles.get(item.developer_id) || "MAS developer"),
@@ -2007,6 +2008,9 @@ export default function App() {
           options: { emailRedirectTo: "mw.wealthgrid.mas://auth/callback" },
         });
         if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error("An account may already exist for this email. Try signing in or use password recovery.");
+        }
         setAuthPassword("");
         if (data.session) {
           setUserEmail(data.user?.email ?? email);
@@ -2087,7 +2091,7 @@ export default function App() {
                   <Text style={styles.drawerClose}>×</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+              <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.drawerSection}>NAVIGATION</Text>
               {([
                 ["Explore", "apps", "Explore apps and websites"],
@@ -2117,6 +2121,18 @@ export default function App() {
                 ["Developer Pro", "Subscription and benefits"],
                 ["Developer wallet", "Earnings and wallet information"],
                 ["Console settings", "Developer preferences"],
+                ["Reviews", "Customer feedback and replies"],
+                ["Publishing checklist", "Release readiness"],
+                ["Quality checks", "Product quality and policy"],
+                ["Developer resources", "Guides and support"],
+                ["Testing", "Release and account testing"],
+                ["Team management", "Team members and roles"],
+                ["Promote a product", "Campaigns and promotion"],
+                ["Spotlight", "Featured product applications"],
+                ["My public profile", "Your developer profile"],
+                ["Security", "Account and app security"],
+                ["Store management", "Manage product listings"],
+                ["Developer assistant", "Help with developer workflows"],
               ] as const).map(([label, description]) => (
                 <TouchableOpacity key={label} accessibilityRole="button" style={[styles.drawerItem, { paddingVertical: windowHeight < 600 ? 9 : 13 }]} onPress={() => {
                   setDrawerOpen(false);
@@ -2168,7 +2184,7 @@ export default function App() {
               <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => void installSelectedApp()} disabled={detailLoading}>
                 <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website" : "Download / install"}</Text>
               </TouchableOpacity>
-              {detailLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {detailLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : null}
               {selectedAppDetails ? <>
                 <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>About this listing</Text><Text style={styles.sectionMeta}>{selectedAppDetails.price_mwk > 0 ? "MK" + Number(selectedAppDetails.price_mwk).toLocaleString() : "FREE"}</Text></View>
                 <Text style={styles.detailDescription}>{selectedAppDetails.description || selectedAppDetails.tagline || selectedApp.description}</Text>
@@ -2224,7 +2240,7 @@ export default function App() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
-                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : COLORS.accentSoft }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
+                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : (accentColor + "18") }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
@@ -2237,10 +2253,10 @@ export default function App() {
                 <Text style={styles.sectionTitle}>{query.trim() || category !== "All" || kindFilter !== "all" ? `${filteredApps.length} result${filteredApps.length === 1 ? "" : "s"}` : "All listings"}</Text>
                 <Text style={styles.sectionMeta}>{catalogueLoading ? "SYNCING" : catalogueSource === "live" ? "MAS CATALOGUE" : catalogueSource === "error" ? "LOAD FAILED" : ""}</Text>
               </View>
-              {catalogueLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
+              {catalogueLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
-                  <View style={[styles.appIcon, { backgroundColor: app.iconUrl ? app.color : COLORS.accentSoft }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{app.name.slice(0, 2).toUpperCase()}</Text>}</View>
+                  <View style={[styles.appIcon, { backgroundColor: app.iconUrl ? app.color : (accentColor + "18") }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{app.name.slice(0, 2).toUpperCase()}</Text>}</View>
                   <View style={styles.appDetails}>
                     <View style={styles.appNameRow}><Text numberOfLines={1} style={styles.appName}>{app.name}</Text><Text style={styles.kindGlyph}>{app.kind === "website" ? "◎" : "▣"}</Text></View>
                     <Text numberOfLines={1} style={styles.appCategory}>{app.tagline || app.category}</Text>
@@ -2315,7 +2331,7 @@ export default function App() {
                       <Text style={styles.postText}>{post.text.replace(/^\[(COLLABO|INVESTORS|GRANTS|CROWDFUND)\]\s*/, "")}</Text>
                       {post.mediaUrl && post.mediaType === "image" ? <Image accessibilityLabel="Post attachment" source={{ uri: post.mediaUrl }} style={styles.postMediaImage} resizeMode="cover" /> : null}
                       {post.mediaUrl && post.mediaType === "video" ? <TouchableOpacity style={styles.mediaLink} onPress={() => void Linking.openURL(post.mediaUrl!)}><Text style={styles.mediaLinkText}>▷ Open attached video</Text></TouchableOpacity> : null}
-                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: COLORS.accent }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={COLORS.accent} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
+                      <View style={styles.postActions}><TouchableOpacity onPress={() => void toggleLike(post.id)}><Text style={[styles.postAction, likedPostIds.includes(post.id) && { color: accentColor }]}>{likedPostIds.includes(post.id) ? "♥ Liked" : "♡ Like"}{reactionCounts[post.id] ? ` · ${reactionCounts[post.id]}` : ""}</Text></TouchableOpacity><TouchableOpacity onPress={() => void toggleComments(post.id)}><Text style={styles.postAction}>○ Comment{commentsByPost[post.id]?.length ? ` · ${commentsByPost[post.id].length}` : ""}</Text></TouchableOpacity><TouchableOpacity disabled={connectingPostIds.includes(post.id)} onPress={() => void requestConnection(post.authorId, post.id)}><Text style={styles.postAction}>{connectingPostIds.includes(post.id) ? "Sending…" : "↗ Connect"}</Text></TouchableOpacity><TouchableOpacity disabled={!post.authorId} onPress={() => post.authorId ? void openConversation(post.authorId) : showNotice("This preview post has no member to message.")}><Text style={styles.postAction}>✉ Message</Text></TouchableOpacity></View>{openCommentsPostId === post.id ? <View style={styles.commentsPanel}>{commentLoadingPostId === post.id ? <ActivityIndicator color={accentColor} /> : (commentsByPost[post.id] ?? []).map((comment) => <View key={comment.id} style={styles.commentItem}><Text style={styles.commentAuthor}>{comment.name}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}<TextInput accessibilityLabel="Write a comment" placeholder="Write a comment…" placeholderTextColor={COLORS.muted} value={commentDrafts[post.id] ?? ""} onChangeText={(value) => setCommentDrafts((current) => ({ ...current, [post.id]: value.slice(0, 1000) }))} multiline maxLength={1000} style={styles.commentInput} /><TouchableOpacity disabled={commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (commentSendingPostId === post.id || !(commentDrafts[post.id] ?? "").trim()) && { opacity: 0.5 }]} onPress={() => void sendComment(post.id)}><Text style={styles.composeButtonText}>{commentSendingPostId === post.id ? "Sending…" : "Send comment"}</Text></TouchableOpacity></View> : null}
                     </View>
                   ))}
                 </>
@@ -2325,7 +2341,7 @@ export default function App() {
                   {!activeConversationUserId ? (
                     <>
                       <Text style={styles.disclaimer}>Choose a member from a Social post to open a private conversation.</Text>
-                      {conversationLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 12 }} /> : null}
+                      {conversationLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 12 }} /> : null}
                       {conversationPreviews.map((conversation) => (
                         <TouchableOpacity key={conversation.userId} style={styles.toolCard} onPress={() => void openConversation(conversation.userId)}>
                           <View style={styles.toolIcon}><Text style={styles.toolIconText}>{conversation.name.slice(0,1).toUpperCase()}</Text></View>
@@ -2353,7 +2369,7 @@ export default function App() {
                     <>
                       <TouchableOpacity style={styles.secondaryButton} onPress={() => { setActiveConversationUserId(null); setMessages([]); }}><Text style={styles.secondaryButtonText}>← All conversations</Text></TouchableOpacity>
                       <View style={styles.messageThread}>
-                        {messagesLoading ? <ActivityIndicator color={COLORS.accent} /> : messages.length ? messages.map((message) => (
+                        {messagesLoading ? <ActivityIndicator color={accentColor} /> : messages.length ? messages.map((message) => (
                           <View key={message.id} style={[styles.messageBubble, message.sender_id === currentUserId ? styles.messageOwn : styles.messageOther]}>
                             <Text style={styles.messageBody}>{message.body}</Text><Text style={styles.messageTime}>{new Date(message.created_at).toLocaleString()}</Text>
                           </View>
@@ -2369,7 +2385,7 @@ export default function App() {
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Connections</Text><Text style={styles.sectionMeta}>MEMBER NETWORK</Text></View>
                   <Text style={styles.pageIntro}>Review incoming requests and manage the people you have connected with.</Text>
                   {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Connect the MAS backend to load live connections.</Text> : null}
-                  {socialConnectionsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialConnections.map((connection) => (
+                  {socialConnectionsLoading ? <ActivityIndicator color={accentColor} /> : socialConnections.map((connection) => (
                     <View key={connection.id} style={styles.toolCard}>
                       <View style={styles.toolIcon}><Text style={styles.toolIconText}>{String(connection.otherName || "M").slice(0,1).toUpperCase()}</Text></View>
                       <View style={styles.toolCopy}>
@@ -2386,8 +2402,8 @@ export default function App() {
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Social activity</Text><Text style={styles.sectionMeta}>{socialNotifications.filter((item) => !item.read).length} UNREAD</Text></View>
                   <Text style={styles.pageIntro}>Reactions, comments, connection requests and messages are separate from store notifications.</Text>
-                  {socialNotificationsLoading ? <ActivityIndicator color={COLORS.accent} /> : socialNotifications.map((item) => (
-                    <TouchableOpacity key={item.id} style={[styles.toolCard,!item.read && {backgroundColor:COLORS.accentSoft}]} onPress={() => !item.read ? void markSocialNotificationRead(item) : undefined}>
+                  {socialNotificationsLoading ? <ActivityIndicator color={accentColor} /> : socialNotifications.map((item) => (
+                    <TouchableOpacity key={item.id} style={[styles.toolCard,!item.read && {backgroundColor:(accentColor + "18")}]} onPress={() => !item.read ? void markSocialNotificationRead(item) : undefined}>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "Social activity"}</Text><Text style={styles.toolDescription}>{item.body || ""}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>
                       <Text style={styles.chevron}>{item.read ? "✓" : "•"}</Text>
                     </TouchableOpacity>
@@ -2414,7 +2430,7 @@ export default function App() {
                     <TextInput value={investmentUse} onChangeText={(value) => setInvestmentUse(value.slice(0,1000))} multiline maxLength={1000} placeholder="How would the funds be used?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
                     <TouchableOpacity disabled={investmentSaving} style={[styles.primaryButton,investmentSaving && {opacity:0.5}]} onPress={() => void publishInvestmentOpportunity()}><Text style={styles.primaryButtonText}>{investmentSaving ? "Publishing…" : "Publish opportunity"}</Text></TouchableOpacity>
                   </View>
-                  {investmentLoading ? <ActivityIndicator color={COLORS.accent} /> : investmentOpportunities.map((item) => (
+                  {investmentLoading ? <ActivityIndicator color={accentColor} /> : investmentOpportunities.map((item) => (
                     <View key={item.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{item.title}</Text>
@@ -2561,6 +2577,8 @@ export default function App() {
                       { name: "Orange", value: "#EA580C" },
                       { name: "Purple", value: "#9333EA" },
                       { name: "Black", value: "#171717" },
+                      { name: "Teal", value: "#0F766E" },
+                      { name: "Pink", value: "#DB2777" },
                     ].map((preset) => (
                       <TouchableOpacity key={preset.value} accessibilityRole="button" accessibilityState={{ selected: accentColor.toLowerCase() === preset.value.toLowerCase() }} onPress={() => setAccentColor(preset.value)} style={[styles.accentChoice, accentColor.toLowerCase() === preset.value.toLowerCase() && { borderColor: preset.value, backgroundColor: `${preset.value}12` }]}>
                         <View style={[styles.accentSwatch, { backgroundColor: preset.value }]} />
@@ -2574,7 +2592,7 @@ export default function App() {
               {utilityScreen === "library" ? (
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Saved listings</Text><Text style={styles.sectionMeta}>{libraryData.saved.length}</Text></View>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : libraryData.saved.map((entry, index) => <View key={entry.listing_id || index} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => { const l = entry.listings; if (l) { setSelectedApp({ id: l.id, name: l.name, category: l.category || "Other", description: l.description || "", mark: (l.name || "M").slice(0,1), color: COLORS.accent, slug: l.slug, kind: l.kind }); setUtilityScreen("none"); } }}><Text style={styles.toolTitle}>{entry.listings?.name || "Saved listing"}</Text><Text style={styles.toolDescription}>{entry.listings?.category || "MAS Store listing"}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Library actions need the MAS backend configuration."); return; } const { data: authData, error: authError } = await supabase.auth.getUser(); if (authError || !authData.user) { showNotice("Sign in to manage your library."); return; } const { error } = await supabase.from("wishlist").delete().eq("user_id", authData.user.id).eq("listing_id", entry.listing_id); if (error) { showNotice(error.message || "Could not remove this saved listing."); return; } setLibraryData((current) => ({ ...current, saved: current.saved.filter((item) => item.listing_id !== entry.listing_id) })); showNotice("Removed from your library."); }}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : libraryData.saved.map((entry, index) => <View key={entry.listing_id || index} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => { const l = entry.listings; if (l) { setSelectedApp({ id: l.id, name: l.name, category: l.category || "Other", description: l.description || "", mark: (l.name || "M").slice(0,1), color: accentColor, slug: l.slug, kind: l.kind }); setUtilityScreen("none"); } }}><Text style={styles.toolTitle}>{entry.listings?.name || "Saved listing"}</Text><Text style={styles.toolDescription}>{entry.listings?.category || "MAS Store listing"}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Library actions need the MAS backend configuration."); return; } const { data: authData, error: authError } = await supabase.auth.getUser(); if (authError || !authData.user) { showNotice("Sign in to manage your library."); return; } const { error } = await supabase.from("wishlist").delete().eq("user_id", authData.user.id).eq("listing_id", entry.listing_id); if (error) { showNotice(error.message || "Could not remove this saved listing."); return; } setLibraryData((current) => ({ ...current, saved: current.saved.filter((item) => item.listing_id !== entry.listing_id) })); showNotice("Removed from your library."); }}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
                   {!utilityLoading && !libraryData.saved.length ? <Text style={styles.emptyText}>You have no saved listings yet.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Installed apps</Text><Text style={styles.sectionMeta}>{libraryData.installed.length}</Text></View>
                   {libraryData.installed.map((entry, index) => <View key={entry.id || index} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{entry.listings?.name || "Installed listing"}</Text><Text style={styles.toolDescription}>Added {entry.installed_at ? new Date(entry.installed_at).toLocaleDateString() : "to your library"}</Text></View></View>)}
@@ -2584,13 +2602,13 @@ export default function App() {
               ) : utilityScreen === "notifications" ? (
                 <>
                   <TouchableOpacity style={styles.secondaryButton} onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", data.user.id).eq("read", false); if (error) showNotice("Could not mark notifications as read."); else { setNotificationItems((items) => items.map((item) => ({ ...item, read: true }))); showNotice("All notifications marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark all as read</Text></TouchableOpacity>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : notificationItems.map((item) => <View key={item.id} style={[styles.toolCard, !item.read && { backgroundColor: COLORS.accentSoft }]}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "MAS notification"}</Text><Text style={styles.toolDescription}>{item.body || "Platform update"}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>{!item.read ? <TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("id", item.id).eq("user_id", data.user.id); if (error) showNotice(error.message || "Could not update this notification."); else { setNotificationItems((items) => items.map((current) => current.id === item.id ? { ...current, read: true } : current)); showNotice("Notification marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark read</Text></TouchableOpacity> : <Text style={styles.chevron}>✓</Text>}</View>)}
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : notificationItems.map((item) => <View key={item.id} style={[styles.toolCard, !item.read && { backgroundColor: (accentColor + "18") }]}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title || "MAS notification"}</Text><Text style={styles.toolDescription}>{item.body || "Platform update"}</Text><Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View>{!item.read ? <TouchableOpacity accessibilityRole="button" onPress={async () => { if (!isSupabaseConfigured) { showNotice("Notifications need the MAS backend configuration."); return; } const { data, error: authError } = await supabase.auth.getUser(); if (authError || !data.user) { showNotice("Sign in to manage notifications."); return; } const { error } = await supabase.from("notifications").update({ read: true }).eq("id", item.id).eq("user_id", data.user.id); if (error) showNotice(error.message || "Could not update this notification."); else { setNotificationItems((items) => items.map((current) => current.id === item.id ? { ...current, read: true } : current)); showNotice("Notification marked as read."); } }}><Text style={styles.secondaryButtonText}>Mark read</Text></TouchableOpacity> : <Text style={styles.chevron}>✓</Text>}</View>)}
                   {!utilityLoading && !notificationItems.length ? <Text style={styles.emptyText}>You have no notifications yet.</Text> : null}
                   {!isSupabaseConfigured ? <Text style={styles.disclaimer}>Notifications need the public MAS backend configuration.</Text> : null}
                 </>
               ) : (
                 <>
-                  {utilityLoading ? <ActivityIndicator color={COLORS.accent} /> : isSupabaseConfigured ? (
+                  {utilityLoading ? <ActivityIndicator color={accentColor} /> : isSupabaseConfigured ? (
                     <View style={styles.composeCard}>
                       <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || userEmail || "Your MAS account"}</Text><Text style={styles.profileHint}>Update the name and details shown on your MAS profile.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => void chooseAccountAvatar()}><Text style={styles.secondaryButtonText}>Change profile photo</Text></TouchableOpacity></View>
                       <Text style={styles.fieldLabel}>Display name (max 80 characters)</Text><TextInput value={accountDisplayName} onChangeText={(value) => setAccountDisplayName(value.slice(0,80))} placeholder="Your name" placeholderTextColor={COLORS.muted} style={styles.formInput} />
@@ -2649,19 +2667,19 @@ export default function App() {
                 </View>
               ) : developerScreen === "Developer dashboard" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
                   <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
                 </>
               ) : developerScreen === "Reviews" ? (
                 <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerReviews.map((review) => <View key={review.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{developerRows.find((row) => row.id === review.listing_id)?.name || "Product review"} · {Number(review.rating) || 0}/5 ★</Text><Text style={styles.toolDescription}>{review.body || "No written review."}</Text><Text style={styles.postTag}>{review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</Text>{review.developer_reply ? <View style={styles.infoBanner}><Text style={styles.infoTitle}>Your reply</Text><Text style={styles.infoText}>{review.developer_reply}</Text></View> : <><TextInput accessibilityLabel="Reply to product review" value={reviewReplies[review.id] ?? ""} onChangeText={(value) => setReviewReplies((items) => ({ ...items, [review.id]: value.slice(0, 1000) }))} placeholder="Write a reply to this review…" placeholderTextColor={COLORS.muted} style={styles.commentInput} multiline maxLength={1000} /><TouchableOpacity disabled={reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()} style={[styles.composeButton, { alignSelf: "flex-end", marginTop: 8 }, (reviewReplySaving === review.id || !(reviewReplies[review.id] || "").trim()) && { opacity: 0.5 }]} onPress={() => void replyToDeveloperReview(review)}><Text style={styles.composeButtonText}>{reviewReplySaving === review.id ? "Publishing…" : "Publish reply"}</Text></TouchableOpacity></>}</View></View>)}
                   {!developerLoading && !developerReviews.length ? <Text style={styles.emptyText}>No reviews have been posted for your products yet.</Text> : null}
                 </>
               ) : developerScreen === "Analytics" ? (
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Product analytics</Text><Text style={styles.infoText}>Live view and install events for your listings. Conversion is installs divided by views; repeated events may be counted separately.</Text></View>
                   <View style={styles.chips}>{([["7d","7 days"],["30d","30 days"],["90d","90 days"]] as ["7d" | "30d" | "90d",string][]).map(([value,label]) => <TouchableOpacity key={value} onPress={() => setAnalyticsRange(value)} style={[styles.chip,analyticsRange === value && styles.chipActive]}><Text style={[styles.chipText,analyticsRange === value && styles.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
-                  {analyticsLoading ? <ActivityIndicator color={COLORS.accent}/> : !analyticsProAllowed ? (
+                  {analyticsLoading ? <ActivityIndicator color={accentColor}/> : !analyticsProAllowed ? (
                     <View style={styles.composeCard}>
                       <Text style={styles.sectionTitle}>Advanced analytics requires Developer Pro</Text>
                       <Text style={styles.toolDescription}>Your detailed view/install events and audience breakdowns are available while your Pro subscription is active or within its paid period.</Text>
@@ -2686,7 +2704,7 @@ export default function App() {
                   </>}
                 </>
               ) : developerScreen === "My applications" || developerScreen === "Publishing checklist" ? (                <>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
                   {developerScreen === "My applications" ? <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
@@ -2706,16 +2724,16 @@ export default function App() {
                     <TextInput value={portfolioDescription} onChangeText={(value) => setPortfolioDescription(value.slice(0,500))} multiline maxLength={500} placeholder="What did you build?" placeholderTextColor={COLORS.muted} style={[styles.formInput,{minHeight:70,textAlignVertical:"top"}]}/>
                     <TouchableOpacity disabled={portfolioSaving} style={[styles.primaryButton,portfolioSaving && {opacity:0.5}]} onPress={() => void addPortfolioProject()}><Text style={styles.primaryButtonText}>{portfolioSaving ? "Adding…" : "Add portfolio project"}</Text></TouchableOpacity>
                   </View>
-                  {portfolioLoading ? <ActivityIndicator color={COLORS.accent}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
+                  {portfolioLoading ? <ActivityIndicator color={accentColor}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
                   {!portfolioLoading && !portfolioProjects.length ? <Text style={styles.emptyText}>Add projects built outside MAS to showcase your work.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Published products</Text><Text style={styles.sectionMeta}>{developerRows.filter((item) => item.status === "published").length}</Text></View>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
                   {!developerLoading && !developerRows.some((item) => item.status === "published") ? <Text style={styles.emptyText}>Published products will appear on your profile when they are approved.</Text> : null}
                 </>
               ) : developerScreen === "Quality checks" ? (
                 <>
                   <View style={styles.infoBanner}><Text style={styles.infoTitle}>Store readiness</Text><Text style={styles.infoText}>The checklist mirrors MAS store-quality requirements. Scores are guidance; a strong score does not guarantee approval.</Text></View>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => {
+                  {developerLoading ? <ActivityIndicator color={accentColor} /> : developerRows.map((item) => {
                     const report = asoReport(item);
                     return <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name} · {report.score}/100</Text><Text style={styles.toolDescription}>{item.status === "published" ? "Published listing" : `Status: ${item.status}`}</Text>{report.checks.map((check) => <Text key={check.label} style={[styles.postTag, { color: check.ok ? COLORS.green : "#B42318" }]}>{check.ok ? "✓" : "Fix"} · {check.label}</Text>)}</View>{item.status !== "pending" ? <TouchableOpacity accessibilityRole="button" onPress={() => startEditingListing(item)}><Text style={styles.secondaryButtonText}>Edit listing</Text></TouchableOpacity> : null}</View>;
                   })}
@@ -2735,7 +2753,7 @@ export default function App() {
                     <TouchableOpacity disabled={betaSaving || !developerRows.length} style={[styles.primaryButton,(betaSaving || !developerRows.length) && {opacity:0.5}]} onPress={() => void addBetaTester()}><Text style={styles.primaryButtonText}>{betaSaving ? "Adding tester…" : "Add tester"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester list</Text><Text style={styles.sectionMeta}>{betaTesters.length}</Text></View>
-                  {betaLoading ? <ActivityIndicator color={COLORS.accent}/> : betaTesters.map((tester) => <View key={tester.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{tester.email}</Text><Text style={styles.toolDescription}>{developerRows.find((listing) => listing.id === tester.listing_id)?.name || "MAS product"} · {tester.channel} test</Text><Text style={styles.postTag}>{tester.status} · {tester.created_at ? new Date(tester.created_at).toLocaleDateString() : ""}</Text></View><TouchableOpacity onPress={async () => { const next = tester.status === "active" ? "invited" : "active"; const { error } = await supabase.from("beta_testers").update({status:next}).eq("id",tester.id); if (error) showNotice(error.message || "Could not update tester status."); else { setBetaTesters((items) => items.map((item) => item.id === tester.id ? {...item,status:next} : item)); showNotice("Tester status updated."); } }}><Text style={styles.secondaryButtonText}>{tester.status === "active" ? "Set invited" : "Mark active"}</Text></TouchableOpacity></View>)}
+                  {betaLoading ? <ActivityIndicator color={accentColor}/> : betaTesters.map((tester) => <View key={tester.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{tester.email}</Text><Text style={styles.toolDescription}>{developerRows.find((listing) => listing.id === tester.listing_id)?.name || "MAS product"} · {tester.channel} test</Text><Text style={styles.postTag}>{tester.status} · {tester.created_at ? new Date(tester.created_at).toLocaleDateString() : ""}</Text></View><TouchableOpacity onPress={async () => { const next = tester.status === "active" ? "invited" : "active"; const { error } = await supabase.from("beta_testers").update({status:next}).eq("id",tester.id); if (error) showNotice(error.message || "Could not update tester status."); else { setBetaTesters((items) => items.map((item) => item.id === tester.id ? {...item,status:next} : item)); showNotice("Tester status updated."); } }}><Text style={styles.secondaryButtonText}>{tester.status === "active" ? "Set invited" : "Mark active"}</Text></TouchableOpacity></View>)}
                   {!betaLoading && !betaTesters.length ? <Text style={styles.emptyText}>No beta testers have been added yet.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tester feedback</Text><Text style={styles.sectionMeta}>{betaFeedback.length}</Text></View>
                   {betaFeedback.map((feedback) => <View key={feedback.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{feedback.kind} · {feedback.severity}</Text><Text style={styles.toolDescription}>{feedback.body}</Text><Text style={styles.postTag}>{developerRows.find((listing) => listing.id === feedback.listing_id)?.name || "MAS product"} · {feedback.status}</Text></View>{feedback.status !== "resolved" ? <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"resolved")}><Text style={styles.secondaryButtonText}>Resolve</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateBetaFeedbackStatus(feedback,"open")}><Text style={styles.secondaryButtonText}>Reopen</Text></TouchableOpacity>}</View>)}
@@ -2752,7 +2770,7 @@ export default function App() {
                     <TouchableOpacity disabled={teamSaving} style={[styles.primaryButton,teamSaving && {opacity:0.5}]} onPress={() => void inviteTeamMember()}><Text style={styles.primaryButtonText}>{teamSaving ? "Inviting…" : "Invite teammate"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Members</Text><Text style={styles.sectionMeta}>{teamMembers.length}</Text></View>
-                  {teamLoading ? <ActivityIndicator color={COLORS.accent}/> : teamMembers.map((member) => <View key={member.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{member.email}</Text><Text style={styles.toolDescription}>Role: {member.role} · Status: {member.status}</Text><Text style={styles.postTag}>{member.created_at ? new Date(member.created_at).toLocaleDateString() : ""}</Text><View style={styles.chips}>{(["admin","editor","viewer"]).map((role) => <TouchableOpacity key={role} onPress={() => role !== member.role ? void updateTeamMember(member,{role}) : undefined} style={[styles.chip,member.role === role && styles.chipActive]}><Text style={[styles.chipText,member.role === role && styles.chipTextActive]}>{role}</Text></TouchableOpacity>)}</View></View><View style={{gap:8,alignItems:"flex-end"}}>{member.status !== "active" ? <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"active"})}><Text style={styles.secondaryButtonText}>Activate</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"invited"})}><Text style={styles.secondaryButtonText}>Deactivate</Text></TouchableOpacity>}<TouchableOpacity onPress={() => void removeTeamMember(member)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View></View>)}
+                  {teamLoading ? <ActivityIndicator color={accentColor}/> : teamMembers.map((member) => <View key={member.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{member.email}</Text><Text style={styles.toolDescription}>Role: {member.role} · Status: {member.status}</Text><Text style={styles.postTag}>{member.created_at ? new Date(member.created_at).toLocaleDateString() : ""}</Text><View style={styles.chips}>{(["admin","editor","viewer"]).map((role) => <TouchableOpacity key={role} onPress={() => role !== member.role ? void updateTeamMember(member,{role}) : undefined} style={[styles.chip,member.role === role && styles.chipActive]}><Text style={[styles.chipText,member.role === role && styles.chipTextActive]}>{role}</Text></TouchableOpacity>)}</View></View><View style={{gap:8,alignItems:"flex-end"}}>{member.status !== "active" ? <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"active"})}><Text style={styles.secondaryButtonText}>Activate</Text></TouchableOpacity> : <TouchableOpacity onPress={() => void updateTeamMember(member,{status:"invited"})}><Text style={styles.secondaryButtonText}>Deactivate</Text></TouchableOpacity>}<TouchableOpacity onPress={() => void removeTeamMember(member)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View></View>)}
                   {!teamLoading && !teamMembers.length ? <Text style={styles.emptyText}>No team members yet. Invite a collaborator to start.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Activity log</Text><Text style={styles.sectionMeta}>{teamActivity.length}</Text></View>
                   {teamActivity.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.action}</Text>{item.target ? <Text style={styles.toolDescription}>{item.target}</Text> : null}<Text style={styles.postTag}>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</Text></View></View>)}
@@ -2771,7 +2789,7 @@ export default function App() {
                     <TouchableOpacity disabled={spotlightSaving} style={[styles.primaryButton,spotlightSaving && {opacity:0.5}]} onPress={() => void submitSpotlightApplication()}><Text style={styles.primaryButtonText}>{spotlightSaving ? "Submitting…" : "Submit application"}</Text></TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your applications</Text><Text style={styles.sectionMeta}>{spotlightApplications.length}</Text></View>
-                  {spotlightLoading ? <ActivityIndicator color={COLORS.accent}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
+                  {spotlightLoading ? <ActivityIndicator color={accentColor}/> : spotlightApplications.map((item) => <View key={item.id} style={styles.toolCard}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.opportunity}</Text><Text style={styles.toolDescription}>{item.pitch}</Text><Text style={styles.postTag}>{item.status} · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View></View>)}
                   {!spotlightLoading && !spotlightApplications.length ? <Text style={styles.emptyText}>You have not submitted a Spotlight application yet.</Text> : null}
                 </>
               ) : developerScreen === "Developer Pro" ? (
@@ -2937,7 +2955,7 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Your campaigns</Text><Text style={styles.sectionMeta}>{promotionCampaigns.length}</Text></View>
-                  {promotionLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
+                  {promotionLoading ? <ActivityIndicator color={accentColor} style={{ marginVertical: 16 }} /> : promotionCampaigns.length ? promotionCampaigns.map((campaign) => (
                     <View key={campaign.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}>
                         <Text style={styles.toolTitle}>{campaign.name || "Promotion campaign"}</Text>
@@ -2981,7 +2999,7 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Community requests</Text><Text style={styles.sectionMeta}>{featureRequests.length}</Text></View>
-                  {featureRequestsLoading ? <ActivityIndicator color={COLORS.accent} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
+                  {featureRequestsLoading ? <ActivityIndicator color={accentColor} style={{marginVertical:16}} /> : featureRequests.length ? featureRequests.map((item) => (
                     <View key={item.id} style={styles.toolCard}>
                       <View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.title}</Text><Text style={styles.toolDescription}>{item.body || "No additional details."}</Text><Text style={styles.postTag}>{item.status || "open"} · {Number(item.vote_count || 0)} votes · {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</Text></View>
                       <TouchableOpacity accessibilityRole="button" disabled={featureRequestVotingId === item.id} onPress={() => void toggleFeatureRequestVote(item)} style={[styles.secondaryButton, featureRequestVotingId === item.id && { opacity: 0.5 }]}><Text style={styles.secondaryButtonText}>{featureRequestVotingId === item.id ? "Saving…" : featureRequestVoteIds.includes(item.id) ? "Remove vote" : "Vote"}</Text></TouchableOpacity>
@@ -3093,14 +3111,14 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
   app: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
-  headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
-  headerMenuButton: { width: 26, height: 30, alignItems: "center", justifyContent: "center" },
-  headerLogo: { width: 28, height: 28, flexShrink: 0 },
+  header: { minHeight: 56, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
+  headerSearchBox: { minHeight: 44, flex: 1, minWidth: 0, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  headerMenuButton: { width: 32, height: 36, flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  headerLogo: { width: 30, height: 30, flexShrink: 0 },
   
   headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
-  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 0, color: COLORS.text, fontSize: 16 },
-  brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
+  headerSearchInput: { flex: 1, minWidth: 0, minHeight: 42, paddingVertical: 0, color: COLORS.text, fontSize: 15 },
+  brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: accentColor, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
   brandSub: { color: COLORS.muted, fontSize: 8, fontWeight: "700", letterSpacing: 1.3, marginTop: 2 },
@@ -3108,7 +3126,7 @@ const styles = StyleSheet.create({
   avatarText: { color: COLORS.text, fontWeight: "800" },
   avatarImage: { width: 36, height: 36, borderRadius: 18 },
   content: { flex: 1, backgroundColor: "#FFFFFF" },
-  contentInner: { paddingHorizontal: 12, paddingTop: 0, paddingBottom: 12, backgroundColor: "#FFFFFF" },
+  contentInner: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 28, backgroundColor: "#FFFFFF" },
   hero: { padding: 0, borderRadius: 0, backgroundColor: COLORS.background, borderWidth: 0, borderColor: COLORS.border },
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
@@ -3118,9 +3136,9 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 0, minHeight: 40 },
   storeTabs: { flexDirection: "row", gap: 24, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 0, marginBottom: 12 },
   storeTab: { paddingTop: 4, paddingBottom: 10, borderBottomWidth: 3, borderBottomColor: "transparent" },
-  storeTabActive: { borderBottomColor: COLORS.accent },
+  storeTabActive: { borderBottomColor: accentColor },
   storeTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "500" },
-  storeTabTextActive: { color: COLORS.accent, fontWeight: "700" },
+  storeTabTextActive: { color: accentColor, fontWeight: "700" },
   sectionHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   shelfHeading: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   shelfHeadingCopy: { flex: 1 },
@@ -3132,13 +3150,13 @@ const styles = StyleSheet.create({
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
   chip: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentSoft },
+  chipActive: { borderColor: accentColor, backgroundColor: (accentColor + "18") },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "500" },
-  chipTextActive: { color: COLORS.accent },
+  chipTextActive: { color: accentColor },
   appCard: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8, borderRadius: 0, borderWidth: 0, borderColor: "transparent", backgroundColor: COLORS.background, marginBottom: 0, gap: 16 },
   appIcon: { width: 64, height: 64, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
-  appIconFallbackText: { color: COLORS.accent, fontSize: 18, fontWeight: "600" },
+  appIconFallbackText: { color: accentColor, fontSize: 18, fontWeight: "600" },
   appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 16, paddingBottom: 8 },
@@ -3158,7 +3176,7 @@ const styles = StyleSheet.create({
   detailIconImage: { width: "100%", height: "100%" },
   detailIconText: { color: "#FFFFFF", fontSize: 46, fontWeight: "900" },
   detailTitle: { color: COLORS.text, fontSize: 25, fontWeight: "900", marginTop: 16, textAlign: "center" },
-  detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
+  detailCategory: { color: accentColor, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
   listingScreenshot: { width: 220, height: 390, borderRadius: 14, backgroundColor: "#F3F3F3", borderWidth: 1, borderColor: "#E1E1E1", marginRight: 10 },
   detailDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 14, textAlign: "center" },
   detailStats: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-around", gap: 8, marginTop: 22, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
@@ -3199,11 +3217,11 @@ const styles = StyleSheet.create({
   postComposerInput: { minHeight: 82, maxHeight: 180, marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13, lineHeight: 19, textAlignVertical: "top" },
   composeFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   composeLimit: { color: COLORS.muted, fontSize: 10 },
-  composeButton: { backgroundColor: COLORS.accent, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8 },
+  composeButton: { backgroundColor: accentColor, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8 },
   composeButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
   postCard: { padding: 15, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, marginBottom: 12 },
   postHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  smallAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accentSoft, alignItems: "center", justifyContent: "center" },
+  smallAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: (accentColor + "18"), alignItems: "center", justifyContent: "center" },
   smallAvatarText: { color: "#188038", fontWeight: "900" },
   postIdentity: { flex: 1 },
   postName: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
@@ -3213,7 +3231,7 @@ const styles = StyleSheet.create({
   commentsPanel: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
   messageThread: { gap: 8, marginVertical: 12 },
   messageBubble: { maxWidth: "88%", padding: 11, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
-  messageOwn: { alignSelf: "flex-end", backgroundColor: COLORS.accentSoft },
+  messageOwn: { alignSelf: "flex-end", backgroundColor: (accentColor + "18") },
   messageOther: { alignSelf: "flex-start", backgroundColor: COLORS.surface },
   messageBody: { color: COLORS.text, fontSize: 12, lineHeight: 18 },
   messageTime: { color: COLORS.muted, fontSize: 9, marginTop: 5 },
@@ -3226,26 +3244,26 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.green },
   statusText: { color: COLORS.green, fontSize: 11, fontWeight: "700" },
   toolCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, borderRadius: 13, marginBottom: 10 },
-  toolIcon: { width: 43, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: COLORS.accentSoft },
+  toolIcon: { width: 43, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: (accentColor + "18") },
   toolIconText: { color: "#188038", fontSize: 20, fontWeight: "800" },
   toolCopy: { flex: 1 },
   toolTitle: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
   toolDescription: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   disclaimer: { color: COLORS.muted, fontSize: 10, lineHeight: 16, marginTop: 12 },
   profileCard: { alignItems: "center", padding: 24, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  profileAvatar: { width: 66, height: 66, borderRadius: 33, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
+  profileAvatar: { width: 66, height: 66, borderRadius: 33, backgroundColor: accentColor, alignItems: "center", justifyContent: "center" },
   profileAvatarText: { color: "#FFFFFF", fontSize: 26, fontWeight: "900" },
   profileName: { color: COLORS.text, fontSize: 17, fontWeight: "800", marginTop: 14 },
   profileHint: { color: COLORS.muted, textAlign: "center", fontSize: 12, lineHeight: 18, marginTop: 7 },
-  primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
+  primaryButton: { marginTop: 18, backgroundColor: accentColor, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4 },
+  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 4, minHeight: 64 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 56, gap: 2, paddingVertical: 3 },
   tabIconPill: { width: 64, height: 28, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
-  tabIconPillActive: { backgroundColor: COLORS.accentSoft },
+  tabIconPillActive: { backgroundColor: (accentColor + "18") },
   tabIcon: { color: COLORS.muted, fontSize: 20, lineHeight: 22 },
-  tabActive: { color: COLORS.accent },
+  tabActive: { color: accentColor },
   tabLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "500" },
   tabLabelActive: { color: COLORS.text },
   toast: { position: "absolute", bottom: 72, left: 18, right: 18, padding: 13, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: COLORS.border },
@@ -3261,8 +3279,8 @@ const styles = StyleSheet.create({
   accentChoiceText: { color: COLORS.text, fontSize: 11, fontWeight: "600" },
   accentCheck: { marginLeft: "auto", fontWeight: "900" },
   drawerRoot: { flex: 1, flexDirection: "row", backgroundColor: "rgba(0,0,0,0.35)" },
-  drawerBackdrop: { flex: 1 },
-  drawerPanel: { width: "82%", maxWidth: 340, height: "100%", backgroundColor: "#FFFFFF", paddingTop: 26, paddingHorizontal: 16, paddingBottom: 20, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
+  drawerBackdrop: { flex: 1, minWidth: 0 },
+  drawerPanel: { width: "82%", maxWidth: 420, minWidth: 0, height: "100%", flexShrink: 0, backgroundColor: "#FFFFFF", paddingTop: 18, paddingHorizontal: 16, paddingBottom: 12, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
   drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   drawerTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
   drawerClose: { color: COLORS.muted, fontSize: 30, lineHeight: 32, paddingHorizontal: 6 },
