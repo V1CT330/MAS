@@ -13,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
@@ -132,6 +133,10 @@ function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book"
 }
 
 export default function App() {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isTabletLayout = windowWidth >= 768;
+  const contentMaxWidth = isTabletLayout ? 1120 : 960;
+  const drawerWidth = Math.min(isTabletLayout ? 420 : 360, windowWidth * 0.88);
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [sectionPostDraft, setSectionPostDraft] = useState("");
@@ -2053,7 +2058,7 @@ export default function App() {
       <ExpoStatusBar style="dark" />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.app}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: windowWidth < 360 ? 8 : 12 }]}>
           <View style={styles.headerSearchBox}>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
               <NativeIcon name="menu" color={COLORS.text} size={20} />
@@ -2075,14 +2080,14 @@ export default function App() {
 
         <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
-            <View style={styles.drawerPanel}>
+            <View style={[styles.drawerPanel, { width: drawerWidth, paddingTop: Math.max(16, (StatusBar.currentHeight ?? 0) + 8), paddingBottom: windowHeight < 520 ? 12 : 20 }]}>
               <View style={styles.drawerHeader}>
                 <Text style={styles.drawerTitle}>Malawian App Store</Text>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setDrawerOpen(false)}>
                   <Text style={styles.drawerClose}>×</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
               <Text style={styles.drawerSection}>NAVIGATION</Text>
               {([
                 ["Explore", "apps", "Explore apps and websites"],
@@ -2093,7 +2098,7 @@ export default function App() {
                 ["Develop", "grid", "Developer space"],
                 ["Settings", "settings", "Appearance and preferences"],
               ] as const).map(([label, icon, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => navigateDrawer(label)}>
+                <TouchableOpacity key={label} accessibilityRole="button" style={[styles.drawerItem, { paddingVertical: windowHeight < 600 ? 9 : 13 }]} onPress={() => navigateDrawer(label)}>
                   <NativeIcon name={icon} color={accentColor} size={20} />
                   <View style={styles.drawerItemCopy}>
                     <Text style={styles.drawerItemTitle}>{label}</Text>
@@ -2113,7 +2118,7 @@ export default function App() {
                 ["Developer wallet", "Earnings and wallet information"],
                 ["Console settings", "Developer preferences"],
               ] as const).map(([label, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
+                <TouchableOpacity key={label} accessibilityRole="button" style={[styles.drawerItem, { paddingVertical: windowHeight < 600 ? 9 : 13 }]} onPress={() => {
                   setDrawerOpen(false);
                   setSelectedApp(null);
                   setUtilityScreen("none");
@@ -2137,7 +2142,7 @@ export default function App() {
           </View>
         </Modal>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", paddingHorizontal: windowWidth < 360 ? 8 : 12 }]} keyboardShouldPersistTaps="handled">
           {selectedApp ? (
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={styles.secondaryButtonText}>← Back to store</Text></TouchableOpacity>
