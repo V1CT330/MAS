@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   SafeAreaView,
   ActivityIndicator,
   Image,
   Linking,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -117,6 +119,18 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   ],
 };
 
+function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book" | "bell" | "user" | "users" | "grid" | "settings" | "search"; color: string; size?: number }) {
+  const line = { backgroundColor: color, borderRadius: 2 } as const;
+  if (name === "search") return <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}><View style={{ width: size*0.62, height: size*0.62, borderWidth: 1.8, borderColor: color, borderRadius: size, marginRight: 4, marginBottom: 4 }} /><View style={{ position: "absolute", width: size*0.38, height: 1.8, backgroundColor: color, right: 0, bottom: 2, transform: [{ rotate: "45deg" }] }} /></View>;
+  if (name === "menu") return <View style={{ width: size, height: size, justifyContent: "center", gap: 4 }}><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /></View>;
+  if (name === "apps" || name === "grid") return <View style={{ width: size, height: size, flexDirection: "row", flexWrap: "wrap", gap: 3, alignContent: "center", justifyContent: "center" }}>{[0,1,2,3].map((i)=><View key={i} style={{width:(size-5)/2,height:(size-5)/2,borderWidth:1.8,borderColor:color,borderRadius:2}} />)}</View>;
+  if (name === "book") return <View style={{ width: size*0.78, height: size, borderWidth:1.8,borderColor:color,borderRadius:3,flexDirection:"row" }}><View style={{width:2,backgroundColor:color,marginLeft:4,marginRight:3}}/><View style={{flex:1}}/></View>;
+  if (name === "bell") return <View style={{width:size*0.82,height:size*0.9,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.68,height:size*0.68,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size/2,borderTopRightRadius:size/2,borderBottomLeftRadius:4,borderBottomRightRadius:4}}/><View style={{width:size*0.94,height:2,backgroundColor:color,marginTop:1}}/><View style={{width:4,height:4,borderRadius:2,backgroundColor:color,marginTop:1}}/></View>;
+  if (name === "user") return <View style={{width:size,height:size,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.34,height:size*0.34,borderRadius:size,borderWidth:1.8,borderColor:color,marginBottom:2}}/><View style={{width:size*0.82,height:size*0.4,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size,borderTopRightRadius:size,borderBottomWidth:0}}/></View>;
+  if (name === "users") return <View style={{width:size,height:size,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:2}}><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/></View>;
+  return <View style={{width:size,height:size,justifyContent:"center",gap:4}}><View style={{height:2,width:size,backgroundColor:color}}/><View style={{height:2,width:size*0.72,backgroundColor:color}}/><View style={{height:2,width:size*0.86,backgroundColor:color}}/></View>;
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
@@ -196,6 +210,12 @@ export default function App() {
   const [feedSource, setFeedSource] = useState<"unconfigured" | "live" | "error">("unconfigured");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [accentColor, setAccentColor] = useState(COLORS.accent);
+  const [accentLoaded, setAccentLoaded] = useState(false);
   const [postDraft, setPostDraft] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [posting, setPosting] = useState(false);
@@ -1945,6 +1965,89 @@ export default function App() {
     setTimeout(() => setNotice(""), 2800);
   };
 
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem("mas:accent").then((stored) => {
+      if (active && stored && /^#[0-9a-f]{6}$/i.test(stored)) setAccentColor(stored);
+    }).catch(() => undefined).finally(() => {
+      if (active) setAccentLoaded(true);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (accentLoaded) AsyncStorage.setItem("mas:accent", accentColor).catch(() => undefined);
+  }, [accentColor, accentLoaded]);
+
+  const handleEmailAuth = async () => {
+    if (!isSupabaseConfigured) {
+      showNotice("Account sign-in is unavailable because this build has no MAS backend configuration.");
+      return;
+    }
+    const email = authEmail.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      showNotice("Enter a valid email address.");
+      return;
+    }
+    if (authPassword.length < 6) {
+      showNotice("Password must contain at least 6 characters.");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: authPassword,
+          options: { emailRedirectTo: "mw.wealthgrid.mas://auth/callback" },
+        });
+        if (error) throw error;
+        setAuthPassword("");
+        if (data.session) {
+          setUserEmail(data.user?.email ?? email);
+          showNotice("Your MAS account has been created.");
+        } else {
+          setAuthMode("signin");
+          showNotice("Account created. Check your email to confirm your address, then sign in.");
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
+        if (error) throw error;
+        setUserEmail(data.user?.email ?? email);
+        setAuthPassword("");
+        showNotice("You are signed in to MAS.");
+      }
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const navigateDrawer = (destination: "Explore" | "Library" | "Alerts" | "Account" | "Social" | "Develop" | "Settings") => {
+    setDrawerOpen(false);
+    setSelectedApp(null);
+    setDeveloperScreen(null);
+    if (destination === "Library") {
+      setTab("Profile");
+      setUtilityScreen("library");
+    } else if (destination === "Alerts") {
+      setTab("Profile");
+      setUtilityScreen("notifications");
+    } else if (destination === "Settings") {
+      setTab("Profile");
+      setUtilityScreen("settings");
+    } else {
+      setUtilityScreen("none");
+      if (destination === "Develop") {
+        setTab("Develop");
+        setDeveloperScreen("Developer dashboard");
+      } else {
+        setTab(destination === "Account" ? "Profile" : destination);
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ExpoStatusBar style="dark" />
@@ -1952,8 +2055,11 @@ export default function App() {
       <View style={styles.app}>
         <View style={styles.header}>
           <View style={styles.headerSearchBox}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
+              <NativeIcon name="menu" color={COLORS.text} size={20} />
+            </TouchableOpacity>
             <Image accessibilityLabel="Malawian App Store logo" source={{ uri: "https://malawian-app-store-j6pm.vercel.app/favicon.png" }} style={styles.headerLogo} resizeMode="contain" />
-            <Text style={styles.headerSearchIcon}>⌕</Text>
+            <NativeIcon name="search" color={COLORS.muted} size={18} />
             <TextInput
               accessibilityLabel="Search apps and websites"
               placeholder="Search apps & websites"
@@ -1966,6 +2072,70 @@ export default function App() {
             />
           </View>
         </View>
+
+        <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
+          <View style={styles.drawerRoot}>
+            <View style={styles.drawerPanel}>
+              <View style={styles.drawerHeader}>
+                <Text style={styles.drawerTitle}>Malawian App Store</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setDrawerOpen(false)}>
+                  <Text style={styles.drawerClose}>×</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">
+              <Text style={styles.drawerSection}>NAVIGATION</Text>
+              {([
+                ["Explore", "apps", "Explore apps and websites"],
+                ["Library", "book", "Saved and installed apps"],
+                ["Alerts", "bell", "Notifications"],
+                ["Account", "user", "Your MAS account"],
+                ["Social", "users", "Community and messages"],
+                ["Develop", "grid", "Developer space"],
+                ["Settings", "settings", "Appearance and preferences"],
+              ] as const).map(([label, icon, description]) => (
+                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => navigateDrawer(label)}>
+                  <NativeIcon name={icon} color={accentColor} size={20} />
+                  <View style={styles.drawerItemCopy}>
+                    <Text style={styles.drawerItemTitle}>{label}</Text>
+                    <Text style={styles.drawerItemDescription}>{description}</Text>
+                  </View>
+                  <Text style={styles.drawerChevron}>›</Text>
+                </TouchableOpacity>
+              ))}
+              <Text style={styles.drawerSection}>DEVELOPER SPACE</Text>
+              {([
+                ["Developer dashboard", "Overview and publishing status"],
+                ["Publish a product", "Create an app or website listing"],
+                ["My applications", "Manage your products and releases"],
+                ["Analytics", "Views, installs and performance"],
+                ["Verification", "Developer identity status"],
+                ["Developer Pro", "Subscription and benefits"],
+                ["Developer wallet", "Earnings and wallet information"],
+                ["Console settings", "Developer preferences"],
+              ] as const).map(([label, description]) => (
+                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
+                  setDrawerOpen(false);
+                  setSelectedApp(null);
+                  setUtilityScreen("none");
+                  setTab("Develop");
+                  setDeveloperScreen(label);
+                }}>
+                  <NativeIcon name="settings" color={accentColor} size={19} />
+                  <View style={styles.drawerItemCopy}>
+                    <Text style={styles.drawerItemTitle}>{label}</Text>
+                    <Text style={styles.drawerItemDescription}>{description}</Text>
+                  </View>
+                  <Text style={styles.drawerChevron}>›</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.drawerFooter}>
+                <Text style={styles.drawerFooterText}>Built for Malawi · Powered by Wealth Grid Finance</Text>
+              </View>
+              </ScrollView>
+            </View>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close navigation menu" style={styles.drawerBackdrop} onPress={() => setDrawerOpen(false)} />
+          </View>
+        </Modal>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
           {selectedApp ? (
@@ -1982,7 +2152,7 @@ export default function App() {
                   <View style={styles.detailStat}><Text style={styles.detailStatValue}>{selectedApp.developer || "MAS developer"}</Text><Text style={styles.detailStatLabel}>Developer</Text></View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.primaryButton} onPress={async () => {
+              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={async () => {
                 if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -1990,7 +2160,7 @@ export default function App() {
                 const { error } = await supabase.from("wishlist").insert({ user_id: authData.user.id, listing_id: selectedApp.id });
                 showNotice(error ? (error.code === "23505" ? "This listing is already saved." : error.message || "Could not save listing.") : "Saved to your library.");
               }}><Text style={styles.primaryButtonText}>＋ Save to my library</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={() => void installSelectedApp()} disabled={detailLoading}>
+              <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => void installSelectedApp()} disabled={detailLoading}>
                 <Text style={styles.primaryButtonText}>{selectedApp.kind === "website" ? "Open website" : "Download / install"}</Text>
               </TouchableOpacity>
               {detailLoading ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
@@ -2318,7 +2488,39 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
+              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in or create an account to connect your MAS profile." : "Account sign-in needs the MAS backend configuration in this build.")}</Text>
+                {userEmail ? (
+                  <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); } }); }}>
+                    <Text style={styles.primaryButtonText}>Sign out</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.authForm}>
+                    <View style={styles.authModeRow}>
+                      <TouchableOpacity onPress={() => setAuthMode("signin")} style={[styles.authModeButton, authMode === "signin" && { borderColor: accentColor, backgroundColor: `${accentColor}18` }]}>
+                        <Text style={[styles.authModeText, authMode === "signin" && { color: accentColor }]}>Sign in</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setAuthMode("signup")} style={[styles.authModeButton, authMode === "signup" && { borderColor: accentColor, backgroundColor: `${accentColor}18` }]}>
+                        <Text style={[styles.authModeText, authMode === "signup" && { color: accentColor }]}>Create account</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput accessibilityLabel="Email address" value={authEmail} onChangeText={setAuthEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" textContentType="emailAddress" placeholder="Email address" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <TextInput accessibilityLabel="Password" value={authPassword} onChangeText={setAuthPassword} secureTextEntry textContentType={authMode === "signup" ? "newPassword" : "password"} autoCapitalize="none" placeholder="Password (at least 6 characters)" placeholderTextColor={COLORS.muted} style={styles.formInput} />
+                    <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, { backgroundColor: accentColor }, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={() => void handleEmailAuth()}>
+                      <Text style={styles.primaryButtonText}>{authLoading ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in with email"}</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.authDivider}>OR</Text>
+                    <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.secondaryButton, { alignSelf: "stretch", alignItems: "center" }]} onPress={async () => {
+                      if (!isSupabaseConfigured) return;
+                      setAuthLoading(true);
+                      const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } });
+                      if (error) { showNotice(error.message); setAuthLoading(false); return; }
+                      if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } }
+                      else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); }
+                    }}>
+                      <Text style={[styles.secondaryButtonText, { color: accentColor }]}>{authLoading ? "Connecting…" : "Continue with Google"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}</View>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
@@ -2342,6 +2544,28 @@ export default function App() {
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setUtilityScreen("none")}><Text style={styles.secondaryButtonText}>← Back</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{utilityScreen === "library" ? "My library" : utilityScreen === "notifications" ? "Notifications" : "Account settings"}</Text>
               <Text style={styles.pageIntro}>{utilityScreen === "library" ? "Your saved listings and installed-app history." : utilityScreen === "notifications" ? "Updates for your MAS account and activity." : "Manage your MAS account on this device."}</Text>
+              {utilityScreen === "settings" ? (
+                <View style={styles.composeCard}>
+                  <Text style={styles.sectionTitle}>Appearance</Text>
+                  <Text style={styles.toolDescription}>Choose the accent color used across the native MAS interface. Your choice is saved on this device.</Text>
+                  <View style={styles.accentGrid}>
+                    {[
+                      { name: "Green", value: "#168447" },
+                      { name: "Blue", value: "#2563EB" },
+                      { name: "Red", value: "#DC2626" },
+                      { name: "Orange", value: "#EA580C" },
+                      { name: "Purple", value: "#9333EA" },
+                      { name: "Black", value: "#171717" },
+                    ].map((preset) => (
+                      <TouchableOpacity key={preset.value} accessibilityRole="button" accessibilityState={{ selected: accentColor.toLowerCase() === preset.value.toLowerCase() }} onPress={() => setAccentColor(preset.value)} style={[styles.accentChoice, accentColor.toLowerCase() === preset.value.toLowerCase() && { borderColor: preset.value, backgroundColor: `${preset.value}12` }]}>
+                        <View style={[styles.accentSwatch, { backgroundColor: preset.value }]} />
+                        <Text style={styles.accentChoiceText}>{preset.name}</Text>
+                        {accentColor.toLowerCase() === preset.value.toLowerCase() ? <Text style={[styles.accentCheck, { color: preset.value }]}>✓</Text> : null}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               {utilityScreen === "library" ? (
                 <>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Saved listings</Text><Text style={styles.sectionMeta}>{libraryData.saved.length}</Text></View>
@@ -2377,7 +2601,7 @@ export default function App() {
                       <Text style={styles.fieldLabel}>LinkedIn (HTTPS)</Text><TextInput value={accountLinkedinUrl} onChangeText={setAccountLinkedinUrl} autoCapitalize="none" keyboardType="url" placeholder="https://linkedin.com/in/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Facebook (HTTPS)</Text><TextInput value={accountFacebookUrl} onChangeText={setAccountFacebookUrl} autoCapitalize="none" keyboardType="url" placeholder="https://facebook.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
-                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
+                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
                     </View>
                   ) : <Text style={styles.disclaimer}>Account settings are unavailable until the public MAS backend configuration is added to this build.</Text>}
                 </>
@@ -2421,7 +2645,7 @@ export default function App() {
               ) : developerScreen === "Developer dashboard" ? (
                 <>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : <View style={styles.devMetricGrid}>{[["Published",developerRows.filter((x) => x.status === "published").length],["In review",developerRows.filter((x) => x.status === "pending").length],["Drafts",developerRows.filter((x) => x.status === "draft").length],["Rejected",developerRows.filter((x) => x.status === "rejected").length]].map(([label,value]) => <View key={String(label)} style={styles.devMetric}><Text style={styles.devMetricValue}>{value}</Text><Text style={styles.devMetricLabel}>{label}</Text></View>)}</View>}
-                  <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ Publish a product</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => setDeveloperScreen("My applications")}><Text style={styles.secondaryButtonText}>View all products →</Text></TouchableOpacity>
                 </>
               ) : developerScreen === "Reviews" ? (
                 <>
@@ -2436,7 +2660,7 @@ export default function App() {
                     <View style={styles.composeCard}>
                       <Text style={styles.sectionTitle}>Advanced analytics requires Developer Pro</Text>
                       <Text style={styles.toolDescription}>Your detailed view/install events and audience breakdowns are available while your Pro subscription is active or within its paid period.</Text>
-                      <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
+                      <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Developer Pro")}><Text style={styles.primaryButtonText}>View Developer Pro →</Text></TouchableOpacity>
                     </View>
                   ) : <>
                     <View style={styles.devMetricGrid}>
@@ -2459,12 +2683,12 @@ export default function App() {
               ) : developerScreen === "My applications" || developerScreen === "Publishing checklist" ? (                <>
                   {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.map((item) => <View key={item.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => developerScreen === "My applications" && item.status !== "pending" ? startEditingListing(item) : undefined}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.category} · {item.kind} · {item.status}</Text>{developerScreen === "Publishing checklist" ? <Text style={styles.postTag}>{item.status === "published" ? "Published" : item.status === "draft" ? "Draft needs assets and checks" : item.status === "pending" ? "Awaiting review" : "Review status: " + item.status}</Text> : null}{developerScreen === "My applications" && item.status !== "pending" ? <Text style={styles.postTag}>Tap to edit listing</Text> : null}</TouchableOpacity>{developerScreen === "My applications" && (item.status === "draft" || item.status === "rejected") ? <View style={{ gap: 8, alignItems: "flex-end" }}><TouchableOpacity accessibilityRole="button" onPress={() => void submitDraftForReview(item)}><Text style={styles.secondaryButtonText}>Submit for review</Text></TouchableOpacity>{item.status === "draft" ? <TouchableOpacity accessibilityRole="button" onPress={() => void deleteNativeDraft(item)}><Text style={styles.removeMediaText}>Delete</Text></TouchableOpacity> : null}</View> : null}</View>)}
                   {!developerLoading && !developerRows.length ? <Text style={styles.emptyText}>No products are attached to this developer account yet.</Text> : null}
-                  {developerScreen === "My applications" ? <TouchableOpacity style={styles.primaryButton} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
+                  {developerScreen === "My applications" ? <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => setDeveloperScreen("Publish a product")}><Text style={styles.primaryButtonText}>＋ New product draft</Text></TouchableOpacity> : null}
                 </>
               ) : null}
               {developerScreen === "My public profile" ? (
                 <>
-                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Portfolio projects</Text><Text style={styles.sectionMeta}>{portfolioProjects.length}</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Project name *</Text>
@@ -2567,7 +2791,7 @@ export default function App() {
                       "Product promotion and Spotlight application tools",
                       "Kwacha checkout through the existing PayChangu workflow",
                     ].map((item) => <Text key={item} style={styles.postTag}>✓  {item}</Text>)}
-                    <TouchableOpacity style={styles.primaryButton} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/subscription").catch(() => showNotice("Could not open secure checkout."))}><Text style={styles.primaryButtonText}>{proSubscription?.status === "active" ? "Open subscription management" : "Continue to secure checkout"}</Text></TouchableOpacity>
                     <Text style={styles.disclaimer}>The hosted checkout and cancellation actions remain on the MAS web service so payment validation and subscription changes stay server-side. If prompted, sign in to your MAS account in the browser.</Text>
                   </View>
                 </>
@@ -2812,11 +3036,11 @@ export default function App() {
 
         <View style={styles.tabBar}>
           {([
-            ["Explore", "▣"],
-            ["Library", "▤"],
-            ["Alerts", "♧"],
-            ["Account", "○"],
-          ] as [string, string][]).map(([name, icon]) => {
+            ["Explore", "apps"],
+            ["Library", "book"],
+            ["Alerts", "bell"],
+            ["Account", "user"],
+          ] as [string, "apps" | "book" | "bell" | "user"][]).map(([name, icon]) => {
             const active = name === "Explore"
               ? tab === "Explore" && utilityScreen === "none" && developerScreen === null
               : name === "Library"
@@ -2848,8 +3072,8 @@ export default function App() {
                   }
                 }}
               >
-                <View style={[styles.tabIconPill, active && styles.tabIconPillActive]}>
-                  <Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text>
+                <View style={[styles.tabIconPill, active && styles.tabIconPillActive, active && { backgroundColor: `${accentColor}18` }]}>
+                  <NativeIcon name={icon} color={active ? accentColor : COLORS.muted} size={21} />
                 </View>
                 <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
               </TouchableOpacity>
@@ -2864,8 +3088,9 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
   app: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
+  header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
   headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  headerMenuButton: { width: 26, height: 30, alignItems: "center", justifyContent: "center" },
   headerLogo: { width: 28, height: 28, flexShrink: 0 },
   
   headerSearchIcon: { color: COLORS.muted, fontSize: 22, lineHeight: 24, width: 18, textAlign: "center" },
@@ -3020,4 +3245,28 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: COLORS.text },
   toast: { position: "absolute", bottom: 72, left: 18, right: 18, padding: 13, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: COLORS.border },
   toastText: { color: COLORS.text, fontSize: 12, textAlign: "center" },
+  authForm: { width: "100%", marginTop: 18, gap: 10 },
+  authModeRow: { flexDirection: "row", gap: 8 },
+  authModeButton: { flex: 1, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
+  authModeText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  authDivider: { color: COLORS.muted, fontSize: 10, fontWeight: "700", textAlign: "center", marginTop: 4 },
+  accentGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  accentChoice: { minWidth: "30%", flexGrow: 1, flexDirection: "row", alignItems: "center", gap: 7, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 9, paddingVertical: 10 },
+  accentSwatch: { width: 16, height: 16, borderRadius: 8 },
+  accentChoiceText: { color: COLORS.text, fontSize: 11, fontWeight: "600" },
+  accentCheck: { marginLeft: "auto", fontWeight: "900" },
+  drawerRoot: { flex: 1, flexDirection: "row", backgroundColor: "rgba(0,0,0,0.35)" },
+  drawerBackdrop: { flex: 1 },
+  drawerPanel: { width: "82%", maxWidth: 340, height: "100%", backgroundColor: "#FFFFFF", paddingTop: 26, paddingHorizontal: 16, paddingBottom: 20, borderTopRightRadius: 18, borderBottomRightRadius: 18 },
+  drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  drawerTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
+  drawerClose: { color: COLORS.muted, fontSize: 30, lineHeight: 32, paddingHorizontal: 6 },
+  drawerSection: { color: COLORS.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1.4, marginTop: 22, marginBottom: 8 },
+  drawerItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
+  drawerItemCopy: { flex: 1 },
+  drawerItemTitle: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
+  drawerItemDescription: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
+  drawerChevron: { color: COLORS.muted, fontSize: 22 },
+  drawerFooter: { marginTop: "auto", paddingTop: 18 },
+  drawerFooterText: { color: COLORS.muted, fontSize: 10, lineHeight: 15 },
 });
