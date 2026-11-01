@@ -2062,9 +2062,11 @@ export default function App() {
         <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
 
           <View style={styles.headerSearchBox}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
+{tab === "Develop" ? (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open developer navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
               <NativeIcon name="menu" color={COLORS.text} size={20} />
             </TouchableOpacity>
+          ) : null}
             <Image accessibilityLabel="Malawian App Store logo" source={require("./assets/mas-logo-mark.png")} style={styles.headerLogo} resizeMode="contain" />
             <NativeIcon name="search" color={COLORS.muted} size={18} />
             <TextInput
@@ -2080,7 +2082,7 @@ export default function App() {
           </View>
         </View>
 
-        <Modal visible={drawerOpen} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
+        <Modal visible={drawerOpen && tab === "Develop"} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
             <View style={[styles.drawerPanel, { width: Math.min(windowWidth * 0.88, 340), paddingTop: Math.max(20, (StatusBar.currentHeight ?? 0) + 12), paddingBottom: Math.max(16, Math.round(windowHeight * 0.02)) }]}>
               <View style={styles.drawerHeader}>
