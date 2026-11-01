@@ -2099,8 +2099,8 @@ export default function App() {
                 ["My applications", "book", "Manage your products and releases"],
                 ["Analytics", "search", "Views, installs and performance"],
                 ["Verification", "user", "Developer identity status"],
-                ["Developer Pro", "star", "Subscription and benefits"],
-                ["Developer wallet", "wallet", "Earnings and wallet information"],
+                ["Developer Pro", "users", "Subscription and benefits"],
+                ["Developer wallet", "book", "Earnings and wallet information"],
                 ["Console settings", "settings", "Developer preferences"],
               ] as const).map(([label, icon, description]) => (
                 <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
