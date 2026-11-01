@@ -2,16 +2,16 @@
   "expo": {
     "name": "Malawian App Store",
     "slug": "malawian-app-store-wsf8defenl82zkzevchmj",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "mw.wealthgrid.mas",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
       "package": "mw.wealthgrid.mas",
-      "versionCode": 4,
+      "versionCode": 5,
       "edgeToEdgeEnabled": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/mas-logo-mark.png",
+        "foregroundImage": "./assets/mas-logo-mark-adaptive.svg",
         "backgroundColor": "#FFFFFF"
       }
     },
@@ -29,7 +29,7 @@
       "barStyle": "dark-content",
       "enforceContrast": false
     },
-    "icon": "./assets/mas-logo-mark.png",
+    "icon": "./assets/mas-logo-mark-adaptive.svg",
     "splash": {
       "image": "./assets/mas-logo.png",
       "resizeMode": "contain",
