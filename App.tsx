@@ -3050,7 +3050,7 @@ export default function App() {
             ["Develop", "grid"],
             ["Profile", "user"],
           ] as [Tab, "apps" | "users" | "grid" | "user"][]).map(([name, icon]) => {
-            const active = tab === name && utilityScreen === "none" && (name !== "Develop" || developerScreen === null);
+            const active = tab === name && utilityScreen === "none";
             return (
               <TouchableOpacity
                 key={name}
