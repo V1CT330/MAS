@@ -2119,31 +2119,6 @@ export default function App() {
                 </TouchableOpacity>
               ))}
 
-              {([
-                ["Developer dashboard", "Overview and publishing status"],
-                ["Publish a product", "Create an app or website listing"],
-                ["My applications", "Manage your products and releases"],
-                ["Analytics", "Views, installs and performance"],
-                ["Verification", "Developer identity status"],
-                ["Developer Pro", "Subscription and benefits"],
-                ["Developer wallet", "Earnings and wallet information"],
-                ["Console settings", "Developer preferences"],
-              ] as const).map(([label, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
-                  setDrawerOpen(false);
-                  setSelectedApp(null);
-                  setUtilityScreen("none");
-                  setTab("Develop");
-                  setDeveloperScreen(label);
-                }}>
-                  <NativeIcon name="settings" color={accentColor} size={19} />
-                  <View style={styles.drawerItemCopy}>
-                    <Text style={styles.drawerItemTitle}>{label}</Text>
-                    <Text style={styles.drawerItemDescription}>{description}</Text>
-                  </View>
-                  <Text style={styles.drawerChevron}>›</Text>
-                </TouchableOpacity>
-              ))}
               <View style={styles.drawerFooter}>
                 <Text style={styles.drawerFooterText}>Built for Malawi · Powered by Wealth Grid Finance</Text>
               </View>
