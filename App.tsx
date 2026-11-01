@@ -2092,18 +2092,25 @@ export default function App() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">
-              <Text style={styles.drawerSection}>NAVIGATION</Text>
+              <Text style={styles.drawerSection}>DEVELOPER SPACE</Text>
               {([
-                ["Explore", "apps", "Explore apps and websites"],
-                ["Library", "book", "Saved and installed apps"],
-                ["Alerts", "bell", "Notifications"],
-                ["Account", "user", "Your MAS account"],
-                ["Social", "users", "Community and messages"],
-                ["Develop", "grid", "Developer space"],
-                ["Settings", "settings", "Appearance and preferences"],
+                ["Developer dashboard", "grid", "Overview and publishing status"],
+                ["Publish a product", "apps", "Create an app or website listing"],
+                ["My applications", "book", "Manage your products and releases"],
+                ["Analytics", "search", "Views, installs and performance"],
+                ["Verification", "user", "Developer identity status"],
+                ["Developer Pro", "star", "Subscription and benefits"],
+                ["Developer wallet", "wallet", "Earnings and wallet information"],
+                ["Console settings", "settings", "Developer preferences"],
               ] as const).map(([label, icon, description]) => (
-                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => navigateDrawer(label)}>
-                  <NativeIcon name={icon} color={accentColor} size={20} />
+                <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
+                  setDrawerOpen(false);
+                  setSelectedApp(null);
+                  setUtilityScreen("none");
+                  setTab("Develop");
+                  setDeveloperScreen(label);
+                }}>
+                  <NativeIcon name={icon} color={accentColor} size={19} />
                   <View style={styles.drawerItemCopy}>
                     <Text style={styles.drawerItemTitle}>{label}</Text>
                     <Text style={styles.drawerItemDescription}>{description}</Text>
@@ -2111,7 +2118,7 @@ export default function App() {
                   <Text style={styles.drawerChevron}>›</Text>
                 </TouchableOpacity>
               ))}
-              <Text style={styles.drawerSection}>DEVELOPER SPACE</Text>
+
               {([
                 ["Developer dashboard", "Overview and publishing status"],
                 ["Publish a product", "Create an app or website listing"],
