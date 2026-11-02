@@ -485,7 +485,7 @@ export default function App() {
     setAuthLoading(true);
     try {
       if (authMode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password: authPassword });
+        const { data, error } = await supabase.auth.signUp({ email, password: authPassword, options: { emailRedirectTo: "mw.wealthgrid.mas://auth/callback" } });
         if (error) throw error;
         if (data.session) {
           setUserEmail(data.user?.email ?? email);
