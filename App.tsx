@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
@@ -1532,7 +1533,7 @@ export default function App() {
       <View style={styles.app}>
         <View style={styles.header}>
           <View style={styles.brandRow}>
-            <View style={styles.brandMark}><Text style={styles.brandMarkText}>▣</Text></View>
+            <View style={styles.brandMark}><MaterialCommunityIcons name="storefront-outline" size={22} color="#FFFFFF" /></View>
             <View>
               <Text style={styles.brand}>MAS</Text>
               <Text style={styles.brandSub}>MALAWIAN APP STORE</Text>
@@ -1590,7 +1591,7 @@ export default function App() {
           {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
             <>
               <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
+                <MaterialCommunityIcons name="magnify" size={22} color={COLORS.muted} style={styles.searchIcon} />
                 <TextInput
                   accessibilityLabel="Search apps and websites"
                   placeholder="Search apps & websites"
@@ -2153,13 +2154,13 @@ export default function App() {
 
         <View style={styles.tabBar}>
           {([
-            ["Explore", "⌕"],
-            ["Social", "♡"],
-            ["Develop", "▤"],
-            ["Profile", "●"],
+            ["Explore", "storefront-outline"],
+            ["Social", "account-group-outline"],
+            ["Develop", "code-braces-box"],
+            ["Profile", "account-circle-outline"],
           ] as [Tab, string][]).map(([name, icon]) => (
             <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => { setUtilityScreen("none"); setSelectedApp(null); setDeveloperScreen(null); setTab(name); }}>
-              <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
+              <MaterialCommunityIcons name={icon as any} size={23} color={tab === name ? COLORS.accent : COLORS.muted} />
               <Text style={[styles.tabLabel, tab === name && styles.tabLabelActive]}>{name}</Text>
               {tab === name ? <View style={styles.tabIndicator}/> : null}
             </TouchableOpacity>
@@ -2171,7 +2172,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0, backgroundColor: COLORS.background },
   app: { flex: 1, backgroundColor: COLORS.background },
   header: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -2188,9 +2189,9 @@ const styles = StyleSheet.create({
   eyebrow: { color: COLORS.green, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginBottom: 12 },
   heroTitle: { color: COLORS.text, fontSize: 29, lineHeight: 35, fontWeight: "900", letterSpacing: -0.7 },
   heroText: { color: COLORS.muted, fontSize: 13, lineHeight: 20, marginTop: 10, marginBottom: 18 },
-  searchBox: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
-  searchIcon: { color: COLORS.muted, fontSize: 25, marginRight: 8 },
-  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 10 },
+  searchBox: { width: "100%", minWidth: 0, minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, backgroundColor: "#F5F7F6", borderRadius: 24, borderWidth: 1, borderColor: "#E8EAED" },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, minWidth: 0, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
   storeTabs: { flexDirection: "row", gap: 22, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginTop: 12, marginBottom: 14 },
   storeTab: { paddingTop: 9, paddingBottom: 11, borderBottomWidth: 3, borderBottomColor: "transparent" },
   storeTabActive: { borderBottomColor: COLORS.accent },
