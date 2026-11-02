@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Platform,
   SafeAreaView,
   ActivityIndicator,
   Image,
@@ -192,6 +193,9 @@ export default function App() {
   const [feedSource, setFeedSource] = useState<"preview" | "live">("preview");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [postDraft, setPostDraft] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [posting, setPosting] = useState(false);
@@ -471,6 +475,36 @@ export default function App() {
     void loadListingDetails().catch(() => { if (active) { setDetailLoading(false); showNotice("Could not load listing details. Check your connection and retry."); } });
     return () => { active = false; };
   }, [selectedApp]);
+
+  const submitEmailAuth = async () => {
+    if (!isSupabaseConfigured) { showNotice("Account access is unavailable because MAS backend configuration is missing."); return; }
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showNotice("Enter a valid email address."); return; }
+    if (authPassword.length < 8) { showNotice("Password must be at least 8 characters."); return; }
+    setAuthLoading(true);
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email, password: authPassword });
+        if (error) throw error;
+        if (data.session) {
+          setUserEmail(data.user?.email ?? email);
+          showNotice("Your MAS account has been created.");
+        } else {
+          showNotice("Account request received. Check your email to confirm your account, then sign in.");
+          setAuthMode("signin");
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: authPassword });
+        if (error) throw error;
+        setUserEmail(data.user?.email ?? email);
+        showNotice("Signed in to MAS.");
+      }
+    } catch (error: any) {
+      showNotice(error?.message || "Could not complete account access. Try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const saveAccountProfile = async () => {
     if (!isSupabaseConfigured) { showNotice("Account settings need the MAS backend configuration."); return; }
@@ -1498,7 +1532,7 @@ export default function App() {
       <View style={styles.app}>
         <View style={styles.header}>
           <View style={styles.brandRow}>
-            <View style={styles.brandMark}><Text style={styles.brandMarkText}>M</Text></View>
+            <View style={styles.brandMark}><Text style={styles.brandMarkText}>▣</Text></View>
             <View>
               <Text style={styles.brand}>MAS</Text>
               <Text style={styles.brandSub}>MALAWIAN APP STORE</Text>
@@ -1514,7 +1548,7 @@ export default function App() {
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setSelectedApp(null)}><Text style={styles.secondaryButtonText}>← Back to store</Text></TouchableOpacity>
               <View style={styles.detailHero}>
-                <View style={[styles.detailIcon, { backgroundColor: selectedApp.color }]}>{selectedApp.iconUrl ? <Image source={{ uri: selectedApp.iconUrl }} style={styles.detailIconImage} resizeMode="cover" /> : <Text style={styles.detailIconText}>{selectedApp.mark}</Text>}</View>
+                <View style={[styles.detailIcon, { backgroundColor: selectedApp.color }]}>{selectedApp.iconUrl ? <Image source={{ uri: selectedApp.iconUrl }} style={styles.detailIconImage} resizeMode="contain" /> : <Text style={styles.detailIconText}>{selectedApp.mark}</Text>}</View>
                 <Text style={styles.detailTitle}>{selectedApp.name}</Text>
                 <Text style={styles.detailCategory}>{selectedApp.category} · {selectedApp.kind === "website" ? "Website" : "App"}</Text>
                 <Text style={styles.detailDescription}>{selectedApp.description || "Discover this project from a Malawian developer."}</Text>
@@ -1607,7 +1641,7 @@ export default function App() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nativeShelfRow}>
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
-                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
+                        <View style={[styles.nativeShelfIcon, { backgroundColor: item.color }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="contain" /> : <Text style={styles.appIconText}>{item.mark}</Text>}</View>
                         <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.category} · {item.rating ? item.rating.toFixed(1) + " ★" : (item.kind || "app")}</Text>
                       </TouchableOpacity>
@@ -1619,7 +1653,7 @@ export default function App() {
               {catalogueLoading && apps === sampleApps ? <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} /> : null}
               {filteredApps.length ? filteredApps.map((app) => (
                 <TouchableOpacity key={app.id || app.name} style={styles.appCard} onPress={() => setSelectedApp(app)}>
-                  <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="cover" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
+                  <View style={[styles.appIcon, { backgroundColor: app.color }]}>{app.iconUrl ? <Image source={{ uri: app.iconUrl }} style={styles.appIconImage} resizeMode="contain" /> : <Text style={styles.appIconText}>{app.mark}</Text>}</View>
                   <View style={styles.appDetails}>
                     <Text style={styles.appName}>{app.name}</Text>
                     <Text style={styles.appCategory}>{app.category}</Text>
@@ -1873,7 +1907,26 @@ export default function App() {
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
-              <View style={styles.profileCard}>{accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}<Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text><Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in securely with your Google account to connect your MAS profile." : "Add the public Supabase URL and publishable key to enable account sign-in.")}</Text>{userEmail ? <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => error ? showNotice(error.message) : showNotice("Signed out.")); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) { showNotice(error.message); setAuthLoading(false); return; } if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } } else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); } }}><Text style={styles.primaryButtonText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>}</View>
+              <View style={styles.profileCard}>
+                {accountAvatarUri ? <Image source={{ uri: accountAvatarUri }} style={styles.profileAvatar} resizeMode="cover" /> : <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{(accountDisplayName || userEmail || "V").charAt(0).toUpperCase()}</Text></View>}
+                <Text style={styles.profileName}>{accountDisplayName || (userEmail ? "You're signed in" : "Your MAS account")}</Text>
+                <Text style={styles.profileHint}>{userEmail || (isSupabaseConfigured ? "Sign in or create an account to connect your MAS profile." : "Account access requires the public MAS Supabase configuration.")}</Text>
+                {userEmail ? (
+                  <TouchableOpacity style={styles.primaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); setAuthEmail(""); setAuthPassword(""); showNotice("Signed out."); } }); }}><Text style={styles.primaryButtonText}>Sign out</Text></TouchableOpacity>
+                ) : (
+                  <View style={styles.authForm}>
+                    <View style={styles.authModeRow}>
+                      <TouchableOpacity accessibilityRole="button" style={[styles.authModeButton, authMode === "signin" && styles.authModeButtonActive]} onPress={() => setAuthMode("signin")}><Text style={[styles.authModeText, authMode === "signin" && styles.authModeTextActive]}>Sign in</Text></TouchableOpacity>
+                      <TouchableOpacity accessibilityRole="button" style={[styles.authModeButton, authMode === "signup" && styles.authModeButtonActive]} onPress={() => setAuthMode("signup")}><Text style={[styles.authModeText, authMode === "signup" && styles.authModeTextActive]}>Create account</Text></TouchableOpacity>
+                    </View>
+                    <TextInput accessibilityLabel="Email address" value={authEmail} onChangeText={setAuthEmail} placeholder="Email address" placeholderTextColor={COLORS.muted} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" style={styles.formInput} editable={!authLoading} />
+                    <TextInput accessibilityLabel="Password" value={authPassword} onChangeText={setAuthPassword} placeholder="Password (at least 8 characters)" placeholderTextColor={COLORS.muted} secureTextEntry textContentType={authMode === "signup" ? "newPassword" : "password"} autoCapitalize="none" style={styles.formInput} editable={!authLoading} onSubmitEditing={() => void submitEmailAuth()} returnKeyType="go" />
+                    <TouchableOpacity accessibilityRole="button" disabled={!isSupabaseConfigured || authLoading} style={[styles.primaryButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={() => void submitEmailAuth()}><Text style={styles.primaryButtonText}>{authLoading ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in with email"}</Text></TouchableOpacity>
+                    <Text style={styles.authOr}>OR</Text>
+                    <TouchableOpacity accessibilityRole="button" disabled={!isSupabaseConfigured || authLoading} style={[styles.secondaryAuthButton, (!isSupabaseConfigured || authLoading) && { opacity: 0.55 }]} onPress={async () => { if (!isSupabaseConfigured) return; setAuthLoading(true); try { const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } }); if (error) throw error; if (data.url) await Linking.openURL(data.url); else throw new Error("Google sign-in URL was not returned."); } catch (error: any) { showNotice(error?.message || "Could not open Google sign-in."); setAuthLoading(false); } }}><Text style={styles.secondaryAuthText}>{authLoading ? "Connecting…" : "Continue with Google"}</Text></TouchableOpacity>
+                  </View>
+                )}
+              </View>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
@@ -2100,10 +2153,10 @@ export default function App() {
 
         <View style={styles.tabBar}>
           {([
-            ["Explore", "⌂"],
-            ["Social", "◎"],
-            ["Develop", "▦"],
-            ["Profile", "○"],
+            ["Explore", "⌕"],
+            ["Social", "♡"],
+            ["Develop", "▤"],
+            ["Profile", "●"],
           ] as [Tab, string][]).map(([name, icon]) => (
             <TouchableOpacity key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} style={styles.tabItem} onPress={() => { setUtilityScreen("none"); setSelectedApp(null); setDeveloperScreen(null); setTab(name); }}>
               <Text style={[styles.tabIcon, tab === name && styles.tabActive]}>{icon}</Text>
@@ -2122,8 +2175,8 @@ const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: COLORS.background },
   header: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
-  brandMarkText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
+  brandMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  brandMarkText: { color: "#FFFFFF", fontSize: 19, lineHeight: 23, fontWeight: "900" },
   brand: { color: COLORS.text, fontWeight: "900", fontSize: 17, letterSpacing: 1.4 },
   brandSub: { color: COLORS.muted, fontSize: 8, fontWeight: "700", letterSpacing: 1.3, marginTop: 2 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, alignItems: "center", justifyContent: "center" },
@@ -2154,12 +2207,12 @@ const styles = StyleSheet.create({
   appCard: { flexDirection: "row", alignItems: "center", padding: 13, borderRadius: 16, borderWidth: 1, borderColor: "#ECEFF1", backgroundColor: COLORS.surface, marginBottom: 10, gap: 12 },
   appIcon: { width: 53, height: 53, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   appIconText: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
-  appIconImage: { width: "100%", height: "100%", borderRadius: 14 },
+  appIconImage: { width: "100%", height: "100%", borderRadius: 14, resizeMode: "contain", backgroundColor: "#FFFFFF" },
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 14, paddingBottom: 8 },
   nativeShelfItem: { width: 104 },
   nativeShelfIcon: { width: 92, height: 92, borderRadius: 19, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
-  nativeShelfIconImage: { width: "100%", height: "100%" },
+  nativeShelfIconImage: { width: "100%", height: "100%", resizeMode: "contain", backgroundColor: "#FFFFFF" },
   nativeShelfName: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
   nativeShelfMeta: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
   fieldLabel: { color: COLORS.text, fontSize: 11, fontWeight: "800", marginTop: 12, marginBottom: 6 },
@@ -2170,7 +2223,7 @@ const styles = StyleSheet.create({
   devMetricLabel: { color: COLORS.muted, fontSize: 11, marginTop: 4 },
   detailHero: { alignItems: "center", paddingVertical: 24, paddingHorizontal: 12 },
   detailIcon: { width: 112, height: 112, borderRadius: 26, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  detailIconImage: { width: "100%", height: "100%" },
+  detailIconImage: { width: "100%", height: "100%", resizeMode: "contain", backgroundColor: "#FFFFFF" },
   detailIconText: { color: "#FFFFFF", fontSize: 46, fontWeight: "900" },
   detailTitle: { color: COLORS.text, fontSize: 25, fontWeight: "900", marginTop: 16, textAlign: "center" },
   detailCategory: { color: COLORS.accent, fontSize: 12, fontWeight: "700", marginTop: 5, textAlign: "center" },
@@ -2250,8 +2303,17 @@ const styles = StyleSheet.create({
   profileHint: { color: COLORS.muted, textAlign: "center", fontSize: 12, lineHeight: 18, marginTop: 7 },
   primaryButton: { marginTop: 18, backgroundColor: COLORS.accent, borderRadius: 11, paddingHorizontal: 24, paddingVertical: 12 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
+  authForm: { width: "100%", marginTop: 8 },
+  authModeRow: { flexDirection: "row", gap: 8, marginTop: 12, marginBottom: 8 },
+  authModeButton: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background },
+  authModeButtonActive: { borderColor: "#B7E1CD", backgroundColor: COLORS.accentSoft },
+  authModeText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  authModeTextActive: { color: COLORS.accent },
+  authOr: { textAlign: "center", color: COLORS.muted, fontSize: 10, fontWeight: "800", marginTop: 14 },
+  secondaryAuthButton: { alignItems: "center", paddingVertical: 12, paddingHorizontal: 18, marginTop: 8, borderRadius: 11, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background },
+  secondaryAuthText: { color: COLORS.text, fontSize: 12, fontWeight: "800" },
   bottomSpace: { height: 22 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 6, paddingBottom: 6 },
+  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 7, paddingBottom: Platform.OS === "android" ? 14 : 6, minHeight: Platform.OS === "android" ? 66 : 54 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 3 },
   tabIcon: { color: COLORS.muted, fontSize: 20, lineHeight: 22 },
   tabActive: { color: COLORS.accent },
