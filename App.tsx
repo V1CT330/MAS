@@ -2078,10 +2078,16 @@ export default function App() {
     } else {
       setUtilityScreen("none");
       if (destination === "Develop") {
-        setSpace("developer"); setTab("Develop");
+        setSpace("developer");
+        setTab("Develop");
         setDeveloperScreen("Developer dashboard");
+      } else if (destination === "Social") {
+        setSpace("social");
+        setTab("Social");
+        setSocialSection("Feed");
       } else {
-        setTab(destination === "Account" ? "Profile" : destination);
+        setSpace("user");
+        setTab(destination === "Account" ? "Profile" : "Explore");
       }
     }
   };
