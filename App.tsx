@@ -2097,7 +2097,7 @@ export default function App() {
       <ExpoStatusBar style="dark" />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={[styles.app, isLargeScreen && styles.appLargeScreen]}>
-        <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
+        <View style={[styles.header, { paddingHorizontal: 12 }]}>
 
           <View style={styles.headerSearchBox}>
             {space === "developer" ? (
@@ -2108,7 +2108,7 @@ export default function App() {
             <Image accessibilityLabel="Malawian App Store logo" source={require("./assets/mas-logo-mark.png")} style={styles.headerLogo} resizeMode="contain" />
             {space === "user" ? (
               <>
-                <NativeIcon name="search" color={COLORS.muted} size={18} />
+                <NativeIcon name="search" color={COLORS.muted} size={16} />
                 <TextInput
                   accessibilityLabel="Search apps and websites"
                   placeholder="Search apps & websites"
@@ -3154,7 +3154,7 @@ const styles = StyleSheet.create({
   app: { flex: 1, width: "100%", backgroundColor: "#FFFFFF" },
   appLargeScreen: { maxWidth: 1100, alignSelf: "center" },
   header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
-  headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  headerSearchBox: { minHeight: 56, width: "100%", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, borderRadius: 28, backgroundColor: "#F3F3F3" },
   spaceHeaderTitle: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "700", paddingHorizontal: 4 },
   spaceSwitcher: { width: "100%", flexDirection: "row", gap: 7, paddingTop: 2, paddingBottom: 10 },
   spaceTab: { flex: 1, minWidth: 0, minHeight: 34, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, borderRadius: 999, borderWidth: 1, borderColor: COLORS.border, backgroundColor: "#FFFFFF" },
