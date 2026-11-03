@@ -3058,34 +3058,32 @@ export default function App() {
         <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
           {([
             ["Explore", "apps"],
-            ["Social", "users"],
-            ["Develop", "grid"],
+            ["Library", "bookmark"],
+            ["Notifications", "bell"],
             ["Profile", "user"],
-          ] as [Tab, "apps" | "users" | "grid" | "user"][]).map(([name, icon]) => {
-            const active = tab === name && utilityScreen === "none";
+          ] as ["Explore" | "Library" | "Notifications" | "Profile", "apps" | "bookmark" | "bell" | "user"][]).map(([name, icon]) => {
+            const active = name === "Library"
+              ? utilityScreen === "library"
+              : name === "Notifications"
+                ? utilityScreen === "notifications"
+                : tab === name && utilityScreen === "none";
             return (
               <TouchableOpacity
                 key={name}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={name === "Develop" ? "Developer Space" : name}
+                accessibilityLabel={name}
                 style={styles.tabItem}
                 onPress={() => {
                   setSelectedApp(null);
-                  setUtilityScreen("none");
-                  if (name === "Explore") {
-                    setDeveloperScreen(null);
-                    setTab("Explore");
-                  } else if (name === "Social") {
-                    setDeveloperScreen(null);
-                    setSocialSection("Feed");
-                    setTab("Social");
-                  } else if (name === "Develop") {
-                    setTab("Develop");
-                    setDeveloperScreen("Developer dashboard");
+                  setDeveloperScreen(null);
+                  if (name === "Library") {
+                    setUtilityScreen("library");
+                  } else if (name === "Notifications") {
+                    setUtilityScreen("notifications");
                   } else {
-                    setDeveloperScreen(null);
-                    setTab("Profile");
+                    setUtilityScreen("none");
+                    setTab(name);
                   }
                   setDrawerOpen(false);
                 }}
@@ -3093,7 +3091,7 @@ export default function App() {
                 <View style={[styles.tabIconPill, active && styles.tabIconPillActive, active && { backgroundColor: `${accentColor}18` }]}>
                   <NativeIcon name={icon} color={active ? accentColor : COLORS.muted} size={21} />
                 </View>
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name === "Develop" ? "Developer" : name}</Text>
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
               </TouchableOpacity>
             );
           })}
