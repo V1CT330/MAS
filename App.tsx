@@ -2052,17 +2052,70 @@ export default function App() {
     }
   };
 
-  const switchSpace = (nextSpace: AppSpace) => {
+  const denyDeveloperAccess = (message: string) => {
+    showNotice(message);
+    setSpace("user");
+    setTab("Profile");
+    setUtilityScreen("settings");
+    setDeveloperScreen(null);
+    setDrawerOpen(false);
+  };
+
+  const confirmDeveloperMode = async (): Promise<boolean> => {
+    if (!isSupabaseConfigured) {
+      denyDeveloperAccess("Developer Mode needs a connection to your MAS account.");
+      return false;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      denyDeveloperAccess("Sign in to MAS before opening Developer Mode.");
+      return false;
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("mode")
+      .eq("id", authData.user.id)
+      .maybeSingle();
+    if (profileError || !profile) {
+      denyDeveloperAccess(profileError?.message || "Could not confirm your workspace permissions.");
+      return false;
+    }
+    if (profile.mode !== "developer") {
+      denyDeveloperAccess("Developer Mode is not enabled for this account. Enable it in MAS account settings first.");
+      return false;
+    }
+    return true;
+  };
+
+  const openDeveloperWorkspace = async (screen = "Developer dashboard") => {
+    if (!(await confirmDeveloperMode())) return;
+    setSpace("developer");
+    setTab("Develop");
+    setSelectedApp(null);
+    setUtilityScreen("none");
+    setDeveloperScreen(screen);
+    setDrawerOpen(false);
+  };
+
+  const switchSpace = async (nextSpace: AppSpace) => {
+    if (nextSpace === "developer") {
+      await openDeveloperWorkspace();
+      return;
+    }
     setSpace(nextSpace);
     setSelectedApp(null);
     setUtilityScreen("none");
-    setDeveloperScreen(nextSpace === "developer" ? "Developer dashboard" : null);
-    setTab(nextSpace === "user" ? "Explore" : nextSpace === "social" ? "Social" : "Develop");
+    setDeveloperScreen(null);
+    setTab(nextSpace === "user" ? "Explore" : "Social");
     if (nextSpace === "social") setSocialSection("Feed");
     setDrawerOpen(false);
   };
 
   const navigateDrawer = (destination: "Explore" | "Library" | "Alerts" | "Account" | "Social" | "Develop" | "Settings") => {
+    if (destination === "Develop") {
+      void openDeveloperWorkspace();
+      return;
+    }
     setDrawerOpen(false);
     setSelectedApp(null);
     setDeveloperScreen(null);
@@ -2077,11 +2130,7 @@ export default function App() {
       setUtilityScreen("settings");
     } else {
       setUtilityScreen("none");
-      if (destination === "Develop") {
-        setSpace("developer");
-        setTab("Develop");
-        setDeveloperScreen("Developer dashboard");
-      } else if (destination === "Social") {
+      if (destination === "Social") {
         setSpace("social");
         setTab("Social");
         setSocialSection("Feed");
@@ -2166,11 +2215,7 @@ export default function App() {
                 ["Console settings", "settings", "Developer preferences"],
               ] as const).map(([label, icon, description]) => (
                 <TouchableOpacity key={label} accessibilityRole="button" style={styles.drawerItem} onPress={() => {
-                  setDrawerOpen(false);
-                  setSelectedApp(null);
-                  setUtilityScreen("none");
-                  setSpace("developer"); setTab("Develop");
-                  setDeveloperScreen(label);
+                  void openDeveloperWorkspace(label);
                 }}>
                   <NativeIcon name={icon} color={accentColor} size={19} />
                   <View style={styles.drawerItemCopy}>
@@ -2591,7 +2636,7 @@ export default function App() {
                 ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("developer"); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (url === "native:develop") { void openDeveloperWorkspace(); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
