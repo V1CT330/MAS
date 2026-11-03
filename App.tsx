@@ -3108,7 +3108,7 @@ export default function App() {
                 ? utilityScreen === "library"
                 : destination === "Alerts"
                   ? utilityScreen === "notifications"
-                  : destination === "Apps"
+                  : destination === "Explore"
                     ? tab === "Explore" && utilityScreen === "none"
                     : utilityScreen === "settings" || (tab === "Profile" && utilityScreen === "none");
               return (
@@ -3130,7 +3130,7 @@ export default function App() {
                       setUtilityScreen("notifications");
                     } else {
                       setUtilityScreen("none");
-                      setTab(destination === "Apps" ? "Explore" : "Profile");
+                      setTab(destination === "Explore" ? "Explore" : "Profile");
                     }
                     setDrawerOpen(false);
                   }}
