@@ -4,7 +4,8 @@ This is a **native React Native + Expo app**, separate from the MAS website. It 
 
 ## Current implementation
 
-- Native bottom tabs: Explore, Social, Developer Space and Profile.
+- Three explicit native spaces: User Mode, Developer Mode and Social. A dedicated mode switcher changes spaces; content and navigation are scoped so they do not bleed into one another.
+- User Mode bottom navigation: Apps, Library, Alerts and Account. Developer tools are not shown in the User Mode navigation; Social has its own community sections; Developer Mode has its own drawer and dashboard.
 - Explore queries published MAS listings and opens the selected listing on the MAS website. Sample catalogue entries are used only as a fallback.
 - Social queries MAS posts and public profile names; text-post publishing, reactions, comments, connection requests, photo/video selection and Storage upload are implemented in the native client.
 - Direct-message screens query and write the existing `social_messages` table.
