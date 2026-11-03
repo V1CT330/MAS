@@ -573,21 +573,40 @@ export default function App() {
       setUserEmail(session?.user.email ?? null);
     });
     const handleUrl = async (url: string) => {
+      let callback: URL;
       try {
-        const callback = new URL(url);
-        const code = callback.searchParams.get("code");
-        if (code && callback.protocol === "mw.wealthgrid.mas:") {
-          setAuthLoading(true);
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) showNotice(error.message);
-          else showNotice("You are signed in to MAS.");
-          setAuthLoading(false);
-        }
+        callback = new URL(url);
       } catch {
+        return;
+      }
+      if (callback.protocol !== "mw.wealthgrid.mas:") return;
+
+      setAuthLoading(true);
+      try {
+        const callbackError = callback.searchParams.get("error_description") || callback.searchParams.get("error");
+        if (callbackError) throw new Error(callbackError.replace(/\+/g, " "));
+        const code = callback.searchParams.get("code");
+        if (!code) {
+          throw new Error("Google sign-in did not return an authorization code. Try again.");
+        }
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const email = sessionData.session?.user.email ?? data.user?.email ?? null;
+        if (!email) throw new Error("Google sign-in returned, but MAS could not confirm your session. Try again.");
+        setUserEmail(email);
+        setTab("Explore");
+        setUtilityScreen("none");
+        setDeveloperScreen(null);
+        showNotice("You are signed in to MAS.");
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : "Google sign-in failed. Please try again.");
+      } finally {
         setAuthLoading(false);
       }
     };
-    Linking.getInitialURL().then((url) => { if (url) void handleUrl(url); });
+    void Linking.getInitialURL().then((url) => { if (url) return handleUrl(url); }).catch(() => setAuthLoading(false));
     const urlSubscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
     return () => {
       active = false;
@@ -2505,13 +2524,23 @@ export default function App() {
                       setAuthLoading(true);
                       const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: "mw.wealthgrid.mas://auth/callback", skipBrowserRedirect: true } });
                       if (error) { showNotice(error.message); setAuthLoading(false); return; }
-                      if (data.url) { try { await Linking.openURL(data.url); } catch { showNotice("Could not open Google sign-in."); setAuthLoading(false); } }
-                      else { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); }
+                      if (!data.url) { showNotice("Google sign-in URL was not returned."); setAuthLoading(false); return; }
+                      try {
+                        await Linking.openURL(data.url);
+                        // Opening the browser is not the same as completing sign-in.
+                        // Release the button while Google is open; the callback will
+                        // set loading again while MAS exchanges the authorization code.
+                        setAuthLoading(false);
+                      } catch {
+                        showNotice("Could not open Google sign-in.");
+                        setAuthLoading(false);
+                      }
                     }}>
                       <Text style={[styles.secondaryButtonText, { color: accentColor }]}>{authLoading ? "Connecting…" : "Continue with Google"}</Text>
                     </TouchableOpacity>
                   </View>
                 )}</View>
+{userEmail ? <>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>More of MAS</Text><Text style={styles.sectionMeta}>QUICK ACCESS</Text></View>
               {[
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
@@ -2528,6 +2557,7 @@ export default function App() {
                 </TouchableOpacity>
               ))}
               <View style={styles.infoBanner}><Text style={styles.infoTitle}>Built for Malawi</Text><Text style={styles.infoText}>Discover apps, collaborate with builders and grow local technology.</Text></View>
+              </> : null}
             </>
           )}
           {!selectedApp && utilityScreen !== "none" ? (
