@@ -2213,7 +2213,7 @@ export default function App() {
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {["All", ...CATEGORIES].map((item) => (
-                  <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}>
+                  <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, styles.categoryFilterChip, category === item && styles.chipActive]}>
                     <Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text>
                   </TouchableOpacity>
                 ))}
@@ -3146,6 +3146,7 @@ const styles = StyleSheet.create({
   sectionMeta: { color: COLORS.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
   chips: { gap: 8, paddingBottom: 15 },
   chip: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  categoryFilterChip: { minHeight: 36, paddingHorizontal: 16, borderRadius: 999 },
   chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accentSoft },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "500" },
   chipTextActive: { color: COLORS.accent },
