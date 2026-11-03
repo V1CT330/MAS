@@ -23,6 +23,7 @@ import { CATEGORIES, asoReport, matchesSearch, matchesListingFilters, topByNumbe
 import type { Listing } from "./src/shared/mas-core";
 
 type Tab = "Explore" | "Social" | "Develop" | "Profile";
+type AppSpace = "user" | "developer" | "social";
 type SocialSection = "Feed" | "Messages" | "Connections" | "Activity" | "Collabo" | "Investors" | "Grants" | "Crowdfund";
 
 const COLORS = {
@@ -120,12 +121,13 @@ const nativeDeveloperPreviews: Record<string, NativePreviewCard[]> = {
   ],
 };
 
-function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book" | "bell" | "user" | "users" | "grid" | "settings" | "search"; color: string; size?: number }) {
+function NativeIcon({ name, color, size = 20 }: { name: "menu" | "apps" | "book" | "bookmark" | "bell" | "user" | "users" | "grid" | "settings" | "search"; color: string; size?: number }) {
   const line = { backgroundColor: color, borderRadius: 2 } as const;
   if (name === "search") return <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}><View style={{ width: size*0.62, height: size*0.62, borderWidth: 1.8, borderColor: color, borderRadius: size, marginRight: 4, marginBottom: 4 }} /><View style={{ position: "absolute", width: size*0.38, height: 1.8, backgroundColor: color, right: 0, bottom: 2, transform: [{ rotate: "45deg" }] }} /></View>;
   if (name === "menu") return <View style={{ width: size, height: size, justifyContent: "center", gap: 4 }}><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /><View style={[line,{height:2,width:size}]} /></View>;
   if (name === "apps" || name === "grid") return <View style={{ width: size, height: size, flexDirection: "row", flexWrap: "wrap", gap: 3, alignContent: "center", justifyContent: "center" }}>{[0,1,2,3].map((i)=><View key={i} style={{width:(size-5)/2,height:(size-5)/2,borderWidth:1.8,borderColor:color,borderRadius:2}} />)}</View>;
   if (name === "book") return <View style={{ width: size*0.78, height: size, borderWidth:1.8,borderColor:color,borderRadius:3,flexDirection:"row" }}><View style={{width:2,backgroundColor:color,marginLeft:4,marginRight:3}}/><View style={{flex:1}}/></View>;
+  if (name === "bookmark") return <View style={{ width: size*0.62, height: size*0.82, borderWidth:1.8, borderColor:color, borderTopLeftRadius:2, borderTopRightRadius:2, alignItems:"center", justifyContent:"flex-end" }}><View style={{ width:size*0.34, height:2, backgroundColor:color, marginBottom:4 }} /></View>;
   if (name === "bell") return <View style={{width:size*0.82,height:size*0.9,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.68,height:size*0.68,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size/2,borderTopRightRadius:size/2,borderBottomLeftRadius:4,borderBottomRightRadius:4}}/><View style={{width:size*0.94,height:2,backgroundColor:color,marginTop:1}}/><View style={{width:4,height:4,borderRadius:2,backgroundColor:color,marginTop:1}}/></View>;
   if (name === "user") return <View style={{width:size,height:size,alignItems:"center",justifyContent:"flex-end"}}><View style={{width:size*0.34,height:size*0.34,borderRadius:size,borderWidth:1.8,borderColor:color,marginBottom:2}}/><View style={{width:size*0.82,height:size*0.4,borderWidth:1.8,borderColor:color,borderTopLeftRadius:size,borderTopRightRadius:size,borderBottomWidth:0}}/></View>;
   if (name === "users") return <View style={{width:size,height:size,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:2}}><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/><View style={{width:size*0.3,height:size*0.3,borderRadius:size,borderWidth:1.6,borderColor:color}}/></View>;
@@ -138,6 +140,7 @@ export default function App() {
   const isLargeScreen = windowWidth >= 600;
   const horizontalPadding = isCompactWidth ? 10 : isLargeScreen ? 24 : 14;
   const bottomBarPadding = Math.max(4, Math.min(12, Math.round(windowHeight * 0.012)));
+  const [space, setSpace] = useState<AppSpace>("user");
   const [tab, setTab] = useState<Tab>("Explore");
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   const [sectionPostDraft, setSectionPostDraft] = useState("");
@@ -358,7 +361,7 @@ export default function App() {
     if (title.length < 5) { showNotice("Give your feature request a title of at least 5 characters."); return; }
     if (!isSupabaseConfigured) { showNotice("Feature requests need the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to submit a feature request."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to submit a feature request."); setSpace("user"); setTab("Profile"); return; }
     setFeatureRequestSaving(true);
     const { data, error } = await supabase.from("feature_requests")
       .insert({ user_id: authData.user.id, title, body: featureRequestBody.trim() || null })
@@ -373,7 +376,7 @@ export default function App() {
   const toggleFeatureRequestVote = async (item: any) => {
     if (!isSupabaseConfigured) { showNotice("Feature voting needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to vote for a feature request."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to vote for a feature request."); setSpace("user"); setTab("Profile"); return; }
     const alreadyVoted = featureRequestVoteIds.includes(item.id);
     setFeatureRequestVotingId(item.id);
     const result = alreadyVoted
@@ -429,7 +432,7 @@ export default function App() {
     if (!Number.isFinite(days) || days < 1 || days > 90) { showNotice("Campaign duration must be between 1 and 90 days."); return; }
     if (!promotionListings.some((item) => item.id === promotionListingId)) { showNotice("Choose one of your own products."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to submit a campaign."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to submit a campaign."); setSpace("user"); setTab("Profile"); return; }
     setPromotionSaving(true);
     const startsAt = new Date();
     const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
@@ -596,7 +599,7 @@ export default function App() {
         const email = sessionData.session?.user.email ?? data.user?.email ?? null;
         if (!email) throw new Error("Google sign-in returned, but MAS could not confirm your session. Try again.");
         setUserEmail(email);
-        setTab("Explore");
+        setSpace("user"); setTab("Explore");
         setUtilityScreen("none");
         setDeveloperScreen(null);
         showNotice("You are signed in to MAS.");
@@ -831,7 +834,7 @@ export default function App() {
   const saveAccountProfile = async () => {
     if (!isSupabaseConfigured) { showNotice("Account settings need the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to update your profile."); setUtilityScreen("none"); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to update your profile."); setUtilityScreen("none"); setSpace("user"); setTab("Profile"); return; }
     const displayName = accountDisplayName.trim();
     const developerName = accountDeveloperName.trim();
     const bio = accountBio.trim();
@@ -923,7 +926,7 @@ export default function App() {
   const submitSelectedReview = async () => {
     if (!selectedApp) { showNotice("Choose a live MAS listing first."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to post a review."); setSelectedApp(null); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to post a review."); setSelectedApp(null); setSpace("user"); setTab("Profile"); return; }
     const { error } = await supabase.from("reviews").upsert({ listing_id: selectedApp.id, user_id: authData.user.id, rating: reviewRating, body: reviewDraft.trim() || null }, { onConflict: "listing_id,user_id" });
     if (error) { showNotice(error.message || "Could not save your review."); return; }
     setReviewDraft("");
@@ -1007,7 +1010,7 @@ export default function App() {
   const submitDraftForReview = async (listing: any) => {
     if (!isSupabaseConfigured) { showNotice("Submitting a listing needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to submit a product for review."); setDeveloperScreen(null); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to submit a product for review."); setDeveloperScreen(null); setSpace("user"); setTab("Profile"); return; }
     const { data: current, error: listingError } = await supabase.from("listings")
       .select("id,name,kind,description,tagline,website_url,icon_url,status")
       .eq("id", listing.id).eq("developer_id", authData.user.id).maybeSingle();
@@ -1055,7 +1058,7 @@ export default function App() {
     if (authError || !authData.user) {
       showNotice("Sign in to manage product drafts.");
       setDeveloperScreen(null);
-      setTab("Profile");
+      setSpace("user"); setTab("Profile");
       return;
     }
     const { error } = await supabase.from("listings")
@@ -1100,7 +1103,7 @@ export default function App() {
     if (draftKind === "website" && !/^https:\/\//i.test(draftWebsiteUrl.trim())) { showNotice("Enter a valid HTTPS website URL."); return; }
     if (!isSupabaseConfigured) { showNotice("Draft creation needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to create a product draft."); setDeveloperScreen(null); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to create a product draft."); setDeveloperScreen(null); setSpace("user"); setTab("Profile"); return; }
     setDraftSaving(true);
     const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "listing";
     const payload: Record<string, any> = {
@@ -1518,7 +1521,7 @@ export default function App() {
     }
     if (!isSupabaseConfigured) { showNotice("Team management needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to manage your developer team."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to manage your developer team."); setSpace("user"); setTab("Profile"); return; }
     if (email === (authData.user.email || "").toLowerCase()) { showNotice("You cannot invite your own account."); return; }
     setTeamSaving(true);
     const { data, error } = await supabase.from("team_members")
@@ -1562,7 +1565,7 @@ export default function App() {
     if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { showNotice("Enter a valid tester email address."); return; }
     if (!isSupabaseConfigured) { showNotice("Beta testing needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to manage beta testers."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to manage beta testers."); setSpace("user"); setTab("Profile"); return; }
     setBetaSaving(true);
     const { data, error } = await supabase.from("beta_testers")
       .insert({ listing_id: betaListingId, owner_id: authData.user.id, email, channel: betaChannel, status: "invited" })
@@ -1595,7 +1598,7 @@ export default function App() {
     if (description.length > 500) { showNotice("Project description must be 500 characters or fewer."); return; }
     if (!isSupabaseConfigured) { showNotice("Portfolio management needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to update your portfolio."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to update your portfolio."); setSpace("user"); setTab("Profile"); return; }
     setPortfolioSaving(true);
     const { data, error } = await supabase.from("developer_portfolio_projects").insert({
       developer_id: authData.user.id,
@@ -1628,7 +1631,7 @@ export default function App() {
     if (spotlightPitch.trim().length < 30) { showNotice("Tell us a little more, at least 30 characters."); return; }
     if (!isSupabaseConfigured) { showNotice("Spotlight applications need the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to apply for Spotlight."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to apply for Spotlight."); setSpace("user"); setTab("Profile"); return; }
     setSpotlightSaving(true);
     const { data, error } = await supabase.from("spotlight_applications").insert({
       developer_id: authData.user.id,
@@ -1646,7 +1649,7 @@ export default function App() {
   const respondToConnection = async (connection: any, status: "accepted" | "declined") => {
     if (!isSupabaseConfigured) { showNotice("Connections need the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to manage connection requests."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to manage connection requests."); setSpace("user"); setTab("Profile"); return; }
     if (connection.recipient_id !== authData.user.id || connection.status !== "pending") {
       showNotice("Only the recipient can respond to a pending request.");
       return;
@@ -1699,7 +1702,7 @@ export default function App() {
     }
     if (!isSupabaseConfigured) { showNotice("Investment listings need the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to publish an opportunity."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to publish an opportunity."); setSpace("user"); setTab("Profile"); return; }
     setInvestmentSaving(true);
     const { data, error } = await supabase.from("social_investment_opportunities").insert({
       founder_id: authData.user.id,
@@ -1780,7 +1783,7 @@ export default function App() {
     if (!verificationDocument) { showNotice("Attach a national ID or passport image/PDF."); return; }
     if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to submit verification."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to submit verification."); setSpace("user"); setTab("Profile"); return; }
     const { data: profile, error: profileError } = await supabase.from("profiles").select("is_developer,kyc_status").eq("id", authData.user.id).maybeSingle();
     if (profileError || !profile) { showNotice(profileError?.message || "Could not verify your developer account."); return; }
     if (profile.is_developer !== true) { showNotice("Only developer accounts can submit identity verification."); return; }
@@ -1822,7 +1825,7 @@ export default function App() {
   const startDiditVerification = async () => {
     if (!isSupabaseConfigured) { showNotice("Verification needs the MAS backend configuration."); return; }
     const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session?.access_token) { showNotice("Your session has expired. Sign in again."); setTab("Profile"); return; }
+    if (error || !data.session?.access_token) { showNotice("Your session has expired. Sign in again."); setSpace("user"); setTab("Profile"); return; }
     setDiditLoading(true);
     try {
       const response = await fetch("https://malawian-app-store-j6pm.vercel.app/api/public/didit/session", {
@@ -1859,7 +1862,7 @@ export default function App() {
   const openConversation = async (recipientId: string) => {
     if (!isSupabaseConfigured) { showNotice("Messaging needs the MAS Supabase connection."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in from Profile to message members."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in from Profile to message members."); setSpace("user"); setTab("Profile"); return; }
     if (recipientId === authData.user.id) { showNotice("You cannot message your own account."); return; }
     setCurrentUserId(authData.user.id);
     setActiveConversationUserId(recipientId);
@@ -1880,7 +1883,7 @@ export default function App() {
     const body = messageDraft.trim();
     if (!body || !activeConversationUserId) return;
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in to send messages."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in to send messages."); setSpace("user"); setTab("Profile"); return; }
     setMessageSending(true);
     const { data, error } = await supabase.from("social_messages")
       .insert({ sender_id: authData.user.id, recipient_id: activeConversationUserId, body })
@@ -1894,7 +1897,7 @@ export default function App() {
   const toggleLike = async (postId: string) => {
     if (!isSupabaseConfigured) { showNotice("Live reactions need Supabase configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in from Profile to react to posts."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in from Profile to react to posts."); setSpace("user"); setTab("Profile"); return; }
     const alreadyLiked = likedPostIds.includes(postId);
     if (alreadyLiked) {
       const { error } = await supabase.from("social_post_reactions").delete().eq("post_id", postId).eq("user_id", authData.user.id);
@@ -1913,7 +1916,7 @@ export default function App() {
     if (!recipientId || !postId) { showNotice("This preview post has no member profile to connect with yet."); return; }
     if (!isSupabaseConfigured) { showNotice("Connections need Supabase configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in from Profile to connect with members."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in from Profile to connect with members."); setSpace("user"); setTab("Profile"); return; }
     if (authData.user.id === recipientId) { showNotice("That is your own post."); return; }
     setConnectingPostIds((current) => [...current, postId]);
     const { error } = await supabase.from("social_connections").insert({ requester_id: authData.user.id, recipient_id: recipientId, status: "pending" });
@@ -1927,7 +1930,7 @@ export default function App() {
     if (body.length < 20) { showNotice("Please write at least 20 characters so members understand your post."); return; }
     if (!isSupabaseConfigured) { showNotice("Publishing needs the MAS backend configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in from Profile to publish in Social."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in from Profile to publish in Social."); setSpace("user"); setTab("Profile"); return; }
     setSectionPosting(true);
     const prefix = "[" + socialSection.toUpperCase() + "] ";
     const { data, error } = await supabase.from("social_posts").insert({ author_id: authData.user.id, body: prefix + body }).select("id,created_at").single();
@@ -1958,7 +1961,7 @@ export default function App() {
     if (!body) return;
     if (!isSupabaseConfigured) { showNotice("Live comments need Supabase configuration."); return; }
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) { showNotice("Sign in from Profile to comment."); setTab("Profile"); return; }
+    if (authError || !authData.user) { showNotice("Sign in from Profile to comment."); setSpace("user"); setTab("Profile"); return; }
     setCommentSendingPostId(postId);
     const { data, error } = await supabase.from("social_post_comments").insert({ post_id: postId, author_id: authData.user.id, body }).select("id,created_at").single();
     if (error || !data) { setCommentSendingPostId(null); showNotice(error?.message || "Your comment could not be sent."); return; }
@@ -2049,23 +2052,33 @@ export default function App() {
     }
   };
 
+  const switchSpace = (nextSpace: AppSpace) => {
+    setSpace(nextSpace);
+    setSelectedApp(null);
+    setUtilityScreen("none");
+    setDeveloperScreen(nextSpace === "developer" ? "Developer dashboard" : null);
+    setTab(nextSpace === "user" ? "Explore" : nextSpace === "social" ? "Social" : "Develop");
+    if (nextSpace === "social") setSocialSection("Feed");
+    setDrawerOpen(false);
+  };
+
   const navigateDrawer = (destination: "Explore" | "Library" | "Alerts" | "Account" | "Social" | "Develop" | "Settings") => {
     setDrawerOpen(false);
     setSelectedApp(null);
     setDeveloperScreen(null);
     if (destination === "Library") {
-      setTab("Profile");
+      setSpace("user"); setTab("Profile");
       setUtilityScreen("library");
     } else if (destination === "Alerts") {
-      setTab("Profile");
+      setSpace("user"); setTab("Profile");
       setUtilityScreen("notifications");
     } else if (destination === "Settings") {
-      setTab("Profile");
+      setSpace("user"); setTab("Profile");
       setUtilityScreen("settings");
     } else {
       setUtilityScreen("none");
       if (destination === "Develop") {
-        setTab("Develop");
+        setSpace("developer"); setTab("Develop");
         setDeveloperScreen("Developer dashboard");
       } else {
         setTab(destination === "Account" ? "Profile" : destination);
@@ -2081,27 +2094,51 @@ export default function App() {
         <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
 
           <View style={styles.headerSearchBox}>
-{tab === "Develop" ? (
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open developer navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
-              <NativeIcon name="menu" color={COLORS.text} size={20} />
-            </TouchableOpacity>
-          ) : null}
+            {space === "developer" ? (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Developer Mode navigation menu" onPress={() => setDrawerOpen(true)} style={styles.headerMenuButton}>
+                <NativeIcon name="menu" color={COLORS.text} size={20} />
+              </TouchableOpacity>
+            ) : null}
             <Image accessibilityLabel="Malawian App Store logo" source={require("./assets/mas-logo-mark.png")} style={styles.headerLogo} resizeMode="contain" />
-            <NativeIcon name="search" color={COLORS.muted} size={18} />
-            <TextInput
-              accessibilityLabel="Search apps and websites"
-              placeholder="Search apps & websites"
-              placeholderTextColor={COLORS.muted}
-              value={query}
-              onChangeText={setQuery}
-              style={styles.headerSearchInput}
-              returnKeyType="search"
-              maxLength={120}
-            />
+            {space === "user" ? (
+              <>
+                <NativeIcon name="search" color={COLORS.muted} size={18} />
+                <TextInput
+                  accessibilityLabel="Search apps and websites"
+                  placeholder="Search apps & websites"
+                  placeholderTextColor={COLORS.muted}
+                  value={query}
+                  onChangeText={setQuery}
+                  style={styles.headerSearchInput}
+                  returnKeyType="search"
+                  maxLength={120}
+                />
+              </>
+            ) : (
+              <Text style={styles.spaceHeaderTitle}>{space === "developer" ? "Developer Mode" : "Social"}</Text>
+            )}
           </View>
         </View>
+        <View style={[styles.spaceSwitcher, { paddingHorizontal: horizontalPadding }]}>
+          {([
+            { key: "user", label: "User", accessibilityLabel: "User Mode" },
+            { key: "developer", label: "Developer", accessibilityLabel: "Developer Mode" },
+            { key: "social", label: "Social", accessibilityLabel: "Social" },
+          ] as const).map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              accessibilityRole="tab"
+              accessibilityLabel={item.accessibilityLabel}
+              accessibilityState={{ selected: space === item.key }}
+              style={[styles.spaceTab, space === item.key && styles.spaceTabActive, space === item.key && { backgroundColor: `${accentColor}18`, borderColor: accentColor }]}
+              onPress={() => switchSpace(item.key)}
+            >
+              <Text numberOfLines={1} style={[styles.spaceTabText, space === item.key && { color: accentColor }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        <Modal visible={drawerOpen && tab === "Develop"} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
+        <Modal visible={drawerOpen && space === "developer"} transparent animationType="fade" onRequestClose={() => setDrawerOpen(false)}>
           <View style={styles.drawerRoot}>
             <View style={[styles.drawerPanel, { width: Math.min(windowWidth * 0.88, 340), paddingTop: Math.max(20, (StatusBar.currentHeight ?? 0) + 12), paddingBottom: Math.max(16, Math.round(windowHeight * 0.02)) }]}>
               <View style={styles.drawerHeader}>
@@ -2126,7 +2163,7 @@ export default function App() {
                   setDrawerOpen(false);
                   setSelectedApp(null);
                   setUtilityScreen("none");
-                  setTab("Develop");
+                  setSpace("developer"); setTab("Develop");
                   setDeveloperScreen(label);
                 }}>
                   <NativeIcon name={icon} color={accentColor} size={19} />
@@ -2166,7 +2203,7 @@ export default function App() {
                 if (!isSupabaseConfigured) { showNotice("Saving listings requires the live MAS backend."); return; }
                 if (!isSupabaseConfigured) { showNotice("Saving needs the MAS backend configuration."); return; }
                 const { data: authData, error: authError } = await supabase.auth.getUser();
-                if (authError || !authData.user) { showNotice("Sign in to save this listing to your library."); setSelectedApp(null); setTab("Profile"); return; }
+                if (authError || !authData.user) { showNotice("Sign in to save this listing to your library."); setSelectedApp(null); setSpace("user"); setTab("Profile"); return; }
                 const { error } = await supabase.from("wishlist").insert({ user_id: authData.user.id, listing_id: selectedApp.id });
                 showNotice(error ? (error.code === "23505" ? "This listing is already saved." : error.message || "Could not save listing.") : "Saved to your library.");
               }}><Text style={styles.primaryButtonText}>＋ Save to my library</Text></TouchableOpacity>
@@ -2191,7 +2228,7 @@ export default function App() {
             </>
           ) : null}
 
-          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
+          {!selectedApp && space === "user" && utilityScreen === "none" && developerScreen === null && tab === "Explore" && (
             <>
               <View style={styles.storeTabs}>
                 {([
@@ -2262,7 +2299,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Social" && (
+          {!selectedApp && space === "social" && utilityScreen === "none" && developerScreen === null && tab === "Social" && (
             <>
               <View style={styles.sectionHeading}><Text style={styles.pageTitle}>Social</Text><TouchableOpacity accessibilityRole="button" onPress={() => { setSocialSearchOpen((open) => !open); if (socialSearchOpen) setSocialSearchQuery(""); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{socialSearchOpen ? "Close search" : "⌕ Search"}</Text></TouchableOpacity></View>
               <Text style={styles.pageIntro}>Ideas, people and technology — connected.</Text>
@@ -2287,7 +2324,7 @@ export default function App() {
                       if (!isSupabaseConfigured) { showNotice("Live posting is unavailable until Supabase is configured."); return; }
                       setPosting(true);
                       const { data: authData, error: authError } = await supabase.auth.getUser();
-                      if (authError || !authData.user) { setPosting(false); showNotice("Sign in from Profile before publishing a post."); setTab("Profile"); return; }
+                      if (authError || !authData.user) { setPosting(false); showNotice("Sign in from Profile before publishing a post."); setSpace("user"); setTab("Profile"); return; }
                       const body = postDraft.trim();
                       let uploaded: { url: string; type: "image" | "video" } | null = null;
                       try {
@@ -2456,7 +2493,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Develop" && (
+          {!selectedApp && space === "developer" && utilityScreen === "none" && developerScreen === null && tab === "Develop" && (
             <>
               <Text style={styles.pageTitle}>Developer space</Text>
               <Text style={styles.pageIntro}>Manage listings, releases, reviews, analytics, team access, Spotlight applications and developer verification. Payment checkout and selected advanced tools hand off to the secure MAS web console.</Text>
@@ -2484,7 +2521,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2494,7 +2531,7 @@ export default function App() {
             </>
           )}
 
-          {!selectedApp && utilityScreen === "none" && developerScreen === null && tab === "Profile" && (
+          {!selectedApp && space === "user" && utilityScreen === "none" && developerScreen === null && tab === "Profile" && (
             <>
               <Text style={styles.pageTitle}>Your MAS profile</Text>
               <Text style={styles.pageIntro}>Your account, apps and community activity in one place.</Text>
@@ -2546,11 +2583,9 @@ export default function App() {
                 ["▤", "My library", "Your saved apps and library.", "native:library"],
                 ["♧", "Notifications", "Account and platform alerts.", "native:notifications"],
                 ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
-                ["◎", "Social community", "Explore posts, messages and collaboration.", "native:social"],
-                ["▦", "Developer space", "Publish and manage your products.", "native:develop"],
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (url === "native:develop") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("developer"); setTab("Develop"); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2560,7 +2595,7 @@ export default function App() {
               </> : null}
             </>
           )}
-          {!selectedApp && utilityScreen !== "none" ? (
+          {!selectedApp && space === "user" && utilityScreen !== "none" ? (
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setUtilityScreen("none")}><Text style={styles.secondaryButtonText}>← Back</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{utilityScreen === "library" ? "My library" : utilityScreen === "notifications" ? "Notifications" : "Account settings"}</Text>
@@ -2622,14 +2657,14 @@ export default function App() {
                       <Text style={styles.fieldLabel}>LinkedIn (HTTPS)</Text><TextInput value={accountLinkedinUrl} onChangeText={setAccountLinkedinUrl} autoCapitalize="none" keyboardType="url" placeholder="https://linkedin.com/in/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <Text style={styles.fieldLabel}>Facebook (HTTPS)</Text><TextInput value={accountFacebookUrl} onChangeText={setAccountFacebookUrl} autoCapitalize="none" keyboardType="url" placeholder="https://facebook.com/username" placeholderTextColor={COLORS.muted} style={styles.formInput} />
                       <TouchableOpacity disabled={accountProfileSaving} style={[styles.primaryButton,accountProfileSaving && {opacity:0.5}]} onPress={() => void saveAccountProfile()}><Text style={styles.primaryButtonText}>{accountProfileSaving ? "Saving…" : "Save profile"}</Text></TouchableOpacity>
-                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setUtilityScreen("none"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
+                      {userEmail ? <TouchableOpacity style={styles.secondaryButton} onPress={() => { void supabase.auth.signOut().then(({ error }) => { if (error) showNotice(error.message); else { setUserEmail(null); showNotice("Signed out."); setUtilityScreen("none"); } }); }}><Text style={styles.secondaryButtonText}>Sign out</Text></TouchableOpacity> : <TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setUtilityScreen("none"); setSpace("user"); setTab("Profile"); }}><Text style={styles.primaryButtonText}>Go to sign in</Text></TouchableOpacity>}
                     </View>
                   ) : <Text style={styles.disclaimer}>Account settings are unavailable until the public MAS backend configuration is added to this build.</Text>}
                 </>
               )}
             </>
           ) : null}
-          {!selectedApp && utilityScreen === "none" && developerScreen !== null ? (
+          {!selectedApp && space === "developer" && utilityScreen === "none" && developerScreen !== null ? (
             <>
               <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => setDeveloperScreen(null)}><Text style={styles.secondaryButtonText}>← Back to developer space</Text></TouchableOpacity>
               <Text style={styles.pageTitle}>{developerScreen}</Text>
@@ -2709,7 +2744,7 @@ export default function App() {
               ) : null}
               {developerScreen === "My public profile" ? (
                 <>
-                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setSpace("social"); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Portfolio projects</Text><Text style={styles.sectionMeta}>{portfolioProjects.length}</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Project name *</Text>
@@ -2725,7 +2760,7 @@ export default function App() {
                   {portfolioLoading ? <ActivityIndicator color={COLORS.accent}/> : portfolioProjects.map((project) => <View key={project.id} style={styles.toolCard}><TouchableOpacity style={styles.toolCopy} onPress={() => void Linking.openURL(project.url).catch(() => showNotice("Could not open this portfolio link."))}><Text style={styles.toolTitle}>{project.title}</Text><Text style={styles.toolDescription}>{project.description || project.project_type}</Text><Text style={styles.postTag}>{project.project_type} · {project.url}</Text></TouchableOpacity><TouchableOpacity onPress={() => void removePortfolioProject(project)}><Text style={styles.removeMediaText}>Remove</Text></TouchableOpacity></View>)}
                   {!portfolioLoading && !portfolioProjects.length ? <Text style={styles.emptyText}>Add projects built outside MAS to showcase your work.</Text> : null}
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Published products</Text><Text style={styles.sectionMeta}>{developerRows.filter((item) => item.status === "published").length}</Text></View>
-                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
+                  {developerLoading ? <ActivityIndicator color={COLORS.accent} /> : developerRows.filter((item) => item.status === "published").map((item) => <TouchableOpacity key={item.id} style={styles.toolCard} onPress={() => { setDeveloperScreen(null); setSpace("user"); setTab("Explore"); const match = apps.find((app) => app.id === item.id); if (match) setSelectedApp(match); else showNotice("This listing is not currently visible in the public catalogue."); }}><View style={styles.toolCopy}><Text style={styles.toolTitle}>{item.name}</Text><Text style={styles.toolDescription}>{item.tagline || item.description || item.category}</Text></View><Text style={styles.chevron}>›</Text></TouchableOpacity>)}
                   {!developerLoading && !developerRows.some((item) => item.status === "published") ? <Text style={styles.emptyText}>Published products will appear on your profile when they are approved.</Text> : null}
                 </>
               ) : developerScreen === "Quality checks" ? (
@@ -3023,8 +3058,8 @@ export default function App() {
                         else if (item.action === "Open promotion console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open the promotion console. Check your connection and try again."));
                         else if (item.action === "Open promotion campaign manager") setDeveloperScreen("Promote a product");
                         else if (item.action === "Open security console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/security").catch(() => showNotice("Could not open the security console. Check your connection and try again."));
-                        else if (item.action === "Open Social") { setDeveloperScreen(null); setTab("Social"); }
-                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
+                        else if (item.action === "Open Social") { setDeveloperScreen(null); setSpace("social"); setTab("Social"); }
+                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setSpace("user"); setTab("Explore"); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Open My applications") setDeveloperScreen("My applications");
                         else if (item.action === "Start a product draft") setDeveloperScreen("Publish a product");
@@ -3035,8 +3070,8 @@ export default function App() {
                         else if (item.action === "Review security notes" || item.action === "Review security rule") setDeveloperScreen("Security");
                         else if (item.action === "Open public profile") setDeveloperScreen("My public profile");
                         else if (item.action === "Open My applications" || item.action === "Review listing screens" || item.action === "Review store test") setDeveloperScreen("My applications");
-                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setTab("Explore"); }
-                        else if (item.action === "Open Social" || item.action === "Review Social test") { setDeveloperScreen(null); setSocialSection("Feed"); setTab("Social"); }
+                        else if (item.action === "Open Explore") { setDeveloperScreen(null); setSpace("user"); setTab("Explore"); }
+                        else if (item.action === "Open Social" || item.action === "Review Social test") { setDeveloperScreen(null); setSocialSection("Feed"); setSpace("social"); setTab("Social"); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Record test status" || item.action === "Review account test") setDeveloperScreen("Testing");
                         else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
@@ -3055,47 +3090,54 @@ export default function App() {
 
         {notice ? <View accessibilityLiveRegion="polite" style={styles.toast}><Text style={styles.toastText}>{notice}</Text></View> : null}
 
-        <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
-          {([
-            ["Explore", "apps"],
-            ["Library", "bookmark"],
-            ["Notifications", "bell"],
-            ["Profile", "user"],
-          ] as ["Explore" | "Library" | "Notifications" | "Profile", "apps" | "bookmark" | "bell" | "user"][]).map(([name, icon]) => {
-            const active = name === "Library"
-              ? utilityScreen === "library"
-              : name === "Notifications"
-                ? utilityScreen === "notifications"
-                : tab === name && utilityScreen === "none";
-            return (
-              <TouchableOpacity
-                key={name}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={name}
-                style={styles.tabItem}
-                onPress={() => {
-                  setSelectedApp(null);
-                  setDeveloperScreen(null);
-                  if (name === "Library") {
-                    setUtilityScreen("library");
-                  } else if (name === "Notifications") {
-                    setUtilityScreen("notifications");
-                  } else {
-                    setUtilityScreen("none");
-                    setTab(name);
-                  }
-                  setDrawerOpen(false);
-                }}
-              >
-                <View style={[styles.tabIconPill, active && styles.tabIconPillActive, active && { backgroundColor: `${accentColor}18` }]}>
-                  <NativeIcon name={icon} color={active ? accentColor : COLORS.muted} size={21} />
-                </View>
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {space === "user" ? (
+          <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
+            {([
+              ["Apps", "apps", "Explore"],
+              ["Library", "bookmark", "Library"],
+              ["Alerts", "bell", "Alerts"],
+              ["Account", "user", "Account"],
+            ] as const).map(([name, icon, destination]) => {
+              const active = destination === "Library"
+                ? utilityScreen === "library"
+                : destination === "Alerts"
+                  ? utilityScreen === "notifications"
+                  : destination === "Apps"
+                    ? tab === "Explore" && utilityScreen === "none"
+                    : utilityScreen === "settings" || (tab === "Profile" && utilityScreen === "none");
+              return (
+                <TouchableOpacity
+                  key={name}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={name}
+                  style={styles.tabItem}
+                  onPress={() => {
+                    setSpace("user");
+                    setSelectedApp(null);
+                    setDeveloperScreen(null);
+                    if (destination === "Library") {
+                      setTab("Profile");
+                      setUtilityScreen("library");
+                    } else if (destination === "Alerts") {
+                      setTab("Profile");
+                      setUtilityScreen("notifications");
+                    } else {
+                      setUtilityScreen("none");
+                      setTab(destination === "Apps" ? "Explore" : "Profile");
+                    }
+                    setDrawerOpen(false);
+                  }}
+                >
+                  <View style={[styles.tabIconPill, active && styles.tabIconPillActive, active && { backgroundColor: `${accentColor}18` }]}>
+                    <NativeIcon name={icon} color={active ? accentColor : COLORS.muted} size={21} />
+                  </View>
+                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -3107,6 +3149,11 @@ const styles = StyleSheet.create({
   appLargeScreen: { maxWidth: 1100, alignSelf: "center" },
   header: { minHeight: 64 + (StatusBar.currentHeight ?? 0), paddingHorizontal: 12, paddingTop: (StatusBar.currentHeight ?? 0) + 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", backgroundColor: COLORS.background },
   headerSearchBox: { minHeight: 40, width: "100%", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 24, backgroundColor: "#F3F3F3" },
+  spaceHeaderTitle: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "700", paddingHorizontal: 4 },
+  spaceSwitcher: { width: "100%", flexDirection: "row", gap: 7, paddingTop: 2, paddingBottom: 10 },
+  spaceTab: { flex: 1, minWidth: 0, minHeight: 34, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, borderRadius: 999, borderWidth: 1, borderColor: COLORS.border, backgroundColor: "#FFFFFF" },
+  spaceTabActive: { backgroundColor: COLORS.accentSoft, borderColor: COLORS.accent },
+  spaceTabText: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
   headerMenuButton: { width: 26, height: 30, alignItems: "center", justifyContent: "center" },
   headerLogo: { width: 28, height: 28, flexShrink: 0 },
   
