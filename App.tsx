@@ -2097,9 +2097,48 @@ export default function App() {
     setDrawerOpen(false);
   };
 
+  // Social is authenticated in the WebApp, so the native workspace must not
+  // expose its feed or member tools until the current Supabase session is confirmed.
+  const openSocialWorkspace = async (section: SocialSection = "Feed") => {
+    if (!isSupabaseConfigured) {
+      setSpace("user");
+      setTab("Profile");
+      setSelectedApp(null);
+      setUtilityScreen("none");
+      setDeveloperScreen(null);
+      setDrawerOpen(false);
+      showNotice("Social needs a connection to your MAS account.");
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      setSpace("user");
+      setTab("Profile");
+      setSelectedApp(null);
+      setUtilityScreen("none");
+      setDeveloperScreen(null);
+      setDrawerOpen(false);
+      showNotice("Sign in to MAS before opening Social.");
+      return;
+    }
+
+    setSpace("social");
+    setTab("Social");
+    setSelectedApp(null);
+    setUtilityScreen("none");
+    setDeveloperScreen(null);
+    setSocialSection(section);
+    setDrawerOpen(false);
+  };
+
   const switchSpace = async (nextSpace: AppSpace) => {
     if (nextSpace === "developer") {
       await openDeveloperWorkspace();
+      return;
+    }
+    if (nextSpace === "social") {
+      await openSocialWorkspace();
       return;
     }
     setSpace(nextSpace);
@@ -2131,9 +2170,7 @@ export default function App() {
     } else {
       setUtilityScreen("none");
       if (destination === "Social") {
-        setSpace("social");
-        setTab("Social");
-        setSocialSection("Feed");
+        void openSocialWorkspace();
       } else {
         setSpace("user");
         setTab(destination === "Account" ? "Profile" : "Explore");
@@ -2572,7 +2609,7 @@ export default function App() {
                 ["✦", "Spotlight", "Explore featured visibility opportunities.", "https://malawian-app-store-j6pm.vercel.app/spotlight"],
                 ["♧", "My public profile", "View and update your public MAS profile.", "https://malawian-app-store-j6pm.vercel.app/profile"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { setSocialSection("Collabo"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (title === "Collaboration & funding") { void openSocialWorkspace("Collabo"); } else if (title === "Developer resources") setDeveloperScreen("Developer resources"); else if (title === "Store management") setDeveloperScreen("My applications"); else if (["Developer assistant", "Promote a product", "Security"].includes(title)) setDeveloperScreen(title); else if (title === "Developer wallet") setDeveloperScreen("Developer wallet"); else if (title === "Console settings") setDeveloperScreen("Console settings"); else if (title === "Developer verification") setDeveloperScreen("Verification"); else if (title === "Developer Pro") setDeveloperScreen("Developer Pro"); else if (["Developer dashboard", "Publish a product", "My applications", "Analytics", "Reviews", "Publishing checklist", ...Object.keys(nativeDeveloperPreviews)].includes(title)) setDeveloperScreen(title); else void Linking.openURL(url).catch(() => showNotice("Could not open the MAS web console. Please check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2636,7 +2673,7 @@ export default function App() {
                 ["⚙", "Account settings", "Manage your account preferences.", "native:settings"],
                 ["↗", "Open MAS website", "Access every web feature and console page.", "https://malawian-app-store-j6pm.vercel.app/"],
               ].map(([icon, title, description, url]) => (
-                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { setUtilityScreen("none"); setDeveloperScreen(null); setSpace("social"); setTab("Social"); } else if (url === "native:develop") { void openDeveloperWorkspace(); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
+                <TouchableOpacity key={title} style={styles.toolCard} accessibilityRole="link" onPress={() => { if (url === "native:library") setUtilityScreen("library"); else if (url === "native:notifications") setUtilityScreen("notifications"); else if (url === "native:settings") setUtilityScreen("settings"); else if (url === "native:social") { void openSocialWorkspace(); } else if (url === "native:develop") { void openDeveloperWorkspace(); } else void Linking.openURL(url).catch(() => showNotice("Could not open this MAS page. Check your connection and try again.")); }}>
                   <View style={styles.toolIcon}><Text style={styles.toolIconText}>{icon}</Text></View>
                   <View style={styles.toolCopy}><Text style={styles.toolTitle}>{title}</Text><Text style={styles.toolDescription}>{description}</Text></View>
                   <Text style={styles.chevron}>›</Text>
@@ -2795,7 +2832,7 @@ export default function App() {
               ) : null}
               {developerScreen === "My public profile" ? (
                 <>
-                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { setDeveloperScreen(null); setSpace("social"); setTab("Social"); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
+                  <View style={styles.profileCard}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{String(developerProfileInfo?.developer_name || developerProfileInfo?.display_name || userEmail || "M").charAt(0).toUpperCase()}</Text></View><Text style={styles.profileName}>{developerProfileInfo?.developer_name || developerProfileInfo?.display_name || "MAS developer"}</Text><Text style={styles.profileHint}>{developerProfileInfo?.bio || "Add a short bio in account settings to introduce yourself to the MAS community."}</Text>{developerProfileInfo?.website_url ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void Linking.openURL(developerProfileInfo.website_url)}><Text style={styles.secondaryButtonText}>Open website</Text></TouchableOpacity> : null}<TouchableOpacity style={[styles.primaryButton, { backgroundColor: accentColor }]} onPress={() => { setDeveloperScreen(null); setUtilityScreen("settings"); }}><Text style={styles.primaryButtonText}>Edit profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => { void openSocialWorkspace(); }}><Text style={styles.secondaryButtonText}>Open Social</Text></TouchableOpacity></View>
                   <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Portfolio projects</Text><Text style={styles.sectionMeta}>{portfolioProjects.length}</Text></View>
                   <View style={styles.composeCard}>
                     <Text style={styles.fieldLabel}>Project name *</Text>
@@ -3109,7 +3146,7 @@ export default function App() {
                         else if (item.action === "Open promotion console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open the promotion console. Check your connection and try again."));
                         else if (item.action === "Open promotion campaign manager") setDeveloperScreen("Promote a product");
                         else if (item.action === "Open security console") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/console/security").catch(() => showNotice("Could not open the security console. Check your connection and try again."));
-                        else if (item.action === "Open Social") { setDeveloperScreen(null); setSpace("social"); setTab("Social"); }
+                        else if (item.action === "Open Social") { void openSocialWorkspace(); }
                         else if (item.action === "Open Explore") { setDeveloperScreen(null); setSpace("user"); setTab("Explore"); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Open My applications") setDeveloperScreen("My applications");
@@ -3122,7 +3159,7 @@ export default function App() {
                         else if (item.action === "Open public profile") setDeveloperScreen("My public profile");
                         else if (item.action === "Open My applications" || item.action === "Review listing screens" || item.action === "Review store test") setDeveloperScreen("My applications");
                         else if (item.action === "Open Explore") { setDeveloperScreen(null); setSpace("user"); setTab("Explore"); }
-                        else if (item.action === "Open Social" || item.action === "Review Social test") { setDeveloperScreen(null); setSocialSection("Feed"); setSpace("social"); setTab("Social"); }
+                        else if (item.action === "Open Social" || item.action === "Review Social test") { void openSocialWorkspace(); }
                         else if (item.action === "Open notifications") { setDeveloperScreen(null); setUtilityScreen("notifications"); }
                         else if (item.action === "Record test status" || item.action === "Review account test") setDeveloperScreen("Testing");
                         else if (item.action === "Review analytics requirements") void Linking.openURL("https://malawian-app-store-j6pm.vercel.app/advertise").catch(() => showNotice("Could not open campaign analytics. Check your connection and try again."));
