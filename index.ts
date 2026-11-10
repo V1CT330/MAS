@@ -1,6 +1,6 @@
 import "./src/lib/native-platform";
 
 import { registerRootComponent } from "expo";
-import App from "./NativeRoot";
+import NativeRoot from "./NativeRoot";
 
-registerRootComponent(App);
+registerRootComponent(NativeRoot);
