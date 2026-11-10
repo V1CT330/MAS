@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build-apk:
     name: Compile installable Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # These are the MAS public client values only. Never put service-role keys
     # or provider secrets in the mobile app.
@@ -25,7 +25,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_7gCVgi4SoqzoAE4G0U3mGA_ag_o2g8w
     steps:
       - name: Check out native MAS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Expo project identity
         shell: bash
@@ -66,18 +66,18 @@ jobs:
           echo "Public Supabase configuration is present; values are not printed."
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
       - name: Set up Java for Android
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
 
