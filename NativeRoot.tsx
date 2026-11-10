@@ -14,8 +14,16 @@ type StoreTab = "apps" | "library" | "alerts" | "account";
 export default function NativeRoot() {
   const [space, setSpace] = useState<Space>("store");
   const [storeTab, setStoreTab] = useState<StoreTab>("apps");
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+    const refreshUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (mounted) setAuthUserId(data.user?.id ?? null);
+    };
+    void refreshUser();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => setAuthUserId(session?.user.id ?? null));
     const handleUrl = async (url: string) => {
       try {
         const callback = new URL(url);
@@ -27,17 +35,18 @@ export default function NativeRoot() {
         await supabase.auth.exchangeCodeForSession(code);
       } catch (error) { console.warn("MAS sign-in callback failed", error); }
     };
-    const subscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
+    const urlSubscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
     void Linking.getInitialURL().then((url) => { if (url) return handleUrl(url); }).catch(() => undefined);
-    return () => subscription.remove();
+    return () => { mounted = false; authListener.subscription.unsubscribe(); urlSubscription.remove(); };
   }, []);
 
+  const openAccount = () => { setSpace("store"); setStoreTab("account"); };
   const current = space === "developer" ? <DeveloperScreen /> : space === "social" ? <SocialScreen /> : storeTab === "apps" ? <StoreScreen /> : storeTab === "library" ? <LibraryScreen /> : storeTab === "alerts" ? <NotificationsScreen /> : <AccountScreen />;
   const title = space === "developer" ? "Developer Mode" : space === "social" ? "Social" : ({ apps: "Discover", library: "My library", alerts: "Alerts", account: "Account" } satisfies Record<StoreTab, string>)[storeTab];
 
   return <SafeAreaView style={styles.safeArea}>
     <StatusBar barStyle="dark-content" backgroundColor="#F6F7FB" />
-    <View style={styles.header}><View><Text style={styles.brand}>Malawian App Store</Text><Text style={styles.title}>{title}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open account" onPress={() => { setSpace("store"); setStoreTab("account"); }} style={styles.accountButton}><Text style={styles.accountGlyph}>●</Text></TouchableOpacity></View>
+    <View style={styles.header}><View><Text style={styles.brand}>Malawian App Store</Text><Text style={styles.title}>{title}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open account" onPress={openAccount} style={styles.accountButton}><Text style={styles.accountGlyph}>{authUserId ? "●" : "○"}</Text></TouchableOpacity></View>
     <View style={styles.spaceTabs}>{(["store", "developer", "social"] as Space[]).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: space === item }} onPress={() => setSpace(item)} style={[styles.spaceTab, space === item && styles.spaceTabActive]}><Text style={[styles.spaceText, space === item && styles.spaceTextActive]}>{item === "store" ? "App Store" : item === "developer" ? "Developer" : "Social"}</Text></TouchableOpacity>)}</View>
     <View style={styles.body}>{current}</View>
     {space === "store" ? <View style={styles.bottomTabs}>{(["apps", "library", "alerts", "account"] as StoreTab[]).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: storeTab === item }} onPress={() => setStoreTab(item)} style={styles.bottomTab}><Text style={[styles.bottomGlyph, storeTab === item && styles.bottomGlyphActive]}>{item === "apps" ? "⌕" : item === "library" ? "▣" : item === "alerts" ? "♧" : "●"}</Text><Text style={[styles.bottomText, storeTab === item && styles.bottomTextActive]}>{item === "apps" ? "Apps" : item === "library" ? "Library" : item === "alerts" ? "Alerts" : "Account"}</Text></TouchableOpacity>)}</View> : null}
