@@ -602,8 +602,9 @@ export default function App() {
 
       // Android can deliver the same redirect through both the initial URL
       // and the live URL event. Process each callback only once.
-      if (handledCallbacks.has(url)) return;
-      handledCallbacks.add(url);
+      const callbackKey = callback.searchParams.get("code") || url;
+      if (handledCallbacks.has(callbackKey)) return;
+      handledCallbacks.add(callbackKey);
 
       if (!active) return;
       setAuthLoading(true);
