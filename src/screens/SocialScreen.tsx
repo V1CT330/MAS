@@ -120,7 +120,7 @@ export default function SocialScreen() {
     if (!mimeType.startsWith("image/") || estimatedBytes > 10 * 1024 * 1024) {
       setError("Choose an image smaller than 10 MB."); return;
     }
-    setSelectedImage({ uri: asset.uri, base64: asset.base64, mimeType, fileName: asset.fileName, fileSize: asset.fileSize ?? null });
+    setSelectedImage({ uri: asset.uri, base64: asset.base64, mimeType, fileName: asset.fileName ?? null, fileSize: asset.fileSize ?? null });
   };
 
   const toggleLike = async (postId: string) => {
