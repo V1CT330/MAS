@@ -8,10 +8,10 @@ on:
 permissions:
   contents: read
 
-# Keep only the newest native APK build for this branch running.
+# Serialize native APK builds without cancelling a build already in progress.
 concurrency:
   group: native-mas-android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-apk:
