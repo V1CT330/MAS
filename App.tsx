@@ -569,12 +569,23 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserEmail(data.session?.user.email ?? null);
+    const handledCallbacks = new Set<string>();
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        showNotice(error.message || "Could not restore your MAS session.");
+        return;
+      }
+      setUserEmail(data.session?.user.email ?? null);
+    }).catch(() => {
+      if (active) showNotice("Could not restore your MAS session. Check your connection and try again.");
     });
+
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user.email ?? null);
+      if (active) setUserEmail(session?.user.email ?? null);
     });
+
     const handleUrl = async (url: string) => {
       let callback: URL;
       try {
@@ -582,8 +593,19 @@ export default function App() {
       } catch {
         return;
       }
-      if (callback.protocol !== "mw.wealthgrid.mas:") return;
 
+      if (
+        callback.protocol !== "mw.wealthgrid.mas:" ||
+        callback.hostname !== "auth" ||
+        callback.pathname !== "/callback"
+      ) return;
+
+      // Android can deliver the same redirect through both the initial URL
+      // and the live URL event. Process each callback only once.
+      if (handledCallbacks.has(url)) return;
+      handledCallbacks.add(url);
+
+      if (!active) return;
       setAuthLoading(true);
       try {
         const callbackError = callback.searchParams.get("error_description") || callback.searchParams.get("error");
@@ -592,25 +614,42 @@ export default function App() {
         if (!code) {
           throw new Error("Google sign-in did not return an authorization code. Try again.");
         }
+
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) throw error;
+
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
+        if (!active) return;
+
         const email = sessionData.session?.user.email ?? data.user?.email ?? null;
         if (!email) throw new Error("Google sign-in returned, but MAS could not confirm your session. Try again.");
+
         setUserEmail(email);
-        setSpace("user"); setTab("Explore");
+        setSpace("user");
+        setTab("Explore");
         setUtilityScreen("none");
         setDeveloperScreen(null);
         showNotice("You are signed in to MAS.");
       } catch (error) {
-        showNotice(error instanceof Error ? error.message : "Google sign-in failed. Please try again.");
+        if (active) showNotice(error instanceof Error ? error.message : "Google sign-in failed. Please try again.");
       } finally {
-        setAuthLoading(false);
+        if (active) setAuthLoading(false);
       }
     };
-    void Linking.getInitialURL().then((url) => { if (url) return handleUrl(url); }).catch(() => setAuthLoading(false));
-    const urlSubscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
+
+    const urlSubscription = Linking.addEventListener("url", ({ url }) => {
+      void handleUrl(url);
+    });
+
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (url) return handleUrl(url);
+      })
+      .catch(() => {
+        if (active) setAuthLoading(false);
+      });
+
     return () => {
       active = false;
       authListener.subscription.unsubscribe();
