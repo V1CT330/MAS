@@ -3141,8 +3141,7 @@ export default function App() {
 
         {notice ? <View accessibilityLiveRegion="polite" style={styles.toast}><Text style={styles.toastText}>{notice}</Text></View> : null}
 
-        {space === "user" ? (
-          <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
+        <View style={[styles.tabBar, { paddingBottom: bottomBarPadding }]}>
             {([
               ["Apps", "apps", "Explore"],
               ["Library", "bookmark", "Library"],
@@ -3187,8 +3186,7 @@ export default function App() {
                 </TouchableOpacity>
               );
             })}
-          </View>
-        ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );
