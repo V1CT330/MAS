@@ -2318,7 +2318,7 @@ export default function App() {
                     {shelf.items.map((item) => (
                       <TouchableOpacity key={item.id} style={styles.nativeShelfItem} onPress={() => setSelectedApp(item)}>
                         <View style={[styles.nativeShelfIcon, { backgroundColor: item.iconUrl ? item.color : COLORS.accentSoft }]}>{item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.nativeShelfIconImage} resizeMode="cover" /> : <Text style={[styles.appIconText, styles.appIconFallbackText]}>{item.name.slice(0, 2).toUpperCase()}</Text>}</View>
-                        <Text numberOfLines={1} style={styles.nativeShelfName}>{item.name}</Text>
+                        <Text numberOfLines={2} style={styles.nativeShelfName}>{item.name}</Text>
                         <Text numberOfLines={1} style={styles.nativeShelfMeta}>{item.ratingCount ? item.rating?.toFixed(1) + " ★" : "New"}</Text>
                       </TouchableOpacity>
                     ))}
@@ -3254,10 +3254,10 @@ const styles = StyleSheet.create({
   nativeShelf: { marginTop: 2, marginBottom: 5 },
   nativeShelfRow: { gap: 16, paddingBottom: 8 },
   nativeShelfItem: { width: 104 },
-  nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 },
+  nativeShelfIcon: { width: 104, height: 104, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#F1F1F1", shadowColor: "#17191C", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
   nativeShelfIconImage: { width: "100%", height: "100%" },
-  nativeShelfName: { color: COLORS.text, fontSize: 13, fontWeight: "500" },
-  nativeShelfMeta: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
+  nativeShelfName: { color: COLORS.text, fontSize: 13, fontWeight: "500", lineHeight: 16, minHeight: 32 },
+  nativeShelfMeta: { color: COLORS.muted, fontSize: 11, lineHeight: 14, marginTop: 3 },
   fieldLabel: { color: COLORS.text, fontSize: 11, fontWeight: "800", marginTop: 12, marginBottom: 6 },
   formInput: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.text, fontSize: 13 },
   devMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 15 },
