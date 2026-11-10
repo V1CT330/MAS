@@ -2145,8 +2145,7 @@ export default function App() {
     setSelectedApp(null);
     setUtilityScreen("none");
     setDeveloperScreen(null);
-    setTab(nextSpace === "user" ? "Explore" : "Social");
-    if (nextSpace === "social") setSocialSection("Feed");
+    setTab("Explore");
     setDrawerOpen(false);
   };
 
