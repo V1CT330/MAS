@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string };
@@ -18,6 +18,8 @@ const LINKS = [
 ];
 
 export default function DeveloperScreen() {
+  const { width: screenWidth } = useWindowDimensions();
+  const metricWidth = screenWidth >= 1100 ? "18.5%" : screenWidth >= 640 ? "31%" : "48%";
   const [userId, setUserId] = useState<string | null>(null);
   const [developerName, setDeveloperName] = useState("Developer");
   const [kyc, setKyc] = useState("none");
@@ -102,7 +104,7 @@ export default function DeveloperScreen() {
           ["Installs (30d)", installs],
           ["Views (30d)", views],
           ["Conversion", `${conversion}%`],
-        ].map(([label, value]) => <View key={String(label)} style={styles.metric}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
+        ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
       </View>
 
       <View style={styles.card}>
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   heading: { color: "#111827", fontSize: 23, fontWeight: "800", marginTop: 4 },
   body: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 5 },
   metrics: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  metric: { width: "31%", minHeight: 68, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 11, padding: 10 },
+  metric: { minHeight: 68, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 11, padding: 10 },
   metricValue: { color: "#111827", fontSize: 17, fontWeight: "800" },
   metricLabel: { color: "#64748B", fontSize: 10, marginTop: 4 },
   card: { backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 13, padding: 14, marginTop: 12 },
