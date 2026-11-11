@@ -4,7 +4,7 @@
     "slug": "malawian-app-store-wsf8defenl82zkzevchmj",
     "version": "1.0.4",
     "scheme": "mw.wealthgrid.mas",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "android": {
       "package": "mw.wealthgrid.mas",
