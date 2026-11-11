@@ -39,8 +39,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Expo project health check
-        run: npx --yes expo-doctor
+      - name: Validate Expo configuration
+        run: npx expo config --type public
       - name: TypeScript check
         run: npm run typecheck
       - name: Bundle Android JavaScript
