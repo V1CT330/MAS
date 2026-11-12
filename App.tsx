@@ -17,6 +17,7 @@ import {
 
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import NativePublishingScreen from "./src/screens/NativePublishingScreen";
+import NativeListingDetailScreen from "./src/screens/NativeListingDetailScreen";
 
 const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
 const ACCENT = "#1877F2";
@@ -66,6 +67,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeRoute, setActiveRoute] = useState("/console");
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [stats, setStats] = useState<StatsRow[]>([]);
   const [walletStatus, setWalletStatus] = useState("Setup pending");
@@ -264,9 +266,13 @@ export default function App() {
     if (activeRoute === "/upload") {
       return <NativePublishingScreen onSaved={(listing) => {
         setListings((items) => [{ id: listing.id, name: listing.name, kind: listing.kind, status: "draft", downloads: 0, rating_avg: 0, rating_count: 0 }, ...items]);
-        setActiveRoute("/console/products");
+        setSelectedListingId(listing.id);
+        setActiveRoute("/console/product-detail");
         setNotice("Draft saved. Complete the publishing checklist and submit it for review.");
       }} />;
+    }
+    if (activeRoute === "/console/product-detail" && selectedListingId) {
+      return <NativeListingDetailScreen listingId={selectedListingId} onBack={() => setActiveRoute("/console/products")} />;
     }
     if (activeRoute === "/console/products") {
       return <>
@@ -274,7 +280,7 @@ export default function App() {
           <TextInput value={search} onChangeText={setSearch} placeholder="Search your products" style={styles.input} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>{listingFilters.map((item) => <TouchableOpacity key={item} onPress={() => setFilter(item)} style={[styles.chip, filter === item && styles.chipActive]}><Text style={[styles.chipText, filter === item && styles.chipTextActive]}>{item === "all" ? "All" : displayStatus(item)}</Text></TouchableOpacity>)}</ScrollView>
         </View>
-        <View style={styles.panel}><Text style={styles.sectionTitle}>Your products</Text>{loading ? <ActivityIndicator color={ACCENT} /> : filteredListings.map((item) => <View key={item.id} style={styles.listRow}><View style={styles.flexOne}><Text style={styles.rowTitle}>{item.name}</Text><Text style={styles.muted}>{item.kind} · {Number(item.downloads ?? 0).toLocaleString()} downloads · {item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) + " stars" : "No ratings yet"}</Text></View><Text style={styles.statusPill}>{displayStatus(item.status)}</Text></View>)}{!loading && !filteredListings.length ? <Text style={styles.muted}>No products match this filter.</Text> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => setActiveRoute("/upload")}><Text style={styles.primaryButtonText}>Create a listing</Text></TouchableOpacity></View>
+        <View style={styles.panel}><Text style={styles.sectionTitle}>Your products</Text>{loading ? <ActivityIndicator color={ACCENT} /> : filteredListings.map((item) => <TouchableOpacity key={item.id} style={styles.listRow} onPress={() => { setSelectedListingId(item.id); setActiveRoute("/console/product-detail"); }}><View style={styles.flexOne}><Text style={styles.rowTitle}>{item.name}</Text><Text style={styles.muted}>{item.kind} · {Number(item.downloads ?? 0).toLocaleString()} downloads · {item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) + " stars" : "No ratings yet"}</Text></View><Text style={styles.statusPill}>{displayStatus(item.status)}</Text></TouchableOpacity>)}{!loading && !filteredListings.length ? <Text style={styles.muted}>No products match this filter.</Text> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => setActiveRoute("/upload")}><Text style={styles.primaryButtonText}>Create a listing</Text></TouchableOpacity></View>
       </>;
     }
     if (activeRoute === "/console/wallet") {
