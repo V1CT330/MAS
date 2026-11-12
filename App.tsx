@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
+import NativePublishingScreen from "./src/screens/NativePublishingScreen";
 
 const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
 const ACCENT = "#1877F2";
@@ -43,7 +44,7 @@ const CONSOLE_ROUTES: ConsoleRoute[] = [
   { label: "Social", path: "/console/social", icon: "◉" },
   { label: "Wallet & earnings", path: "/console/wallet", icon: "◈" },
   { label: "All products", path: "/console/products", icon: "▣" },
-  { label: "Publishing", path: "/console/publishing", icon: "↑" },
+  { label: "Publishing", path: "/upload", icon: "↑" },
   { label: "Testing", path: "/console/testing", icon: "◇" },
   { label: "Quality", path: "/console/quality", icon: "✓" },
   { label: "Analytics", path: "/console/analytics", icon: "⌁" },
@@ -184,6 +185,7 @@ export default function App() {
     if (route.path === "/console/wallet") return;
     if (route.path === "/console/verification") return;
     if (route.path === "/console/settings") return;
+    if (route.path === "/upload") return;
     void openWebRoute(route.path);
   };
 
@@ -259,13 +261,20 @@ export default function App() {
         <View style={styles.panel}><Text style={styles.sectionTitle}>Needs attention</Text>{rejectedListings ? <Text style={styles.bodyText}>{rejectedListings} rejected product(s) need changes before resubmission.</Text> : draftListings ? <Text style={styles.bodyText}>{draftListings} draft(s) may need completion.</Text> : <Text style={styles.bodyText}>You are all caught up. Keep your listings current.</Text>}</View>
       </>;
     }
+    if (activeRoute === "/upload") {
+      return <NativePublishingScreen onSaved={(listing) => {
+        setListings((items) => [{ id: listing.id, name: listing.name, kind: listing.kind, status: "draft", downloads: 0, rating_avg: 0, rating_count: 0 }, ...items]);
+        setActiveRoute("/console/products");
+        setNotice("Draft saved. Complete the publishing checklist and submit it for review.");
+      }} />;
+    }
     if (activeRoute === "/console/products") {
       return <>
         <View style={styles.panel}>
           <TextInput value={search} onChangeText={setSearch} placeholder="Search your products" style={styles.input} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>{listingFilters.map((item) => <TouchableOpacity key={item} onPress={() => setFilter(item)} style={[styles.chip, filter === item && styles.chipActive]}><Text style={[styles.chipText, filter === item && styles.chipTextActive]}>{item === "all" ? "All" : displayStatus(item)}</Text></TouchableOpacity>)}</ScrollView>
         </View>
-        <View style={styles.panel}><Text style={styles.sectionTitle}>Your products</Text>{loading ? <ActivityIndicator color={ACCENT} /> : filteredListings.map((item) => <View key={item.id} style={styles.listRow}><View style={styles.flexOne}><Text style={styles.rowTitle}>{item.name}</Text><Text style={styles.muted}>{item.kind} · {Number(item.downloads ?? 0).toLocaleString()} downloads · {item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) + " stars" : "No ratings yet"}</Text></View><Text style={styles.statusPill}>{displayStatus(item.status)}</Text></View>)}{!loading && !filteredListings.length ? <Text style={styles.muted}>No products match this filter.</Text> : null}<TouchableOpacity style={styles.secondaryButton} onPress={() => void openWebRoute("/upload")}><Text style={styles.secondaryButtonText}>Create or edit a product on MAS</Text></TouchableOpacity></View>
+        <View style={styles.panel}><Text style={styles.sectionTitle}>Your products</Text>{loading ? <ActivityIndicator color={ACCENT} /> : filteredListings.map((item) => <View key={item.id} style={styles.listRow}><View style={styles.flexOne}><Text style={styles.rowTitle}>{item.name}</Text><Text style={styles.muted}>{item.kind} · {Number(item.downloads ?? 0).toLocaleString()} downloads · {item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) + " stars" : "No ratings yet"}</Text></View><Text style={styles.statusPill}>{displayStatus(item.status)}</Text></View>)}{!loading && !filteredListings.length ? <Text style={styles.muted}>No products match this filter.</Text> : null}<TouchableOpacity style={styles.primaryButton} onPress={() => setActiveRoute("/upload")}><Text style={styles.primaryButtonText}>Create a listing</Text></TouchableOpacity></View>
       </>;
     }
     if (activeRoute === "/console/wallet") {
