@@ -167,7 +167,7 @@ export default function DeveloperScreen() {
             <View style={styles.detailMetric}><Text style={styles.detailValue}>{selectedProduct.rating_count ? Number(selectedProduct.rating_avg ?? 0).toFixed(1) : "—"}</Text><Text style={styles.detailLabel}>Average rating</Text></View>
             <View style={styles.detailMetric}><Text style={styles.detailValue}>{Number(selectedProduct.rating_count ?? 0).toLocaleString()}</Text><Text style={styles.detailLabel}>Reviews</Text></View>
           </View>
-          <Text style={styles.body}>This native overview uses the live listing record. Editing listings, uploading releases and submitting changes still use the existing authenticated MAS publishing workflow.</Text>
+          <Text style={styles.body}>Manage listing details, media, releases and developer replies directly in this native workflow. MAS review decisions remain server controlled.</Text>
           <Button title="Open listing management" onPress={() => { setActiveListingId(selectedProduct.id); setSelectedProduct(null); setActiveWorkflow("listing"); }} />
           <TouchableOpacity onPress={() => setSelectedProduct(null)} style={styles.cancel}><Text style={styles.linkTitle}>Close</Text></TouchableOpacity>
         </View>
