@@ -12,7 +12,7 @@ type Product = { id: string; name: string; kind: string; status: string; downloa
 type Metric = { day: string; views: number; installs: number };
 type ProductStatus = "all" | "published" | "pending" | "draft" | "rejected" | "archived";
 
-const WEB = "https://malawian-app-store-j6pm.vercel.app";
+const WEB = "https://malawian-app-store.vercel.app";
 const STATUS_FILTERS: ProductStatus[] = ["all", "published", "pending", "draft", "rejected", "archived"];
 const displayStatus = (value: string) => value === "published" ? "Live" : value === "pending" ? "In review" : value.charAt(0).toUpperCase() + value.slice(1);
 const LINKS = [
