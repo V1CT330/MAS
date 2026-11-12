@@ -9,6 +9,8 @@ type Post = { id: string; author_id: string; body: string; created_at: string; m
 type Comment = { id: string; post_id: string; author_id: string; body: string; created_at: string; parent_comment_id?: string | null; media_url?: string | null; media_type?: string | null };
 type Connection = { id: string; requester_id: string; recipient_id: string; status: "pending" | "accepted" | "declined"; created_at: string };
 type Message = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null };
+type InvestmentProfile = { user_id:string; role:"founder"|"investor"|"both"; organization_name:string|null; headline:string|null; bio:string|null; location:string|null; visibility:"public"|"connections" };
+type Opportunity = { id:string; founder_id:string; title:string; description:string; industry:string; stage:string; funding_goal:number|null; currency:string; use_of_funds:string|null; status:"open"|"paused"|"closed"; created_at:string };
 type PickedMedia = { uri: string; mimeType: string; fileName: string; mediaType: "image" | "video" };
 const BLUE = "#1877F2";
 const socialDb = supabase as any;
@@ -23,6 +25,8 @@ export default function SocialScreen() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [socialAlerts, setSocialAlerts] = useState<{id:string;title:string;body:string;read:boolean;created_at:string}[]>([]);
+  const [investorDirectory,setInvestorDirectory] = useState<InvestmentProfile[]>([]);
+  const [opportunities,setOpportunities] = useState<Opportunity[]>([]);
   const [draft, setDraft] = useState("");
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -31,7 +35,21 @@ export default function SocialScreen() {
   const [messageDraft, setMessageDraft] = useState("");
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [profilePage, setProfilePage] = useState<string | null>(null);
-  const [section, setSection] = useState<"Feed" | "People" | "Messages" | "Notifications" | "My profile">("Feed");
+  const [section, setSection] = useState<"Feed" | "People" | "Messages" | "Notifications" | "Search" | "Find Investors" | "Monetization" | "My profile">("Feed");
+  const [searchTerm,setSearchTerm] = useState("");
+  const [investmentProfile,setInvestmentProfile] = useState<InvestmentProfile|null>(null);
+  const [investRole,setInvestRole] = useState<"founder"|"investor"|"both">("both");
+  const [investOrg,setInvestOrg] = useState("");
+  const [investHeadline,setInvestHeadline] = useState("");
+  const [investBio,setInvestBio] = useState("");
+  const [investLocation,setInvestLocation] = useState("");
+  const [opportunityTitle,setOpportunityTitle] = useState("");
+  const [opportunityDescription,setOpportunityDescription] = useState("");
+  const [opportunityIndustry,setOpportunityIndustry] = useState("");
+  const [opportunityStage,setOpportunityStage] = useState("idea");
+  const [opportunityGoal,setOpportunityGoal] = useState("");
+  const [opportunityCurrency,setOpportunityCurrency] = useState("MWK");
+  const [opportunityFunds,setOpportunityFunds] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +59,7 @@ export default function SocialScreen() {
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
     const me = auth.user.id; setUserId(me);
-    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes] = await Promise.all([
+    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes] = await Promise.all([
       supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
       supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
       supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
@@ -54,6 +72,9 @@ export default function SocialScreen() {
     if (messageRes.error) setError(messageRes.error.message);
     if (alertRes.error) setError(alertRes.error.message);
     setSocialAlerts((alertRes.data ?? []) as {id:string;title:string;body:string;read:boolean;created_at:string}[]);
+    if (investRes.data) { const saved=investRes.data as InvestmentProfile; setInvestmentProfile(saved); setInvestRole(saved.role); setInvestOrg(saved.organization_name||""); setInvestHeadline(saved.headline||""); setInvestBio(saved.bio||""); setInvestLocation(saved.location||""); }
+    if (directoryRes.error) setError(directoryRes.error.message); else setInvestorDirectory((directoryRes.data??[]) as InvestmentProfile[]);
+    if (opportunitiesRes.error) setError(opportunitiesRes.error.message); else setOpportunities((opportunitiesRes.data??[]) as Opportunity[]);
     const postRows = (postRes.data ?? []) as Post[];
     setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
     const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
@@ -153,6 +174,9 @@ export default function SocialScreen() {
     setBusy(false);
   };
 
+  const saveInvestmentProfile = async () => { if(!userId)return; setBusy(true); const {error:e}=await socialDb.from("social_investment_profiles").upsert({user_id:userId,role:investRole,organization_name:investOrg.trim()||null,headline:investHeadline.trim()||null,bio:investBio.trim()||null,location:investLocation.trim()||null,visibility:"public"},{onConflict:"user_id"}); if(e)setError(e.message); else await load(); setBusy(false); };
+  const publishOpportunity = async () => { if(!userId)return; if(opportunityTitle.trim().length<3||opportunityDescription.trim().length<20||opportunityIndustry.trim().length<2){setError("Add a title, a description of at least 20 characters and an industry.");return;} const goal=opportunityGoal.trim()?Number(opportunityGoal):null; if(goal!==null&&(!Number.isFinite(goal)||goal<=0)){setError("Funding target must be a positive number.");return;} setBusy(true); const {error:e}=await socialDb.from("social_investment_opportunities").insert({founder_id:userId,title:opportunityTitle.trim(),description:opportunityDescription.trim(),industry:opportunityIndustry.trim(),stage:opportunityStage,funding_goal:goal,currency:opportunityCurrency,use_of_funds:opportunityFunds.trim()||null}); if(e)setError(e.message); else {setOpportunityTitle("");setOpportunityDescription("");setOpportunityIndustry("");setOpportunityGoal("");setOpportunityFunds("");await load();} setBusy(false); };
+  const updateOpportunity = async (item:Opportunity,status:"open"|"paused"|"closed") => {setBusy(true);const {error:e}=await socialDb.from("social_investment_opportunities").update({status}).eq("id",item.id).eq("founder_id",userId);if(e)setError(e.message);else await load();setBusy(false);};
   const sendConnection = async (personId: string) => {
     if (!userId) return; setBusy(true);
     const { error: e } = await supabase.from("social_connections").insert({ requester_id:userId,recipient_id:personId,status:"pending" });
@@ -195,7 +219,7 @@ export default function SocialScreen() {
   if (!userId) return <View style={s.root}><Text style={s.title}>MAS Social</Text><Text style={s.copy}>{error || "Sign in to access Social."}</Text><Action title="Try again" onPress={() => void load()} /></View>;
   return <View style={s.root}>
     <View style={s.top}><Text style={s.title}>Social</Text><TouchableOpacity onPress={() => void load()}><Text style={s.link}>Refresh</Text></TouchableOpacity></View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs}>{(["Feed","People","Messages","Notifications","My profile"] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {setSection(tab);setProfilePage(null);}} style={[s.tab,section===tab&&s.tabActive]}><Text style={[s.tabText,section===tab&&s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs}>{(["Feed","People","Messages","Notifications","Search","Find Investors","Monetization","My profile"] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {setSection(tab);setProfilePage(null);}} style={[s.tab,section===tab&&s.tabActive]}><Text style={[s.tabText,section===tab&&s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</ScrollView>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
       {profilePage ? <><TouchableOpacity onPress={() => setProfilePage(null)}><Text style={s.link}>‹ Back</Text></TouchableOpacity>{renderProfile(profilePage)}</> : section === "My profile" ? renderProfile(userId) : null}
@@ -240,6 +264,45 @@ export default function SocialScreen() {
               relation?.status === "pending" ? <Text style={s.muted}>Requested</Text> : <Action title="Add friend" onPress={() => void sendConnection(person.id)} />}
           </View>;
         })}
+      </> : null}
+      {section === "Search" && !profilePage ? <>
+        <Text style={s.section}>Search MAS Social</Text>
+        <TextInput value={searchTerm} onChangeText={setSearchTerm} placeholder="Search people and posts…" style={s.input} />
+        {searchTerm.trim().length>0 ? <>
+          {people.filter(p => name(p.id).toLowerCase().includes(searchTerm.trim().toLowerCase()) || (p.bio||"").toLowerCase().includes(searchTerm.trim().toLowerCase())).map(p => <TouchableOpacity key={p.id} onPress={() => setProfilePage(p.id)} style={s.person}><Text style={s.authorName}>{name(p.id)}</Text><Text style={s.muted}>{p.bio||"MAS member"}</Text></TouchableOpacity>)}
+          {posts.filter(p => p.body.toLowerCase().includes(searchTerm.trim().toLowerCase())).map(p => <View key={p.id} style={s.card}><Text style={s.authorName}>{name(p.author_id)}</Text><Text style={s.copy}>{p.body}</Text></View>)}
+        </> : <Text style={s.copy}>Search members and public posts.</Text>}
+      </> : null}
+      {section === "Find Investors" && !profilePage ? <>
+        <Text style={s.section}>Find Investors</Text><Text style={s.copy}>Founder and investor introductions. Listings are introductions, not verified investments or financial advice. MAS does not process investments here.</Text>
+        <View style={s.card}><Text style={s.section}>Your founder / investor profile</Text>
+          <TextInput value={investRole} onChangeText={v=>setInvestRole(v as "founder"|"investor"|"both")} placeholder="Role: founder, investor or both" style={s.input}/>
+          <TextInput value={investOrg} onChangeText={setInvestOrg} maxLength={120} placeholder="Organization / startup" style={s.input}/>
+          <TextInput value={investHeadline} onChangeText={setInvestHeadline} maxLength={160} placeholder="Headline" style={s.input}/>
+          <TextInput value={investBio} onChangeText={setInvestBio} maxLength={1500} multiline placeholder="About you and your investment interests" style={s.input}/>
+          <TextInput value={investLocation} onChangeText={setInvestLocation} maxLength={120} placeholder="Location" style={s.input}/>
+          <Action title={busy?"Saving…":"Save profile"} disabled={busy} onPress={()=>void saveInvestmentProfile()}/>
+        </View>
+        <View style={s.card}><Text style={s.section}>Publish a startup opportunity</Text>
+          <TextInput value={opportunityTitle} onChangeText={setOpportunityTitle} maxLength={120} placeholder="Opportunity title" style={s.input}/>
+          <TextInput value={opportunityIndustry} onChangeText={setOpportunityIndustry} maxLength={80} placeholder="Industry" style={s.input}/>
+          <TextInput value={opportunityStage} onChangeText={setOpportunityStage} placeholder="Stage: idea, prototype, early_revenue, growth, established" style={s.input}/>
+          <TextInput value={opportunityDescription} onChangeText={setOpportunityDescription} maxLength={4000} multiline placeholder="Describe the problem, solution and support needed (20+ characters)" style={s.input}/>
+          <TextInput value={opportunityGoal} onChangeText={setOpportunityGoal} keyboardType="decimal-pad" placeholder="Funding target (optional)" style={s.input}/>
+          <TextInput value={opportunityCurrency} onChangeText={setOpportunityCurrency} placeholder="Currency: MWK, USD, ZAR, GBP or EUR" style={s.input}/>
+          <TextInput value={opportunityFunds} onChangeText={setOpportunityFunds} maxLength={1000} placeholder="Use of funds (optional)" style={s.input}/>
+          <Action title={busy?"Publishing…":"Publish opportunity"} disabled={busy} onPress={()=>void publishOpportunity()}/>
+        </View>
+        <Text style={s.section}>Open startup opportunities</Text>
+        {opportunities.filter(o=>o.status==="open"||o.founder_id===userId).map(item=><View key={item.id} style={s.card}><Text style={s.authorName}>{item.title}</Text><Text style={s.muted}>{name(item.founder_id)} · {item.industry} · {item.stage.replaceAll("_"," ")}</Text><Text style={s.copy}>{item.description}</Text>{item.funding_goal!==null?<Text style={s.copy}>Target: {item.currency} {Number(item.funding_goal).toLocaleString()}</Text>:null}<View style={s.row}>{item.founder_id===userId?<><Action title={item.status==="open"?"Pause":"Reopen"} secondary onPress={()=>void updateOpportunity(item,item.status==="open"?"paused":"open")}/><Action title="Close" secondary onPress={()=>void updateOpportunity(item,"closed")}/></>:acceptedIds.has(item.founder_id)?<Action title="Message founder" onPress={()=>void openConversation(item.founder_id)}/>:<Action title="Connect with founder" onPress={()=>void sendConnection(item.founder_id)}/>}</View></View>)}
+        <Text style={s.section}>Investor directory</Text>
+        {investorDirectory.filter(p=>p.user_id!==userId&&(p.role==="investor"||p.role==="both")).map(p=><View key={p.user_id} style={s.person}><View style={{flex:1}}><Text style={s.authorName}>{p.organization_name||name(p.user_id)}</Text><Text style={s.muted}>{p.headline||p.role}{p.location?" · "+p.location:""}</Text><Text style={s.copy}>{p.bio}</Text></View>{acceptedIds.has(p.user_id)?<Action title="Message" secondary onPress={()=>void openConversation(p.user_id)}/>:<Action title="Connect" onPress={()=>void sendConnection(p.user_id)}/>}</View>)}
+      </> : null}
+      {section === "Monetization" && !profilePage ? <>
+        <Text style={s.section}>Creator monetization</Text><Text style={s.copy}>Setup pending. Build an audience and share useful work while MAS connects the payment infrastructure.</Text>
+        <Text style={s.error}>Social payments are not active. Do not accept money for tips, memberships, paid posts, sponsorships or referrals through MAS until checkout, earnings records, refunds and payouts are enabled.</Text>
+        {["Tips and support","Paid memberships","Paid posts and products","Sponsored content","Referral commissions"].map(label=><View key={label} style={s.card}><Text style={s.authorName}>{label}</Text><Text style={s.muted}>Planned · payments and creator eligibility required</Text></View>)}
+        <Action title="Open advertising" secondary onPress={()=>void Linking.openURL("https://malawian-app-store.vercel.app/advertise")}/>
       </> : null}
       {section === "Notifications" && !profilePage ? <>
         <Text style={s.section}>Social notifications</Text>
