@@ -3,7 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 type Notification = { id: string; title: string; body: string | null; read: boolean; created_at: string };
-export default function NotificationsScreen() {
+export default function NotificationsScreen({ scope = "user" }: { scope?: "user" | "developer" }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +15,7 @@ export default function NotificationsScreen() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) { setUserId(null); setItems([]); setLoading(false); return; }
     setUserId(auth.user.id);
-    const { data, error: requestError } = await supabase.from("notifications").select("id,title,body,read,created_at").eq("user_id", auth.user.id).order("created_at", { ascending: false }).limit(50);
+    const { data, error: requestError } = await supabase.from("notifications").select("id,title,body,read,created_at").eq("user_id", auth.user.id).eq("scope", scope).order("created_at", { ascending: false }).limit(50);
     if (requestError) setError(requestError.message); else setItems((data ?? []) as Notification[]);
     setLoading(false);
   }, []);
@@ -23,14 +23,14 @@ export default function NotificationsScreen() {
   const markAllRead = async () => {
     if (!userId) return;
     setBusy(true); setError("");
-    const { error: requestError } = await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+    const { error: requestError } = await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("scope", scope).eq("read", false);
     if (requestError) setError(requestError.message); else await load();
     setBusy(false);
   };
   const dismiss = async (id: string) => {
     if (!userId) return;
     setBusy(true); setError("");
-    const { error: requestError } = await supabase.from("notifications").delete().eq("id", id).eq("user_id", userId);
+    const { error: requestError } = await supabase.from("notifications").delete().eq("id", id).eq("user_id", userId).eq("scope", scope);
     if (requestError) setError(requestError.message); else setItems((current) => current.filter((item) => item.id !== id));
     setBusy(false);
   };
