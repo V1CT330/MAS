@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 
-import { CATEGORIES, matchesListingFilters, matchesSearch, rankListings, type Listing } from "../shared/mas-core";
+import { CATEGORIES, matchesListingFilters, matchesSearch, rankListings, topByNumber, type Listing } from "../shared/mas-core";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const ACCENT = "#1877F2";
@@ -72,6 +72,11 @@ export default function StoreScreen() {
     ),
     { query: search, limit: 200 },
   ), [listings, search, kind, category]);
+
+  const isBrowsing = !search.trim() && kind === "all" && category === "All";
+  const recommended = useMemo(() => rankListings(listings, { limit: 8, maxPerCategory: 2 }), [listings]);
+  const topCharts = useMemo(() => topByNumber(listings, (item) => item.downloads, 8), [listings]);
+  const topRated = useMemo(() => topByNumber(listings, (item) => Number(item.rating_avg ?? 0) * Number(item.rating_count ?? 0), 8), [listings]);
 
   const runInstall = async (item: StoreListing) => {
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -138,6 +143,11 @@ export default function StoreScreen() {
         </ScrollView>
         {loading ? <ActivityIndicator style={styles.loading} color={ACCENT} /> : null}
         {!loading && !filtered.length ? <View style={styles.empty}><Text style={styles.title}>{notice ? "Store unavailable" : search || kind !== "all" || category !== "All" ? "No matching products" : "Nothing here yet"}</Text><Text style={styles.body}>{notice || (search || kind !== "all" || category !== "All" ? "Try a different search or filter." : "New listings from Malawian developers will appear here.")}</Text>{notice ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void loadListings()}><Text style={styles.secondaryText}>Try again</Text></TouchableOpacity> : null}</View> : null}
+        {isBrowsing && !loading && filtered.length > 0 ? <>
+          <DiscoveryShelf title="Recommended for you" subtitle="Fresh from Malawian developers" items={recommended} onSelect={setSelected} />
+          <DiscoveryShelf title="Top charts" subtitle="Most popular listings" items={topCharts} onSelect={setSelected} />
+          <DiscoveryShelf title="Top rated" subtitle="Listings with the strongest ratings" items={topRated} onSelect={setSelected} />
+        </> : null}
         {filtered.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" onPress={() => setSelected(item)} style={styles.card}>
           {item.iconDisplayUrl ? <Image source={{ uri: item.iconDisplayUrl }} style={styles.icon} /> : <View style={[styles.icon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
           <View style={styles.cardText}><Text numberOfLines={1} style={styles.title}>{item.name}</Text><Text numberOfLines={2} style={styles.body}>{item.tagline || item.description || "Discover this MAS listing"}</Text><Text style={styles.meta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Browser extension" : "App"} · {item.category} · {Number(item.downloads ?? 0).toLocaleString()} {item.kind === "website" ? "visits" : "installs"}</Text></View>
@@ -163,6 +173,21 @@ export default function StoreScreen() {
   );
 }
 
+function DiscoveryShelf({ title, subtitle, items, onSelect }: { title: string; subtitle: string; items: StoreListing[]; onSelect: (item: StoreListing) => void }) {
+  if (!items.length) return null;
+  return <View style={styles.shelf}>
+    <Text style={styles.shelfTitle}>{title}</Text>
+    <Text style={styles.shelfSubtitle}>{subtitle}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelfRow}>
+      {items.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" onPress={() => onSelect(item)} style={styles.shelfTile}>
+        {item.iconDisplayUrl ? <Image source={{ uri: item.iconDisplayUrl }} style={styles.shelfIcon} /> : <View style={[styles.shelfIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
+        <Text numberOfLines={1} style={styles.shelfName}>{item.name}</Text>
+        <Text numberOfLines={1} style={styles.shelfMeta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Extension" : "App"}</Text>
+      </TouchableOpacity>)}
+    </ScrollView>
+  </View>;
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F6F7FB" }, content: { padding: 16, paddingBottom: 32 }, heading: { color: "#111827", fontSize: 23, fontWeight: "800" }, subheading: { color: "#64748B", fontSize: 13, marginTop: 5, marginBottom: 14 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#111827", fontSize: 15, fontWeight: "700" }, body: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "#FFF", borderRadius: 13, padding: 12, marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#E7EBF3" }, icon: { width: 54, height: 54, borderRadius: 13, backgroundColor: "#EFF4FA" }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#64748B", fontSize: 10, marginTop: 5, textTransform: "capitalize" }, chevron: { color: "#64748B", fontSize: 25 }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#F6F7FB" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#FFF", borderRadius: 13, padding: 14, marginVertical: 10 }, screenshot: { width: 190, height: 300, borderRadius: 12, marginRight: 10, marginVertical: 10, backgroundColor: "#E7EBF3" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
+  root: { flex: 1, backgroundColor: "#F6F7FB" }, shelf: { marginTop: 18 }, shelfTitle: { color: "#111827", fontSize: 17, fontWeight: "800" }, shelfSubtitle: { color: "#64748B", fontSize: 11, marginTop: 3 }, shelfRow: { gap: 10, paddingVertical: 10 }, shelfTile: { width: 116, backgroundColor: "#FFF", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#E7EBF3" }, shelfIcon: { width: 72, height: 72, borderRadius: 16, backgroundColor: "#EFF4FA", alignSelf: "center" }, shelfName: { color: "#111827", fontSize: 12, fontWeight: "700", marginTop: 8 }, shelfMeta: { color: "#64748B", fontSize: 10, marginTop: 3 }, content: { padding: 16, paddingBottom: 32 }, heading: { color: "#111827", fontSize: 23, fontWeight: "800" }, subheading: { color: "#64748B", fontSize: 13, marginTop: 5, marginBottom: 14 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#111827", fontSize: 15, fontWeight: "700" }, body: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "#FFF", borderRadius: 13, padding: 12, marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#E7EBF3" }, icon: { width: 54, height: 54, borderRadius: 13, backgroundColor: "#EFF4FA" }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#64748B", fontSize: 10, marginTop: 5, textTransform: "capitalize" }, chevron: { color: "#64748B", fontSize: 25 }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#F6F7FB" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#FFF", borderRadius: 13, padding: 14, marginVertical: 10 }, screenshot: { width: 190, height: 300, borderRadius: 12, marginRight: 10, marginVertical: 10, backgroundColor: "#E7EBF3" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
 });
