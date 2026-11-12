@@ -91,8 +91,8 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
         {stats.length ? stats.map((row) => <View key={row.day} style={styles.chartRow}>
           <Text style={styles.date}>{row.day.slice(5)}</Text>
           <View style={styles.bars}>
-            <View style={styles.barTrack}><View style={[styles.bar, styles.viewsBar, { width: Math.max(row.views ? 2 : 0, row.views / maxValue * 100) + "%" }]} /></View>
-            <View style={styles.barTrack}><View style={[styles.bar, styles.installBar, { width: Math.max(row.installs ? 2 : 0, row.installs / maxValue * 100) + "%" }]} /></View>
+            <View style={styles.barTrack}><View style={[styles.bar, styles.viewsBar, { width: (Math.max(row.views ? 2 : 0, row.views / maxValue * 100) + "%") as `${number}%` }]} /></View>
+            <View style={styles.barTrack}><View style={[styles.bar, styles.installBar, { width: (Math.max(row.installs ? 2 : 0, row.installs / maxValue * 100) + "%") as `${number}%` }]} /></View>
           </View>
           <Text style={styles.values}>{row.views}/{row.installs}</Text>
         </View>) : <Text style={styles.empty}>No recorded events for this period.</Text>}
