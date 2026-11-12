@@ -38,44 +38,56 @@ export default function NativePublishingScreen({ onSaved }: Props) {
   const [message, setMessage] = useState("");
 
   const choosePackage = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: kind === "app"
-        ? ["application/vnd.android.package-archive", "application/octet-stream"]
-        : ["application/zip", "application/x-zip-compressed"],
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    const extension = asset.name.split(".").pop()?.toLowerCase();
-    if (extension !== (kind === "app" ? "apk" : "zip")) {
-      setMessage(kind === "app" ? "Choose an APK file." : "Choose a ZIP package.");
-      return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: kind === "app"
+          ? ["application/vnd.android.package-archive", "application/octet-stream"]
+          : ["application/zip", "application/x-zip-compressed"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const extension = asset.name.split(".").pop()?.toLowerCase();
+      if (extension !== (kind === "app" ? "apk" : "zip")) {
+        setMessage(kind === "app" ? "Choose an APK file." : "Choose a ZIP package.");
+        return;
+      }
+      if (!asset.size || asset.size > 50 * 1024 * 1024) {
+        setMessage("Package must be larger than 0 bytes and no larger than 50 MB.");
+        return;
+      }
+      setPackageFile(asset);
+      setMessage("Package selected.");
+    } catch {
+      setMessage("Could not open the file picker. Please try again.");
     }
-    if (!asset.size || asset.size > 50 * 1024 * 1024) {
-      setMessage("Package must be larger than 0 bytes and no larger than 50 MB.");
-      return;
-    }
-    setPackageFile(asset);
-    setMessage("Package selected.");
   };
 
   const chooseImages = async (target: "icon" | "screenshots") => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: target === "screenshots",
-      selectionLimit: target === "screenshots" ? 8 : 1,
-      quality: 0.9,
-    });
-    if (result.canceled) return;
-    const selected = result.assets.filter((item) => item.uri && item.fileSize !== 0 && (item.fileSize ?? 0) <= 10 * 1024 * 1024);
-    if (selected.length !== result.assets.length) {
-      setMessage("Each image must be larger than 0 bytes and no larger than 10 MB.");
-      return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: target === "screenshots",
+        selectionLimit: target === "screenshots" ? 8 : 1,
+        quality: 0.9,
+      });
+      if (result.canceled) return;
+      const allowed = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
+      const selected = result.assets.filter((item) => {
+        const extension = item.fileName?.split(".").pop()?.toLowerCase() || "";
+        return item.uri && item.fileSize !== 0 && (item.fileSize ?? 0) <= 10 * 1024 * 1024 && allowed.includes(extension) && (item.mimeType ?? "").startsWith("image/");
+      });
+      if (selected.length !== result.assets.length) {
+        setMessage("Use JPG, PNG, WebP, GIF or AVIF images up to 10 MB each.");
+        return;
+      }
+      if (target === "icon") setIcon(selected[0] ?? null);
+      else setScreenshots(selected.slice(0, 8));
+      setMessage(target === "icon" ? "Icon selected." : selected.length + " screenshot(s) selected.");
+    } catch {
+      setMessage("Could not open the image picker. Please try again.");
     }
-    if (target === "icon") setIcon(selected[0] ?? null);
-    else setScreenshots(selected.slice(0, 8));
-    setMessage(target === "icon" ? "Icon selected." : selected.length + " screenshot(s) selected.");
   };
 
   const saveDraft = async () => {
