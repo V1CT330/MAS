@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "../lib/supabase";
 
 type Props = { listingId: string; onBack: () => void };
 type ListingRow = { id:string; name:string; kind:string; category:string; status:string; tagline:string|null; description:string|null; icon_url:string|null; screenshots:string[]|null; website_url:string|null; rejection_reason?:string|null };
 type Check = { label:string; hint:string; ok:boolean };
 type PickedImage = ImagePicker.ImagePickerAsset;
+type ReleaseRow = { version:string; changelog:string|null; file_url:string|null; size_bytes:number|null; status:string };
 async function uploadImage(userId:string,asset:PickedImage,folder:string){
  const response=await fetch(asset.uri);
  if(!response.ok)throw new Error("Could not read the selected image.");
@@ -44,11 +46,17 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
  const [newScreenshots,setNewScreenshots]=useState<PickedImage[]>([]);
  const [clearIcon,setClearIcon]=useState(false);
  const [replaceScreenshots,setReplaceScreenshots]=useState(false);
+ const [releases,setReleases]=useState<ReleaseRow[]>([]);
+ const [releaseVersion,setReleaseVersion]=useState("");
+ const [releaseNotes,setReleaseNotes]=useState("");
+ const [releaseFile,setReleaseFile]=useState<DocumentPicker.DocumentPickerAsset|null>(null);
  const refresh=useCallback(async()=>{
   setLoading(true);
   const {data,error}=await supabase.from("listings").select("id,name,kind,category,status,tagline,description,icon_url,screenshots,website_url,rejection_reason").eq("id",listingId).single();
   if(error||!data){setListing(null);setMessage(error?.message??"Listing unavailable.");setLoading(false);return;}
-  const row=data as ListingRow;setListing(row);setTagline(row.tagline??"");setDescription(row.description??"");setLoading(false);
+  const row=data as ListingRow;setListing(row);setTagline(row.tagline??"");setDescription(row.description??"");
+  const {data:versionRows}=await supabase.from("listing_versions").select("version,changelog,file_url,size_bytes,status").eq("listing_id",listingId);
+  setReleases((versionRows??[]) as ReleaseRow[]);setLoading(false);
  },[listingId]);
  useEffect(()=>{void refresh();},[refresh]);
  const checks=useMemo(()=>listing?checksFor(listing):[],[listing]);
@@ -91,6 +99,34 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
    setMessage(e instanceof Error?e.message:"Could not save listing images.");
   }finally{setBusy(false);}
  };
+ const chooseReleaseFile=async()=>{
+  try{
+   const result=await DocumentPicker.getDocumentAsync({type:["application/vnd.android.package-archive","application/octet-stream"],copyToCacheDirectory:true,multiple:false});
+   if(result.canceled)return;
+   const asset=result.assets[0];
+   if(!asset.name.toLowerCase().endsWith(".apk")||!asset.size||asset.size>50*1024*1024){setMessage("Choose a valid APK file up to 50 MB.");return;}
+   setReleaseFile(asset);setMessage("APK selected.");
+  }catch(e){setMessage(e instanceof Error?e.message:"Could not open the package picker.");}
+ };
+ const publishRelease=async()=>{
+  if(!listing||listing.kind==="website")return;
+  const cleanVersion=releaseVersion.trim();
+  if(!/^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(cleanVersion)){setMessage("Use a version such as 1.2.0.");return;}
+  if(!releaseFile){setMessage("Choose the APK package first.");return;}
+  if(releases.some(x=>x.version===cleanVersion)){setMessage("That version already exists.");return;}
+  setBusy(true);setMessage("");let uploadedPath:string|null=null;
+  try{
+   const {data:auth,error:authError}=await supabase.auth.getUser();
+   if(authError||!auth.user)throw new Error("Sign in to upload a release.");
+   uploadedPath=await uploadImage(auth.user.id,{...({} as PickedImage),uri:releaseFile.uri,fileName:releaseFile.name,mimeType:releaseFile.mimeType} as PickedImage,"builds");
+   const {error}=await supabase.from("listing_versions").insert({listing_id:listingId,version:cleanVersion,changelog:releaseNotes.trim()||"Release "+cleanVersion,file_url:uploadedPath,size_bytes:releaseFile.size,status:"pending"});
+   if(error)throw error;
+   setReleaseVersion("");setReleaseNotes("");setReleaseFile(null);await refresh();setMessage("Release uploaded and submitted for review.");
+  }catch(e){
+   if(uploadedPath)await supabase.storage.from("app-assets").remove([uploadedPath]);
+   setMessage(e instanceof Error?e.message:"Could not upload this release.");
+  }finally{setBusy(false);}
+ };
  const saveDetails=async()=>{
   if(!listing)return;
   setBusy(true);setMessage("");
@@ -118,6 +154,7 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   <TouchableOpacity onPress={onBack} style={s.back}><Text style={s.backText}>‹  All products</Text></TouchableOpacity>
   <View style={s.header}><Text style={s.eyebrow}>LISTING OVERVIEW</Text><Text style={s.title}>{listing.name}</Text><Text style={s.copy}>{listing.kind.replace("_"," ")} · {listing.category}</Text><View style={s.status}><Text style={s.statusText}>{listing.status==="published"?"Live":listing.status==="pending"?"In review":listing.status}</Text></View></View>
   {listing.rejection_reason?<View style={s.panel}><Text style={s.panelTitle}>Review feedback</Text><Text style={s.copy}>{listing.rejection_reason}</Text></View>:null}
+  <View style={s.panel}><Text style={s.panelTitle}>Releases</Text>{releases.length?releases.map((item,index)=><View key={item.version+"-"+index} style={s.releaseRow}><View style={s.flex}><Text style={s.checkTitle}>Version {item.version}</Text><Text style={s.hint}>{item.changelog||"No release notes"} · {item.size_bytes?Math.round(item.size_bytes/1024/1024*10)/10+" MB":"No package"} </Text></View><Text style={s.statusText}>{item.status}</Text></View>):<Text style={s.copy}>No releases recorded yet.</Text>}{listing.kind==="website"?<Text style={s.copy}>Website releases are managed through the website address and are not APK uploads.</Text>:<><Text style={s.fieldLabel}>New version</Text><TextInput value={releaseVersion} onChangeText={setReleaseVersion} autoCapitalize="none" placeholder="1.2.0" style={s.input}/><Text style={s.fieldLabel}>Release notes</Text><TextInput value={releaseNotes} onChangeText={setReleaseNotes} multiline maxLength={1000} placeholder="What changed in this release?" style={[s.input,s.multiline]}/><TouchableOpacity style={s.secondaryButton} onPress={()=>void chooseReleaseFile()}><Text style={s.secondaryText}>{releaseFile?releaseFile.name:"Choose APK package (50 MB max)"}</Text></TouchableOpacity><TouchableOpacity disabled={busy} onPress={()=>void publishRelease()} style={[s.button,busy&&s.disabled]}>{busy?<ActivityIndicator color="#FFF"/>:<Text style={s.buttonText}>Upload release for review</Text>}</TouchableOpacity></>}</View>
   {listing.status==="draft"||listing.status==="rejected"?<View style={s.panel}><Text style={s.panelTitle}>Listing images</Text><Text style={s.mediaInfo}>Current icon: {listing.icon_url?"Added":"Not added"} · Screenshots: {listing.screenshots?.length??0}</Text><TouchableOpacity style={s.secondaryButton} onPress={()=>void pickMedia("icon")}><Text style={s.secondaryText}>{newIcon?"Choose a different icon": "Replace icon"}</Text></TouchableOpacity>{listing.icon_url?<TouchableOpacity onPress={()=>{setClearIcon(true);setNewIcon(null);}}><Text style={s.removeText}>Remove current icon</Text></TouchableOpacity>:null}<TouchableOpacity style={s.secondaryButton} onPress={()=>void pickMedia("screenshots")}><Text style={s.secondaryText}>{replaceScreenshots?"Choose different screenshots":"Replace screenshots"}</Text></TouchableOpacity>{replaceScreenshots?<Text style={s.mediaInfo}>{newScreenshots.length} new screenshot(s) selected. This replaces the current set.</Text>:null}<TouchableOpacity disabled={busy||(!newIcon&&!replaceScreenshots&&!clearIcon)} onPress={()=>void saveMedia()} style={[s.button,(busy||(!newIcon&&!replaceScreenshots&&!clearIcon))&&s.disabled]}>{busy?<ActivityIndicator color="#FFF"/>:<Text style={s.buttonText}>Save images</Text>}</TouchableOpacity></View>:null}
   {listing.status==="draft"||listing.status==="rejected"?<View style={s.panel}><Text style={s.panelTitle}>Edit listing details</Text><Text style={s.fieldLabel}>Tagline · {tagline.trim().length}/20 characters minimum</Text><TextInput value={tagline} onChangeText={setTagline} maxLength={90} placeholder="One line about your product" style={s.input}/><Text style={s.fieldLabel}>Description · {description.trim().length}/200 characters minimum</Text><TextInput value={description} onChangeText={setDescription} multiline maxLength={2000} textAlignVertical="top" placeholder="Describe what it does and who it helps" style={[s.input,s.multiline]}/><TouchableOpacity disabled={busy} onPress={()=>void saveDetails()} style={[s.button,busy&&s.disabled]}>{busy?<ActivityIndicator color="#FFF"/>:<Text style={s.buttonText}>Save details</Text>}</TouchableOpacity></View>:null}
   <View style={s.panel}><View style={s.row}><Text style={s.panelTitle}>Submission checklist</Text><Text style={s.score}>{score}%</Text></View><View style={s.track}><View style={[s.progress,{width:score+"%"}]}/></View>
@@ -128,4 +165,4 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   </View>
  </ScrollView>;
 }
-const s=StyleSheet.create({content:{padding:16,paddingBottom:32},center:{padding:32,alignItems:"center"},back:{paddingVertical:8},backText:{color:"#1A73E8",fontSize:14,fontWeight:"600"},header:{marginBottom:14},eyebrow:{fontSize:10,letterSpacing:1,color:"#5F6368",fontWeight:"700"},title:{fontSize:23,color:"#202124",fontWeight:"700",marginTop:5},copy:{fontSize:13,color:"#5F6368",lineHeight:19,marginTop:5},status:{alignSelf:"flex-start",backgroundColor:"#E8F0FE",borderRadius:18,paddingHorizontal:12,paddingVertical:6,marginTop:10},statusText:{fontSize:12,color:"#174EA6",fontWeight:"700",textTransform:"capitalize"},panel:{backgroundColor:"#FFF",borderColor:"#E8EAED",borderWidth:1,borderRadius:16,padding:16,marginBottom:12},panelTitle:{fontSize:16,color:"#202124",fontWeight:"700"},fieldLabel:{fontSize:12,color:"#3C4043",fontWeight:"600",marginTop:14,marginBottom:6},mediaInfo:{fontSize:12,color:"#5F6368",marginTop:8,lineHeight:18},secondaryButton:{minHeight:42,borderRadius:22,borderWidth:1,borderColor:"#DADCE0",alignItems:"center",justifyContent:"center",marginTop:10,paddingHorizontal:12},secondaryText:{fontSize:13,color:"#1A73E8",fontWeight:"600"},removeText:{fontSize:12,color:"#B3261E",marginTop:10},input:{minHeight:46,borderWidth:1,borderColor:"#DADCE0",borderRadius:11,paddingHorizontal:12,paddingVertical:10,color:"#202124",backgroundColor:"#FFF",fontSize:13},multiline:{minHeight:130,paddingTop:12},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center"},score:{fontSize:15,color:"#1A73E8",fontWeight:"700"},track:{height:7,borderRadius:8,backgroundColor:"#E8EAED",overflow:"hidden",marginTop:12,marginBottom:8},progress:{height:7,backgroundColor:"#1A73E8",borderRadius:8},checkRow:{flexDirection:"row",alignItems:"flex-start",paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#F1F3F4",gap:10},mark:{fontSize:16,fontWeight:"700",width:20},flex:{flex:1},checkTitle:{fontSize:13,color:"#202124",fontWeight:"600"},hint:{fontSize:11,color:"#5F6368",marginTop:3},note:{fontSize:11,color:"#5F6368",lineHeight:16,marginTop:12},button:{minHeight:46,borderRadius:24,backgroundColor:"#1A73E8",alignItems:"center",justifyContent:"center",marginTop:16,paddingHorizontal:16},buttonText:{color:"#FFF",fontSize:13,fontWeight:"700"},disabled:{opacity:.6},message:{fontSize:12,color:"#3C4043",lineHeight:18,marginTop:12}});
+const s=StyleSheet.create({content:{padding:16,paddingBottom:32},center:{padding:32,alignItems:"center"},back:{paddingVertical:8},backText:{color:"#1A73E8",fontSize:14,fontWeight:"600"},header:{marginBottom:14},eyebrow:{fontSize:10,letterSpacing:1,color:"#5F6368",fontWeight:"700"},title:{fontSize:23,color:"#202124",fontWeight:"700",marginTop:5},copy:{fontSize:13,color:"#5F6368",lineHeight:19,marginTop:5},status:{alignSelf:"flex-start",backgroundColor:"#E8F0FE",borderRadius:18,paddingHorizontal:12,paddingVertical:6,marginTop:10},statusText:{fontSize:12,color:"#174EA6",fontWeight:"700",textTransform:"capitalize"},panel:{backgroundColor:"#FFF",borderColor:"#E8EAED",borderWidth:1,borderRadius:16,padding:16,marginBottom:12},panelTitle:{fontSize:16,color:"#202124",fontWeight:"700"},fieldLabel:{fontSize:12,color:"#3C4043",fontWeight:"600",marginTop:14,marginBottom:6},mediaInfo:{fontSize:12,color:"#5F6368",marginTop:8,lineHeight:18},releaseRow:{flexDirection:"row",alignItems:"center",paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#F1F3F4",gap:8},secondaryButton:{minHeight:42,borderRadius:22,borderWidth:1,borderColor:"#DADCE0",alignItems:"center",justifyContent:"center",marginTop:10,paddingHorizontal:12},secondaryText:{fontSize:13,color:"#1A73E8",fontWeight:"600"},removeText:{fontSize:12,color:"#B3261E",marginTop:10},input:{minHeight:46,borderWidth:1,borderColor:"#DADCE0",borderRadius:11,paddingHorizontal:12,paddingVertical:10,color:"#202124",backgroundColor:"#FFF",fontSize:13},multiline:{minHeight:130,paddingTop:12},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center"},score:{fontSize:15,color:"#1A73E8",fontWeight:"700"},track:{height:7,borderRadius:8,backgroundColor:"#E8EAED",overflow:"hidden",marginTop:12,marginBottom:8},progress:{height:7,backgroundColor:"#1A73E8",borderRadius:8},checkRow:{flexDirection:"row",alignItems:"flex-start",paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#F1F3F4",gap:10},mark:{fontSize:16,fontWeight:"700",width:20},flex:{flex:1},checkTitle:{fontSize:13,color:"#202124",fontWeight:"600"},hint:{fontSize:11,color:"#5F6368",marginTop:3},note:{fontSize:11,color:"#5F6368",lineHeight:16,marginTop:12},button:{minHeight:46,borderRadius:24,backgroundColor:"#1A73E8",alignItems:"center",justifyContent:"center",marginTop:16,paddingHorizontal:16},buttonText:{color:"#FFF",fontSize:13,fontWeight:"700"},disabled:{opacity:.6},message:{fontSize:12,color:"#3C4043",lineHeight:18,marginTop:12}});
