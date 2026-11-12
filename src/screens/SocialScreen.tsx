@@ -47,7 +47,7 @@ export default function SocialScreen() {
       supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").order("display_name",{ascending:true}).limit(100),
-      supabase.from("notifications").select("id,title,body,read,created_at").eq("user_id",me).eq("scope","social").order("created_at",{ascending:false}).limit(50),
+      supabase.from("social_notifications").select("id,title,body,read,created_at").eq("user_id",me).order("created_at",{ascending:false}).limit(50),
     ]);
     if (postRes.error) setError(postRes.error.message);
     if (connectionRes.error) setError(connectionRes.error.message);
@@ -105,7 +105,7 @@ export default function SocialScreen() {
   };
 
   const submitPost = async () => {
-    if (!userId || (!draft.trim() && !picked)) return;
+    if (!userId || !draft.trim()) { setError("Write a message to accompany your post media."); return; }
     if (draft.trim().length > 2000) { setError("Posts are limited to 2,000 characters."); return; }
     setBusy(true); setError("");
     try {
@@ -162,7 +162,7 @@ export default function SocialScreen() {
     setBusy(true); const { error: e } = await supabase.from("social_connections").update({ status }).eq("id",connection.id);
     if (e) setError(e.message); else await load(); setBusy(false);
   };
-  const markAlertRead = async (id: string) => { const { error: e } = await supabase.from("notifications").update({read:true}).eq("id",id).eq("user_id",userId); if(e) setError(e.message); else setSocialAlerts(rows => rows.map(row => row.id===id?{...row,read:true}:row)); };
+  const markAlertRead = async (id: string) => { const { error: e } = await supabase.from("social_notifications").update({read:true}).eq("id",id).eq("user_id",userId); if(e) setError(e.message); else setSocialAlerts(rows => rows.map(row => row.id===id?{...row,read:true}:row)); };
   const sendMessage = async () => {
     if (!userId || !selectedPerson || !messageDraft.trim()) return;
     if (messageDraft.trim().length > 4000) { setError("Messages are limited to 4,000 characters."); return; }
