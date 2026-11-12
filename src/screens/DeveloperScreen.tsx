@@ -6,6 +6,7 @@ import NativeListingDetailScreen from "./NativeListingDetailScreen";
 import NativeAnalyticsScreen from "./NativeAnalyticsScreen";
 import NativeVerificationScreen from "./NativeVerificationScreen";
 import NativeSubscriptionScreen from "./NativeSubscriptionScreen";
+import NativeDeveloperSettingsScreen from "./NativeDeveloperSettingsScreen";
 
 type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string };
 type Metric = { day: string; views: number; installs: number };
@@ -19,6 +20,7 @@ const LINKS = [
   { title: "Developer Pro", path: "/console/subscription", description: "View plan status and use secure PayChangu checkout." },
   { title: "Verification", path: "/console/verification", description: "Continue the existing identity verification process." },
   { title: "Analytics", path: "/console/analytics", description: "Open the existing developer analytics workflow." },
+  { title: "Account settings", path: "/console/settings", description: "Manage your developer profile, security and store presence." },
 ];
 
 export default function DeveloperScreen() {
@@ -34,7 +36,7 @@ export default function DeveloperScreen() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription">("dashboard");
+  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings">("dashboard");
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +101,7 @@ export default function DeveloperScreen() {
   if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "verification") return <NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "subscription") return <NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
+  if (activeWorkflow === "settings") return <NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "listing" && activeListingId) return <NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
 
   if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
@@ -153,7 +156,7 @@ export default function DeveloperScreen() {
       </View>
 
       <Text style={styles.section}>Developer tools</Text>
-      {LINKS.map((item) => <TouchableOpacity key={item.path} onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.linkCard}><Text style={styles.linkTitle}>{item.title} ›</Text><Text style={styles.body}>{item.description}</Text></TouchableOpacity>)}
+      {LINKS.map((item) => <TouchableOpacity key={item.path} onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.linkCard}><Text style={styles.linkTitle}>{item.title} ›</Text><Text style={styles.body}>{item.description}</Text></TouchableOpacity>)}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
 
