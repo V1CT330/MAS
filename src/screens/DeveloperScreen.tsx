@@ -21,6 +21,8 @@ const LINKS = [
   { title: "Verification", path: "/console/verification", description: "Continue the existing identity verification process." },
   { title: "Analytics", path: "/console/analytics", description: "Open the existing developer analytics workflow." },
   { title: "Account settings", path: "/console/settings", description: "Manage your developer profile, security and store presence." },
+  { title: "Store presence", path: "/console/store", description: "Manage the public developer page shown to MAS users." },
+  { title: "Resources & support", path: "/console/resources", description: "Open MAS developer guides and support resources." },
 ];
 
 export default function DeveloperScreen() {
