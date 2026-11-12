@@ -36,8 +36,6 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
  const score=checks.length?Math.round(checks.filter(x=>x.ok).length/checks.length*100):0;
  const saveDetails=async()=>{
   if(!listing)return;
-  if(tagline.trim().length<20){setMessage("Tagline must contain at least 20 characters.");return;}
-  if(description.trim().length<200){setMessage("Description must contain at least 200 characters.");return;}
   setBusy(true);setMessage("");
   try{
    const {error}=await supabase.from("listings").update({tagline:tagline.trim(),description:description.trim()}).eq("id",listingId);
@@ -63,6 +61,7 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   <TouchableOpacity onPress={onBack} style={s.back}><Text style={s.backText}>‹  All products</Text></TouchableOpacity>
   <View style={s.header}><Text style={s.eyebrow}>LISTING OVERVIEW</Text><Text style={s.title}>{listing.name}</Text><Text style={s.copy}>{listing.kind.replace("_"," ")} · {listing.category}</Text><View style={s.status}><Text style={s.statusText}>{listing.status==="published"?"Live":listing.status==="pending"?"In review":listing.status}</Text></View></View>
   {listing.rejection_reason?<View style={s.panel}><Text style={s.panelTitle}>Review feedback</Text><Text style={s.copy}>{listing.rejection_reason}</Text></View>:null}
+  {listing.status==="draft"||listing.status==="rejected"?<View style={s.panel}><Text style={s.panelTitle}>Edit listing details</Text><Text style={s.fieldLabel}>Tagline · {tagline.trim().length}/20 characters minimum</Text><TextInput value={tagline} onChangeText={setTagline} maxLength={90} placeholder="One line about your product" style={s.input}/><Text style={s.fieldLabel}>Description · {description.trim().length}/200 characters minimum</Text><TextInput value={description} onChangeText={setDescription} multiline maxLength={2000} textAlignVertical="top" placeholder="Describe what it does and who it helps" style={[s.input,s.multiline]}/><TouchableOpacity disabled={busy} onPress={()=>void saveDetails()} style={[s.button,busy&&s.disabled]}>{busy?<ActivityIndicator color="#FFF"/>:<Text style={s.buttonText}>Save details</Text>}</TouchableOpacity></View>:null}
   <View style={s.panel}><View style={s.row}><Text style={s.panelTitle}>Submission checklist</Text><Text style={s.score}>{score}%</Text></View><View style={s.track}><View style={[s.progress,{width:score+"%"}]}/></View>
    {checks.map(x=><View key={x.label} style={s.checkRow}><Text style={[s.mark,{color:x.ok?"#188038":"#9AA0A6"}]}>{x.ok?"✓":"○"}</Text><View style={s.flex}><Text style={s.checkTitle}>{x.label}</Text>{!x.ok?<Text style={s.hint}>{x.hint}</Text>:null}</View></View>)}
    <Text style={s.note}>Automated checks and store review determine whether a listing can go live. KYC and package security review still apply.</Text>
