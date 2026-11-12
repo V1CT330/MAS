@@ -25,6 +25,8 @@ const LINKS = [
   { title: "Store presence", path: "/console/store", description: "Manage the public developer page shown to MAS users." },
   { title: "Resources & support", path: "/console/resources", description: "Open MAS developer guides and support resources." },
   { title: "Developer notifications", path: "/console/notifications", description: "Review publishing, verification and account alerts." },
+  { title: "Team management", path: "/console/manage", description: "Invite collaborators and manage workspace access through the secure MAS workflow." },
+  { title: "Quality review", path: "/console/quality", description: "Review publishing quality guidance and listing requirements." },
 ];
 
 export default function DeveloperScreen() {
