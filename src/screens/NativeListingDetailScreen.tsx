@@ -60,13 +60,15 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   const {data,error}=await supabase.from("listings").select("id,name,kind,category,status,tagline,description,icon_url,screenshots,website_url,rejection_reason").eq("id",listingId).single();
   if(error||!data){setListing(null);setMessage(error?.message??"Listing unavailable.");setLoading(false);return;}
   const row=data as ListingRow;setListing(row);setTagline(row.tagline??"");setDescription(row.description??"");
+  setReviewsLoading(true);
   const [versionResult,reviewsResult]=await Promise.all([
    supabase.from("listing_versions").select("version,changelog,file_url,size_bytes,status").eq("listing_id",listingId),
    supabase.from("reviews").select("id,rating,body,created_at,developer_reply").eq("listing_id",listingId).order("created_at",{ascending:false})
   ]);
   setReleases((versionResult.data??[]) as ReleaseRow[]);
   setReviews((reviewsResult.data??[]) as ReviewRow[]);
-  setLoading(false);
+  if(reviewsResult.error)setMessage("Reviews could not be loaded: "+reviewsResult.error.message);
+  setReviewsLoading(false);setLoading(false);
  },[listingId]);
  useEffect(()=>{void refresh();},[refresh]);
  const checks=useMemo(()=>listing?checksFor(listing):[],[listing]);
