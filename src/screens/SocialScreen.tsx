@@ -68,6 +68,10 @@ export default function SocialScreen() {
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").order("display_name",{ascending:true}).limit(100),
       supabase.from("social_notifications").select("id,title,body,read,created_at").eq("user_id",me).order("created_at",{ascending:false}).limit(50),
+      socialDb.from("social_investment_profiles").select("*").eq("user_id",me).maybeSingle(),
+      socialDb.from("social_investment_profiles").select("*").order("updated_at",{ascending:false}).limit(100),
+      socialDb.from("social_investment_opportunities").select("*").order("created_at",{ascending:false}).limit(100),
+      socialDb.from("ad_campaigns").select("id,headline,body,image_url,destination_url,placements,starts_at,ends_at,status").eq("status","approved").contains("placements",["social_feed"]).order("created_at",{ascending:false}).limit(10),
     ]);
     if (postRes.error) setError(postRes.error.message);
     if (connectionRes.error) setError(connectionRes.error.message);
