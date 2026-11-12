@@ -24,7 +24,7 @@ export const CATEGORIES = [
 
 export const SUBSCRIPTION_PRICE_MWK = 5000;
 
-export type ListingKind = "app" | "website";
+export type ListingKind = "app" | "website" | "ai_agent" | "extension";
 export type ListingStatus = "draft" | "pending" | "published" | "rejected";
 
 export type Listing = {
