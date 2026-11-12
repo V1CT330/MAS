@@ -6,7 +6,7 @@ const BLUE = "#1877F2";
 const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
 type Profile = { id: string; display_name: string | null; developer_name: string | null; bio: string | null; mode: string | null; is_developer: boolean | null };
 
-export default function AccountScreen() {
+export default function AccountScreen({ authErrorMessage }: { authErrorMessage?: string | null }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -80,6 +80,7 @@ export default function AccountScreen() {
       <View style={styles.card}><Text style={styles.title}>MAS spaces</Text><Text style={styles.subtitle}>Developer Mode activation and terms are managed through the existing MAS account workflow.</Text><TouchableOpacity onPress={() => void Linking.openURL(`${WEB_ORIGIN}/settings`)} style={styles.action}><Text style={styles.link}>Manage workspaces and settings on MAS ›</Text></TouchableOpacity><TouchableOpacity onPress={() => void Linking.openURL(`${WEB_ORIGIN}/console/social`)} style={styles.action}><Text style={styles.link}>Open Social ›</Text></TouchableOpacity>{isAdmin ? <TouchableOpacity onPress={() => void Linking.openURL(`${WEB_ORIGIN}/admin`)} style={styles.action}><Text style={styles.link}>Administration dashboard ›</Text></TouchableOpacity> : null}</View>
       <TouchableOpacity disabled={busy} onPress={() => void signOut()} style={styles.signOut}><Text style={styles.signOutText}>{busy ? "Please wait…" : "Sign out"}</Text></TouchableOpacity>
     </>}
+    {authErrorMessage ? <Text accessibilityRole="alert" style={styles.notice}>{authErrorMessage}</Text> : null}
     {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
     <TouchableOpacity onPress={() => void load()} style={styles.refresh}><Text style={styles.link}>Refresh account</Text></TouchableOpacity>
   </ScrollView>;
