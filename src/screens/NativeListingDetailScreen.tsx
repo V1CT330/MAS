@@ -79,10 +79,13 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
    if(replaceScreenshots){screenshotPaths=[];for(const item of newScreenshots){const path=await uploadImage(auth.user.id,item,"screenshots");screenshotPaths.push(path);uploaded.push(path);}}
    const {error}=await supabase.from("listings").update({icon_url:iconPath,screenshots:screenshotPaths}).eq("id",listingId);
    if(error)throw error;
-   const oldPaths=[...(newIcon&&listing.icon_url?[listing.icon_url]:[]),...(clearIcon&&listing.icon_url?[listing.icon_url]:[]),...(replaceScreenshots?(listing.screenshots??[]):[])];
-   if(oldPaths.length)await supabase.storage.from("app-assets").remove(oldPaths);
    setNewIcon(null);setNewScreenshots([]);setClearIcon(false);setReplaceScreenshots(false);
-   await refresh();setMessage("Listing images saved.");
+   await refresh();
+   const oldPaths=[...(newIcon&&listing.icon_url?[listing.icon_url]:[]),...(clearIcon&&listing.icon_url?[listing.icon_url]:[]),...(replaceScreenshots?(listing.screenshots??[]):[])];
+   if(oldPaths.length){
+    const {error:cleanupError}=await supabase.storage.from("app-assets").remove(oldPaths);
+    setMessage(cleanupError?"Listing images saved. Old files could not be cleaned up and may need manual cleanup.":"Listing images saved.");
+   }else setMessage("Listing images saved.");
   }catch(e){
    if(uploaded.length)await supabase.storage.from("app-assets").remove(uploaded);
    setMessage(e instanceof Error?e.message:"Could not save listing images.");
