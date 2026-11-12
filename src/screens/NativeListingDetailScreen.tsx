@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { supabase } from "../lib/supabase";
 
 type Props = { listingId: string; onBack: () => void };
@@ -23,15 +23,29 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
+ const [tagline,setTagline]=useState("");
+ const [description,setDescription]=useState("");
  const refresh=useCallback(async()=>{
   setLoading(true);
   const {data,error}=await supabase.from("listings").select("id,name,kind,category,status,tagline,description,icon_url,screenshots,website_url,rejection_reason").eq("id",listingId).single();
   if(error||!data){setListing(null);setMessage(error?.message??"Listing unavailable.");setLoading(false);return;}
-  setListing(data as ListingRow);setLoading(false);
+  const row=data as ListingRow;setListing(row);setTagline(row.tagline??"");setDescription(row.description??"");setLoading(false);
  },[listingId]);
  useEffect(()=>{void refresh();},[refresh]);
  const checks=useMemo(()=>listing?checksFor(listing):[],[listing]);
  const score=checks.length?Math.round(checks.filter(x=>x.ok).length/checks.length*100):0;
+ const saveDetails=async()=>{
+  if(!listing)return;
+  if(tagline.trim().length<20){setMessage("Tagline must contain at least 20 characters.");return;}
+  if(description.trim().length<200){setMessage("Description must contain at least 200 characters.");return;}
+  setBusy(true);setMessage("");
+  try{
+   const {error}=await supabase.from("listings").update({tagline:tagline.trim(),description:description.trim()}).eq("id",listingId);
+   if(error)throw error;
+   await refresh();setMessage("Listing details saved.");
+  }catch(e){setMessage(e instanceof Error?e.message:"Could not save listing details.");}
+  finally{setBusy(false);}
+ };
  const runChecks=async()=>{
   setBusy(true);setMessage("");
   try{
@@ -57,4 +71,4 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   </View>
  </ScrollView>;
 }
-const s=StyleSheet.create({content:{padding:16,paddingBottom:32},center:{padding:32,alignItems:"center"},back:{paddingVertical:8},backText:{color:"#1A73E8",fontSize:14,fontWeight:"600"},header:{marginBottom:14},eyebrow:{fontSize:10,letterSpacing:1,color:"#5F6368",fontWeight:"700"},title:{fontSize:23,color:"#202124",fontWeight:"700",marginTop:5},copy:{fontSize:13,color:"#5F6368",lineHeight:19,marginTop:5},status:{alignSelf:"flex-start",backgroundColor:"#E8F0FE",borderRadius:18,paddingHorizontal:12,paddingVertical:6,marginTop:10},statusText:{fontSize:12,color:"#174EA6",fontWeight:"700",textTransform:"capitalize"},panel:{backgroundColor:"#FFF",borderColor:"#E8EAED",borderWidth:1,borderRadius:16,padding:16,marginBottom:12},panelTitle:{fontSize:16,color:"#202124",fontWeight:"700"},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center"},score:{fontSize:15,color:"#1A73E8",fontWeight:"700"},track:{height:7,borderRadius:8,backgroundColor:"#E8EAED",overflow:"hidden",marginTop:12,marginBottom:8},progress:{height:7,backgroundColor:"#1A73E8",borderRadius:8},checkRow:{flexDirection:"row",alignItems:"flex-start",paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#F1F3F4",gap:10},mark:{fontSize:16,fontWeight:"700",width:20},flex:{flex:1},checkTitle:{fontSize:13,color:"#202124",fontWeight:"600"},hint:{fontSize:11,color:"#5F6368",marginTop:3},note:{fontSize:11,color:"#5F6368",lineHeight:16,marginTop:12},button:{minHeight:46,borderRadius:24,backgroundColor:"#1A73E8",alignItems:"center",justifyContent:"center",marginTop:16,paddingHorizontal:16},buttonText:{color:"#FFF",fontSize:13,fontWeight:"700"},disabled:{opacity:.6},message:{fontSize:12,color:"#3C4043",lineHeight:18,marginTop:12}});
+const s=StyleSheet.create({content:{padding:16,paddingBottom:32},center:{padding:32,alignItems:"center"},back:{paddingVertical:8},backText:{color:"#1A73E8",fontSize:14,fontWeight:"600"},header:{marginBottom:14},eyebrow:{fontSize:10,letterSpacing:1,color:"#5F6368",fontWeight:"700"},title:{fontSize:23,color:"#202124",fontWeight:"700",marginTop:5},copy:{fontSize:13,color:"#5F6368",lineHeight:19,marginTop:5},status:{alignSelf:"flex-start",backgroundColor:"#E8F0FE",borderRadius:18,paddingHorizontal:12,paddingVertical:6,marginTop:10},statusText:{fontSize:12,color:"#174EA6",fontWeight:"700",textTransform:"capitalize"},panel:{backgroundColor:"#FFF",borderColor:"#E8EAED",borderWidth:1,borderRadius:16,padding:16,marginBottom:12},panelTitle:{fontSize:16,color:"#202124",fontWeight:"700"},fieldLabel:{fontSize:12,color:"#3C4043",fontWeight:"600",marginTop:14,marginBottom:6},input:{minHeight:46,borderWidth:1,borderColor:"#DADCE0",borderRadius:11,paddingHorizontal:12,paddingVertical:10,color:"#202124",backgroundColor:"#FFF",fontSize:13},multiline:{minHeight:130,paddingTop:12},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center"},score:{fontSize:15,color:"#1A73E8",fontWeight:"700"},track:{height:7,borderRadius:8,backgroundColor:"#E8EAED",overflow:"hidden",marginTop:12,marginBottom:8},progress:{height:7,backgroundColor:"#1A73E8",borderRadius:8},checkRow:{flexDirection:"row",alignItems:"flex-start",paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#F1F3F4",gap:10},mark:{fontSize:16,fontWeight:"700",width:20},flex:{flex:1},checkTitle:{fontSize:13,color:"#202124",fontWeight:"600"},hint:{fontSize:11,color:"#5F6368",marginTop:3},note:{fontSize:11,color:"#5F6368",lineHeight:16,marginTop:12},button:{minHeight:46,borderRadius:24,backgroundColor:"#1A73E8",alignItems:"center",justifyContent:"center",marginTop:16,paddingHorizontal:16},buttonText:{color:"#FFF",fontSize:13,fontWeight:"700"},disabled:{opacity:.6},message:{fontSize:12,color:"#3C4043",lineHeight:18,marginTop:12}});
