@@ -90,6 +90,91 @@ export function topByDate<T>(
   return [...items].sort((a, b) => (value(b) ?? "").localeCompare(value(a) ?? "")).slice(0, limit);
 }
 
+
+export type DiscoveryListing = {
+  name?: string | null;
+  tagline?: string | null;
+  description?: string | null;
+  category?: string | null;
+  kind?: string | null;
+  developer?: { developer_name?: string | null; display_name?: string | null } | null;
+  downloads?: number | null;
+  rating_avg?: number | null;
+  rating_count?: number | null;
+  created_at?: string | null;
+};
+
+function searchFieldScore(value: string | null | undefined, tokens: readonly string[], weight: number): number {
+  const field = normalizeSearch(value);
+  if (!field) return 0;
+  let score = 0;
+  for (const token of tokens) {
+    if (!field.includes(token)) continue;
+    score += field === token ? 12 * weight : field.startsWith(token) ? 8 * weight : 4 * weight;
+  }
+  return score;
+}
+
+export function listingSearchScore(listing: DiscoveryListing, query: string): number {
+  const tokens = normalizeSearch(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!tokens.length) return 0;
+  const fields = [
+    [listing.name, 5], [listing.tagline, 3], [listing.category, 2],
+    [listing.developer?.developer_name, 2], [listing.developer?.display_name, 2],
+    [listing.description, 1], [listing.kind, 1],
+  ] as const;
+  const total = fields.reduce((sum, [value, weight]) => sum + searchFieldScore(value, tokens, weight), 0);
+  const combined = normalizeSearch(fields.map(([value]) => value).filter(Boolean).join(" "));
+  const matchedTokens = tokens.filter((token) => combined.includes(token)).length;
+  return total * (matchedTokens / tokens.length);
+}
+
+export type DiscoveryOptions = {
+  query?: string;
+  interests?: readonly string[];
+  limit?: number;
+  now?: number;
+  maxPerCategory?: number;
+};
+
+export function rankListings<T extends DiscoveryListing>(
+  items: readonly T[],
+  options: DiscoveryOptions = {},
+): T[] {
+  const now = options.now ?? Date.now();
+  const interests = new Set((options.interests ?? []).map(normalizeSearch));
+  const query = normalizeSearch(options.query);
+  const maxPerCategory = Math.max(1, options.maxPerCategory ?? 3);
+  const scored = items.map((item, index) => {
+    const downloads = Math.max(0, Number(item.downloads ?? 0));
+    const count = Math.max(0, Number(item.rating_count ?? 0));
+    const average = Math.min(5, Math.max(0, Number(item.rating_avg ?? 0)));
+    const confidenceRating = (average * count + 3.8 * 5) / (count + 5);
+    const popularity = Math.log1p(downloads) / Math.log1p(10000);
+    const ageDays = Math.max(0, (now - Date.parse(item.created_at ?? "")) / 86400000);
+    const freshness = Number.isFinite(ageDays) ? Math.exp(-ageDays / 45) : 0;
+    const interest = interests.has(normalizeSearch(item.category)) ? 1 : 0;
+    const exploration = 1 / Math.sqrt(downloads + 1);
+    const relevance = query ? listingSearchScore(item, query) : 0;
+    const score = query
+      ? relevance + confidenceRating * 0.25 + popularity * 2
+      : interest * 5 + confidenceRating * 1.5 + popularity * 2.2 + freshness * 2 + exploration * 0.8;
+    return { item, index, score, category: normalizeSearch(item.category) || "other" };
+  }).sort((a, b) => b.score - a.score || a.index - b.index);
+
+  const counts = new Map<string, number>();
+  const selected: T[] = [];
+  const deferred: typeof scored = [];
+  for (const entry of scored) {
+    const count = counts.get(entry.category) ?? 0;
+    if (count >= maxPerCategory) { deferred.push(entry); continue; }
+    selected.push(entry.item);
+    counts.set(entry.category, count + 1);
+  }
+  for (const entry of deferred) selected.push(entry.item);
+  return selected.slice(0, options.limit ?? selected.length);
+}
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()
