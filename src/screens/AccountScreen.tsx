@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, To
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const BLUE = "#1877F2";
-const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
+const WEB_ORIGIN = "https://malawian-app-store.vercel.app";
 type Profile = { id: string; display_name: string | null; developer_name: string | null; bio: string | null; mode: string | null; is_developer: boolean | null };
 
 export default function AccountScreen({ authErrorMessage }: { authErrorMessage?: string | null }) {
