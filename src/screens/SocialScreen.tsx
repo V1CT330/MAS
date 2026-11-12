@@ -1,177 +1,257 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import * as DocumentPicker from "expo-document-picker";
+import { supabase } from "../lib/supabase";
 
+type Profile = { id: string; display_name: string | null; developer_name: string | null; bio?: string | null; avatar_url?: string | null; cover_image_url?: string | null };
 type Post = { id: string; author_id: string; body: string; created_at: string; media_url?: string | null; media_type?: string | null };
-type Profile = { id: string; display_name: string | null; developer_name: string | null; bio?: string | null; avatar_url?: string | null };
-type Comment = { id: string; post_id: string; author_id: string; body: string; created_at: string };
-type Reaction = { post_id: string; user_id: string };
-type PickedMedia = { uri: string; mimeType: string; fileName: string; fileSize?: number; mediaType: "image" | "video" };
+type Comment = { id: string; post_id: string; author_id: string; body: string; created_at: string; parent_comment_id?: string | null; media_url?: string | null; media_type?: string | null };
+type Connection = { id: string; requester_id: string; recipient_id: string; status: "pending" | "accepted" | "declined"; created_at: string };
+type Message = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null };
+type PickedMedia = { uri: string; mimeType: string; fileName: string; mediaType: "image" | "video" };
 const BLUE = "#1877F2";
-const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
-const ALLOWED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm", "video/quicktime"]);
+const MAX_MEDIA = 50 * 1024 * 1024;
+const BUCKET = "social-media";
 
 export default function SocialScreen() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
-  const [pickedMedia, setPickedMedia] = useState<PickedMedia | null>(null);
+  const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
-  const [commentPostId, setCommentPostId] = useState<string | null>(null);
-  const [profileToShow, setProfileToShow] = useState<Profile | null>(null);
+  const [commentTarget, setCommentTarget] = useState<{ postId: string; parentId: string | null } | null>(null);
+  const [commentAudio, setCommentAudio] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [profilePage, setProfilePage] = useState<string | null>(null);
+  const [section, setSection] = useState<"Feed" | "People" | "Messages" | "My profile">("Feed");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    if (!isSupabaseConfigured) { setUserId(null); setLoading(false); setError("Configure the public MAS Supabase client to load Social."); return; }
     const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to your MAS account to use Social."); return; }
+    if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
     const me = auth.user.id; setUserId(me);
-    const { data: postRows, error: postError } = await supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50);
-    if (postError) { setError(postError.message); setLoading(false); return; }
-    const postList = (postRows ?? []) as Post[]; setPosts(postList);
-    const postIds = postList.map((post) => post.id);
-    const authorIds = [...new Set(postList.map((post) => post.author_id))];
-    if (!postIds.length) { setProfiles({}); setComments([]); setReactions([]); setLoading(false); return; }
-    const [profileResult, commentResult, reactionResult] = await Promise.all([
-      authorIds.length ? supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url").in("id", authorIds) : Promise.resolve({ data: [], error: null }),
-      supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at").in("post_id", postIds).order("created_at", { ascending: true }).limit(300),
-      supabase.from("social_post_reactions").select("post_id,user_id").in("post_id", postIds),
+    const [postRes, connectionRes, messageRes, meRes] = await Promise.all([
+      supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
+      supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
+      supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
+      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
     ]);
-    const profileMap: Record<string, Profile> = {};
-    for (const profile of (profileResult.data ?? []) as Profile[]) profileMap[profile.id] = profile;
-    for (const row of (commentResult.data ?? []) as Comment[]) if (!profileMap[row.author_id]) profileMap[row.author_id] = { id: row.author_id, display_name: null, developer_name: null };
-    setProfiles(profileMap);
-    if (commentResult.error) setError(commentResult.error.message); else setComments((commentResult.data ?? []) as Comment[]);
-    if (reactionResult.error) setError(reactionResult.error.message); else setReactions((reactionResult.data ?? []) as Reaction[]);
+    if (postRes.error) setError(postRes.error.message);
+    if (connectionRes.error) setError(connectionRes.error.message);
+    if (messageRes.error) setError(messageRes.error.message);
+    const postRows = (postRes.data ?? []) as Post[];
+    setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
+    const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
+    const [profileRes, commentRes] = await Promise.all([
+      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
+      postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
+    ]);
+    const map: Record<string, Profile> = {};
+    for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
+    if (meRes.data) map[me] = meRes.data as Profile;
+    setProfiles(map);
+    if (commentRes.error) setError(commentRes.error.message);
+    setComments((commentRes.data ?? []) as Comment[]);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void load();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => { void load(); });
-    return () => listener.subscription.unsubscribe();
+  useEffect(() => { void load(); const channel = supabase.channel("mas-native-social")
+    .on("postgres_changes", { event: "*", schema: "public", table: "social_messages" }, () => { void load(); })
+    .subscribe();
+    return () => { void supabase.removeChannel(channel); };
   }, [load]);
+
+  const acceptedIds = useMemo(() => new Set(connections.filter(c => c.status === "accepted").map(c => c.requester_id === userId ? c.recipient_id : c.requester_id)), [connections,userId]);
+  const people = useMemo(() => Object.values(profiles).filter(p => p.id !== userId), [profiles,userId]);
+  const commentsByPost = useMemo(() => { const out: Record<string, Comment[]> = {}; for (const c of comments) (out[c.post_id] ??= []).push(c); return out; }, [comments]);
+  const threadMessages = messages.filter(m => selectedPerson && ((m.sender_id === userId && m.recipient_id === selectedPerson) || (m.sender_id === selectedPerson && m.recipient_id === userId)));
+  const name = (id: string) => profiles[id]?.developer_name || profiles[id]?.display_name || "MAS member";
 
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { setError("Allow MAS access to photos and videos to attach media."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], allowsEditing: false, quality: 0.85, videoMaxDuration: 120 });
+    if (!permission.granted) { setError("Allow photo and video access to attach media."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images","videos"], quality: 0.85, allowsEditing: false });
     if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    const mimeType = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
-    if (!ALLOWED_MEDIA_TYPES.has(mimeType)) { setError("Choose a JPG, PNG, WEBP, GIF, MP4, WEBM or MOV file."); return; }
-    if (asset.fileSize && asset.fileSize > MAX_MEDIA_BYTES) { setError("Social media must be 50 MB or smaller."); return; }
-    setPickedMedia({ uri: asset.uri, mimeType, fileName: asset.fileName ?? `upload.${mimeType.split("/")[1]}`, fileSize: asset.fileSize, mediaType: asset.type === "video" ? "video" : "image" });
-    setError("");
+    const a = result.assets[0]; const mime = a.mimeType || (a.type === "video" ? "video/mp4" : "image/jpeg");
+    if (!["image/jpeg","image/png","image/webp","image/gif","video/mp4","video/webm","video/quicktime"].includes(mime)) { setError("Unsupported media format."); return; }
+    if (a.fileSize && a.fileSize > MAX_MEDIA) { setError("Media must be 50 MB or smaller."); return; }
+    setPicked({ uri: a.uri, mimeType: mime, fileName: a.fileName || "upload."+mime.split("/")[1], mediaType: a.type === "video" ? "video" : "image" });
+  };
+
+  const uploadFile = async (uri: string, fileName: string, mimeType: string, owner: string) => {
+    const response = await fetch(uri); if (!response.ok) throw new Error("Could not read the selected file.");
+    const blob = await response.blob(); if (!blob.size || blob.size > MAX_MEDIA) throw new Error("File must be larger than 0 bytes and no larger than 50 MB.");
+    const ext = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g,"") || "bin";
+    const path = owner+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+"."+ext;
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: mimeType, upsert: false, cacheControl: "3600" });
+    if (uploadError) throw uploadError;
+    return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   };
 
   const submitPost = async () => {
-    if (!userId) { setError("Sign in to publish a post."); return; }
-    const body = draft.trim();
-    if ((!body && !pickedMedia) || body.length > 2000) { setError("Add a photo, video, or text up to 2,000 characters."); return; }
+    if (!userId || (!draft.trim() && !picked)) return;
+    if (draft.trim().length > 2000) { setError("Posts are limited to 2,000 characters."); return; }
     setBusy(true); setError("");
-    let uploadedPath: string | null = null;
     try {
-      let mediaUrl: string | null = null;
-      if (pickedMedia) {
-        const response = await fetch(pickedMedia.uri);
-        if (!response.ok) throw new Error("Could not read the selected media file.");
-        const blob = await response.blob();
-        if (blob.size > MAX_MEDIA_BYTES) throw new Error("Social media must be 50 MB or smaller.");
-        const extension = pickedMedia.fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || (pickedMedia.mediaType === "video" ? "mp4" : "jpg");
-        uploadedPath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("social-media").upload(uploadedPath, blob, { contentType: pickedMedia.mimeType, cacheControl: "3600", upsert: false });
-        if (uploadError) throw uploadError;
-        mediaUrl = supabase.storage.from("social-media").getPublicUrl(uploadedPath).data.publicUrl;
-      }
-      const { error: insertError } = await supabase.from("social_posts").insert({ author_id: userId, body, media_url: mediaUrl, media_type: pickedMedia?.mediaType ?? null });
-      if (insertError) {
-        if (uploadedPath) await supabase.storage.from("social-media").remove([uploadedPath]);
-        throw insertError;
-      }
-      setDraft(""); setPickedMedia(null); await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not publish your post."); }
+      const mediaUrl = picked ? await uploadFile(picked.uri,picked.fileName,picked.mimeType,userId) : null;
+      const { error: insertError } = await supabase.from("social_posts").insert({ author_id:userId, body:draft.trim(), media_url:mediaUrl, media_type:picked?.mediaType ?? null });
+      if (insertError) throw insertError;
+      setDraft(""); setPicked(null); await load();
+    } catch(e) { setError(e instanceof Error ? e.message : "Could not publish post."); }
     finally { setBusy(false); }
   };
 
-  const deletePost = async (post: Post) => {
-    if (!userId || post.author_id !== userId) return;
+  const submitComment = async () => {
+    if (!userId || !commentTarget) return;
+    const body = commentDraft.trim();
+    if (!body && !commentAudio) { setError("Write a reply or attach a voice recording."); return; }
+    if (body.length > 1000) { setError("Replies are limited to 1,000 characters."); return; }
     setBusy(true); setError("");
-    const { error: deleteError } = await supabase.from("social_posts").delete().eq("id", post.id).eq("author_id", userId);
-    if (deleteError) { setError(deleteError.message); setBusy(false); return; }
-    if (post.media_url) {
-      const marker = "/object/public/social-media/";
-      const markerIndex = post.media_url.indexOf(marker);
-      const path = markerIndex >= 0 ? decodeURIComponent(post.media_url.slice(markerIndex + marker.length)) : "";
-      if (path.startsWith(`${userId}/`)) await supabase.storage.from("social-media").remove([path]);
-    }
-    await load(); setBusy(false);
+    try {
+      const mediaUrl = commentAudio ? await uploadFile(commentAudio.uri,commentAudio.name,commentAudio.mimeType || "audio/mp4",userId) : null;
+      const { error: e } = await supabase.from("social_post_comments").insert({ post_id:commentTarget.postId, parent_comment_id:commentTarget.parentId, author_id:userId, body, media_url:mediaUrl, media_type:mediaUrl ? "audio" : null });
+      if (e) throw e;
+      setCommentDraft(""); setCommentAudio(null); setCommentTarget(null); await load();
+    } catch(e) { setError(e instanceof Error ? e.message : "Could not send reply."); }
+    finally { setBusy(false); }
+  };
+
+  const chooseVoice = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type:["audio/*"], copyToCacheDirectory:true, multiple:false });
+      if (result.canceled || !result.assets[0]) return;
+      const a = result.assets[0];
+      if (!a.size || a.size > MAX_MEDIA) { setError("Voice files must be larger than 0 bytes and no larger than 50 MB."); return; }
+      setCommentAudio(a); setError("");
+    } catch(e) { setError(e instanceof Error ? e.message : "Could not select an audio file."); }
   };
 
   const toggleLike = async (postId: string) => {
+    if (!userId) return; setBusy(true);
+    const { data: existing, error: readError } = await supabase.from("social_post_reactions").select("id").eq("post_id",postId).eq("user_id",userId).maybeSingle();
+    if (readError) setError(readError.message);
+    else {
+      const result = existing ? await supabase.from("social_post_reactions").delete().eq("id",existing.id) : await supabase.from("social_post_reactions").insert({ post_id:postId,user_id:userId });
+      if (result.error) setError(result.error.message); else await load();
+    }
+    setBusy(false);
+  };
+
+  const sendConnection = async (personId: string) => {
+    if (!userId) return; setBusy(true);
+    const { error: e } = await supabase.from("social_connections").insert({ requester_id:userId,recipient_id:personId,status:"pending" });
+    if (e) setError(e.message); else await load(); setBusy(false);
+  };
+  const respondConnection = async (connection: Connection, status: "accepted" | "declined") => {
+    setBusy(true); const { error: e } = await supabase.from("social_connections").update({ status }).eq("id",connection.id);
+    if (e) setError(e.message); else await load(); setBusy(false);
+  };
+  const sendMessage = async () => {
+    if (!userId || !selectedPerson || !messageDraft.trim()) return;
+    if (messageDraft.trim().length > 4000) { setError("Messages are limited to 4,000 characters."); return; }
+    setBusy(true); const { error: e } = await supabase.from("social_messages").insert({ sender_id:userId,recipient_id:selectedPerson,body:messageDraft.trim() });
+    if (e) setError(e.message); else { setMessageDraft(""); await load(); } setBusy(false);
+  };
+  const openConversation = async (id: string) => {
+    setSelectedPerson(id); setSection("Messages");
     if (!userId) return;
-    setBusy(true); setError("");
-    const liked = reactions.some((reaction) => reaction.post_id === postId && reaction.user_id === userId);
-    const result = liked
-      ? await supabase.from("social_post_reactions").delete().eq("post_id", postId).eq("user_id", userId)
-      : await supabase.from("social_post_reactions").insert({ post_id: postId, user_id: userId });
-    if (result.error) setError(result.error.message); else await load();
-    setBusy(false);
+    const unread = messages.filter(m => m.sender_id === id && m.recipient_id === userId && !m.read_at).map(m => m.id);
+    if (unread.length) await supabase.from("social_messages").update({ read_at:new Date().toISOString() }).in("id",unread);
+  };
+  const renderProfile = (id: string) => {
+    const p = profiles[id]; if (!p) return null;
+    return <View style={s.profilePage}>
+      {p.cover_image_url ? <Image source={{uri:p.cover_image_url}} style={s.cover} /> : <View style={s.coverPlaceholder} />}
+      <View style={s.profileRow}>{p.avatar_url ? <Image source={{uri:p.avatar_url}} style={s.avatarLarge} /> : <View style={s.avatarLarge}><Text style={s.avatarText}>{name(id).slice(0,1).toUpperCase()}</Text></View>}
+        <View style={{flex:1}}><Text style={s.title}>{name(id)}</Text><Text style={s.muted}>{id === userId ? "Your MAS profile" : acceptedIds.has(id) ? "Friend" : "MAS member"}</Text></View>
+      </View>
+      <Text style={s.copy}>{p.bio || "No biography added yet."}</Text>
+      {id !== userId ? <View style={s.row}>
+        {acceptedIds.has(id) ? <Action title="Message" onPress={() => void openConversation(id)} /> : <Action title="Add friend" onPress={() => void sendConnection(id)} />}
+      </View> : null}
+      <Text style={s.section}>Recent posts</Text>
+      {posts.filter(post => post.author_id === id).map(post => <View key={post.id} style={s.card}><Text style={s.copy}>{post.body}</Text>{post.media_url ? <Action title="Open media" onPress={() => void Linking.openURL(post.media_url!)} secondary /> : null}</View>)}
+    </View>;
   };
 
-  const submitComment = async () => {
-    if (!userId || !commentPostId) return;
-    const body = commentDraft.trim();
-    if (!body || body.length > 1000) { setError("Comments must contain 1–1,000 characters."); return; }
-    setBusy(true); setError("");
-    const { error: insertError } = await supabase.from("social_post_comments").insert({ post_id: commentPostId, author_id: userId, body });
-    if (insertError) setError(insertError.message); else { setCommentDraft(""); setCommentPostId(null); await load(); }
-    setBusy(false);
-  };
-
-  const commentsByPost = useMemo(() => {
-    const result: Record<string, Comment[]> = {};
-    for (const comment of comments) (result[comment.post_id] ??= []).push(comment);
-    return result;
-  }, [comments]);
-
-  if (loading) return <View style={styles.center}><ActivityIndicator color={BLUE} /></View>;
-  if (!userId) return <View style={styles.root}><Text style={styles.heading}>MAS Social</Text><Text style={styles.body}>{error || "Sign in to access the community feed."}</Text><TouchableOpacity onPress={() => void load()} style={styles.secondaryButton}><Text style={styles.link}>Try again</Text></TouchableOpacity></View>;
-
-  return <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <Text style={styles.heading}>MAS Social</Text><Text style={styles.body}>Share updates and connect with the Malawian tech community.</Text>
-    <View style={styles.composer}><Text style={styles.section}>Create a post</Text><TextInput value={draft} onChangeText={setDraft} maxLength={2000} multiline textAlignVertical="top" placeholder="What would you like to share?" style={styles.postInput} /><Text style={styles.counter}>{draft.length}/2000</Text>
-      {pickedMedia ? <View style={styles.selectedMedia}>{pickedMedia.mediaType === "image" ? <Image source={{ uri: pickedMedia.uri }} style={styles.preview} resizeMode="cover" /> : <Text style={styles.mediaNote}>Video selected: {pickedMedia.fileName}</Text>}<TouchableOpacity onPress={() => setPickedMedia(null)}><Text style={styles.link}>Remove media</Text></TouchableOpacity></View> : null}
-      <TouchableOpacity disabled={busy} onPress={() => void pickMedia()} style={styles.secondaryButton}><Text style={styles.link}>Add photo or video</Text></TouchableOpacity>
-      <TouchableOpacity disabled={busy} onPress={() => void submitPost()} style={[styles.primaryButton, busy && styles.disabled]}><Text style={styles.primaryText}>{busy ? "Posting…" : "Post"}</Text></TouchableOpacity>
-    </View>
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {posts.length === 0 ? <View style={styles.empty}><Text style={styles.body}>No posts yet. Start the conversation.</Text></View> : null}
-    {posts.map((post) => {
-      const author = profiles[post.author_id];
-      const postComments = commentsByPost[post.id] ?? [];
-      const liked = reactions.some((reaction) => reaction.post_id === post.id && reaction.user_id === userId);
-      const likeCount = reactions.filter((reaction) => reaction.post_id === post.id).length;
-      return <View key={post.id} style={styles.post}>
-        <View style={styles.postHeader}><TouchableOpacity onPress={() => setProfileToShow(author ?? { id: post.author_id, display_name: null, developer_name: null })} style={styles.authorRow}><View style={styles.avatar}><Text style={styles.avatarText}>{(author?.display_name || author?.developer_name || "M").slice(0, 1).toUpperCase()}</Text></View><View><Text style={styles.author}>{author?.display_name || author?.developer_name || "MAS member"}</Text><Text style={styles.date}>{new Date(post.created_at).toLocaleString()}</Text></View></TouchableOpacity>{post.author_id === userId ? <TouchableOpacity disabled={busy} onPress={() => void deletePost(post)}><Text style={styles.deleteText}>Delete</Text></TouchableOpacity> : null}</View>
-        {post.body ? <Text style={styles.postBody}>{post.body}</Text> : null}
-        {post.media_url && post.media_type === "image" ? <Image source={{ uri: post.media_url }} style={styles.postImage} resizeMode="cover" /> : null}
-        {post.media_url && post.media_type === "video" ? <TouchableOpacity onPress={() => void Linking.openURL(post.media_url!)} style={styles.videoCard}><Text style={styles.link}>▶ Open video</Text></TouchableOpacity> : null}
-        <View style={styles.actions}><TouchableOpacity disabled={busy} onPress={() => void toggleLike(post.id)} style={styles.action}><Text style={[styles.actionText, liked && styles.liked]}>{liked ? "♥ Liked" : "♡ Like"} · {likeCount}</Text></TouchableOpacity><TouchableOpacity onPress={() => setCommentPostId(commentPostId === post.id ? null : post.id)} style={styles.action}><Text style={styles.actionText}>Comment · {postComments.length}</Text></TouchableOpacity></View>
-        {postComments.slice(-3).map((comment) => <View key={comment.id} style={styles.comment}><Text style={styles.commentAuthor}>{profiles[comment.author_id]?.display_name || profiles[comment.author_id]?.developer_name || "MAS member"}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}
-        {commentPostId === post.id ? <View style={styles.commentComposer}><TextInput value={commentDraft} onChangeText={setCommentDraft} maxLength={1000} placeholder="Write a comment" style={styles.commentInput} /><TouchableOpacity disabled={busy} onPress={() => void submitComment()} style={styles.commentButton}><Text style={styles.primaryText}>Send</Text></TouchableOpacity></View> : null}
-      </View>;
-    })}
-    <TouchableOpacity onPress={() => void load()} style={styles.refresh}><Text style={styles.link}>Refresh feed</Text></TouchableOpacity>
-    <Modal visible={Boolean(profileToShow)} transparent animationType="slide" onRequestClose={() => setProfileToShow(null)}><View style={styles.modalScrim}><View style={styles.profileModal}><TouchableOpacity onPress={() => setProfileToShow(null)} style={styles.close}><Text style={styles.closeText}>×</Text></TouchableOpacity><View style={styles.avatarLarge}><Text style={styles.avatarLargeText}>{(profileToShow?.display_name || profileToShow?.developer_name || "M").slice(0, 1).toUpperCase()}</Text></View><Text style={styles.section}>{profileToShow?.developer_name || profileToShow?.display_name || "MAS member"}</Text>{profileToShow?.bio ? <Text style={styles.body}>{profileToShow.bio}</Text> : <Text style={styles.body}>MAS community member.</Text>}</View></View></Modal>
-  </ScrollView>;
+  if (loading) return <View style={s.center}><ActivityIndicator color={BLUE} /></View>;
+  if (!userId) return <View style={s.root}><Text style={s.title}>MAS Social</Text><Text style={s.copy}>{error || "Sign in to access Social."}</Text><Action title="Try again" onPress={() => void load()} /></View>;
+  return <View style={s.root}>
+    <View style={s.top}><Text style={s.title}>Social</Text><TouchableOpacity onPress={() => void load()}><Text style={s.link}>Refresh</Text></TouchableOpacity></View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs}>{(["Feed","People","Messages","My profile"] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {setSection(tab);setProfilePage(null);}} style={[s.tab,section===tab&&s.tabActive]}><Text style={[s.tabText,section===tab&&s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</ScrollView>
+    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
+      {profilePage ? <><TouchableOpacity onPress={() => setProfilePage(null)}><Text style={s.link}>‹ Back</Text></TouchableOpacity>{renderProfile(profilePage)}</> : section === "My profile" ? renderProfile(userId) : null}
+      {section === "Feed" && !profilePage ? <>
+        <View style={s.card}><Text style={s.section}>Create a post</Text><TextInput value={draft} onChangeText={setDraft} multiline maxLength={2000} placeholder="What would you like to share?" style={s.input} />
+          {picked ? <Text style={s.muted}>{picked.fileName}</Text> : null}
+          <View style={s.row}><Action title="Photo or video" secondary onPress={() => void pickMedia()} /><Action title={busy ? "Posting…" : "Post"} disabled={busy} onPress={() => void submitPost()} /></View>
+        </View>
+        {posts.map(post => {
+          const list = commentsByPost[post.id] ?? [];
+          const liked = false;
+          return <View key={post.id} style={s.card}>
+            <TouchableOpacity style={s.author} onPress={() => {setProfilePage(post.author_id);setSection("Feed");}}><Text style={s.authorName}>{name(post.author_id)}</Text><Text style={s.muted}>{new Date(post.created_at).toLocaleString()}</Text></TouchableOpacity>
+            {post.body ? <Text style={s.copy}>{post.body}</Text> : null}
+            {post.media_url && post.media_type === "image" ? <Image source={{uri:post.media_url}} style={s.postImage} resizeMode="cover" /> : null}
+            {post.media_url && post.media_type === "video" ? <Action title="Open video" secondary onPress={() => void Linking.openURL(post.media_url!)} /> : null}
+            <View style={s.row}><Action title="Like" secondary onPress={() => void toggleLike(post.id)} /><Action title={"Comment · "+list.length} secondary onPress={() => setCommentTarget({postId:post.id,parentId:null})} /></View>
+            {list.map(comment => <View key={comment.id} style={[s.comment,comment.parent_comment_id ? s.reply : null]}>
+              <Text style={s.commentAuthor}>{name(comment.author_id)}</Text>{comment.body ? <Text style={s.copy}>{comment.body}</Text> : null}
+              {comment.media_url ? <Action title="▶ Play voice reply" secondary onPress={() => void Linking.openURL(comment.media_url!)} /> : null}
+              <TouchableOpacity onPress={() => setCommentTarget({postId:post.id,parentId:comment.id})}><Text style={s.link}>Reply</Text></TouchableOpacity>
+            </View>)}
+            {commentTarget?.postId === post.id ? <View style={s.commentBox}>
+              <Text style={s.muted}>{commentTarget.parentId ? "Replying to comment" : "Comment on post"}</Text>
+              <TextInput value={commentDraft} onChangeText={setCommentDraft} maxLength={1000} placeholder="Write a reply…" style={s.input} />
+              {commentAudio ? <Text style={s.muted}>Voice: {commentAudio.name}</Text> : null}
+              <View style={s.row}><Action title="Attach voice recording" secondary onPress={() => void chooseVoice()} /><Action title="Send" disabled={busy} onPress={() => void submitComment()} /></View>
+              <TouchableOpacity onPress={() => {setCommentTarget(null);setCommentDraft("");setCommentAudio(null);}}><Text style={s.muted}>Cancel</Text></TouchableOpacity>
+            </View> : null}
+          </View>;
+        })}
+        {!posts.length ? <Text style={s.copy}>No posts yet. Start the conversation.</Text> : null}
+      </> : null}
+      {section === "People" && !profilePage ? <>
+        <Text style={s.section}>People on MAS</Text>
+        {people.map(person => {
+          const relation = connections.find(c => (c.requester_id===person.id&&c.recipient_id===userId)||(c.recipient_id===person.id&&c.requester_id===userId));
+          return <View key={person.id} style={s.person}>
+            <TouchableOpacity style={{flex:1}} onPress={() => setProfilePage(person.id)}><Text style={s.authorName}>{name(person.id)}</Text><Text style={s.muted}>{person.bio || "MAS member"}</Text></TouchableOpacity>
+            {acceptedIds.has(person.id) ? <Action title="Message" secondary onPress={() => void openConversation(person.id)} /> :
+              relation?.status === "pending" && relation.recipient_id === userId ? <View style={s.row}><Action title="Accept" onPress={() => void respondConnection(relation,"accepted")} /><Action title="Decline" secondary onPress={() => void respondConnection(relation,"declined")} /></View> :
+              relation?.status === "pending" ? <Text style={s.muted}>Requested</Text> : <Action title="Add friend" onPress={() => void sendConnection(person.id)} />}
+          </View>;
+        })}
+      </> : null}
+      {section === "Messages" && !profilePage ? <>
+        <Text style={s.section}>Private messages</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{maxHeight:58}}>
+          {[...new Set(messages.flatMap(m => [m.sender_id,m.recipient_id]).filter(id => id !== userId))].map(id => <TouchableOpacity key={id} onPress={() => void openConversation(id)} style={[s.personChip,selectedPerson===id&&s.tabActive]}><Text style={[s.tabText,selectedPerson===id&&s.tabTextActive]}>{name(id)}</Text></TouchableOpacity>)}
+          {people.filter(p => acceptedIds.has(p.id) && !messages.some(m => m.sender_id===p.id||m.recipient_id===p.id)).map(p => <TouchableOpacity key={p.id} onPress={() => void openConversation(p.id)} style={s.personChip}><Text style={s.tabText}>{name(p.id)}</Text></TouchableOpacity>)}
+        </ScrollView>
+        {selectedPerson ? <>
+          {threadMessages.map(m => <View key={m.id} style={[s.message,m.sender_id===userId?s.myMessage:s.theirMessage]}><Text style={m.sender_id===userId?s.myMessageText:s.copy}>{m.body}</Text><Text style={[s.muted,m.sender_id===userId&&{color:"#EAF2FF"}]}>{new Date(m.created_at).toLocaleString()}</Text></View>)}
+          <TextInput value={messageDraft} onChangeText={setMessageDraft} maxLength={4000} placeholder="Write a message…" style={s.input} />
+          <Action title={busy ? "Sending…" : "Send message"} disabled={busy} onPress={() => void sendMessage()} />
+        </> : <Text style={s.copy}>Choose a friend to open a conversation. Add friends from the People tab.</Text>}
+      </> : null}
+    </ScrollView>
+  </View>;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#F6F7FB" }, content: { padding: 16, paddingBottom: 30 }, center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F6F7FB" }, heading: { color: "#111827", fontSize: 24, fontWeight: "800" }, body: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 5 }, composer: { backgroundColor: "#FFF", padding: 13, borderRadius: 13, marginTop: 14, borderWidth: 1, borderColor: "#E7EBF3" }, section: { color: "#111827", fontSize: 15, fontWeight: "800" }, postInput: { minHeight: 92, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, padding: 10, marginTop: 10, color: "#111827", fontSize: 13 }, counter: { alignSelf: "flex-end", color: "#64748B", fontSize: 10, marginTop: 4 }, primaryButton: { backgroundColor: BLUE, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 9, marginTop: 9 }, primaryText: { color: "#FFF", fontSize: 12, fontWeight: "700" }, disabled: { opacity: 0.6 }, error: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 10, borderRadius: 8, marginTop: 10, fontSize: 12 }, empty: { backgroundColor: "#FFF", borderRadius: 12, padding: 18, marginTop: 12 }, post: { backgroundColor: "#FFF", padding: 13, borderRadius: 13, marginTop: 11, borderWidth: 1, borderColor: "#E7EBF3" }, postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, authorRow: { flexDirection: "row", alignItems: "center", gap: 9 }, avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#EAF2FF", alignItems: "center", justifyContent: "center" }, avatarText: { color: BLUE, fontWeight: "800" }, author: { color: "#111827", fontSize: 12, fontWeight: "700" }, date: { color: "#64748B", fontSize: 9, marginTop: 2 }, postBody: { color: "#263244", fontSize: 13, lineHeight: 20, marginTop: 12 }, postImage: { width: "100%", height: 260, borderRadius: 9, backgroundColor: "#EFF4FA", marginTop: 10 }, videoCard: { minHeight: 100, backgroundColor: "#EAF2FF", alignItems: "center", justifyContent: "center", borderRadius: 9, marginTop: 10 }, mediaNote: { color: "#52607A", fontSize: 11, padding: 8, backgroundColor: "#F6F7FB", marginTop: 9 }, selectedMedia: { marginTop: 8 }, preview: { width: "100%", height: 150, borderRadius: 9 }, deleteText: { color: "#B91C1C", fontSize: 10, fontWeight: "700" }, actions: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#EEF0F5", marginTop: 11, paddingTop: 8 }, action: { flex: 1, paddingVertical: 5 }, actionText: { color: "#52607A", fontSize: 11, fontWeight: "700" }, liked: { color: "#D12F57" }, comment: { borderLeftWidth: 2, borderLeftColor: "#DCE2EA", paddingLeft: 9, marginTop: 8 }, commentAuthor: { color: "#344054", fontSize: 10, fontWeight: "700" }, commentBody: { color: "#52607A", fontSize: 11, marginTop: 2 }, commentComposer: { flexDirection: "row", gap: 6, marginTop: 9 }, commentInput: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 8, paddingHorizontal: 9, color: "#111827", fontSize: 11 }, commentButton: { backgroundColor: BLUE, paddingHorizontal: 12, justifyContent: "center", borderRadius: 8 }, refresh: { padding: 14, alignItems: "center" }, link: { color: BLUE, fontSize: 12, fontWeight: "700" }, secondaryButton: { backgroundColor: "#EFF4FA", padding: 12, borderRadius: 9, alignSelf: "flex-start", marginTop: 10 }, modalScrim: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }, profileModal: { backgroundColor: "#FFF", borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 22, minHeight: 210 }, close: { alignSelf: "flex-end", padding: 5 }, closeText: { color: "#64748B", fontSize: 25 }, avatarLarge: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#EAF2FF", alignItems: "center", justifyContent: "center" }, avatarLargeText: { color: BLUE, fontSize: 21, fontWeight: "800" } });
+function Action({title,onPress,disabled,secondary}:{title:string;onPress:()=>void;disabled?:boolean;secondary?:boolean}) {
+  return <TouchableOpacity accessibilityRole="button" disabled={disabled} onPress={onPress} style={[s.button,secondary&&s.secondary,disabled&&{opacity:0.5}]}><Text style={[s.buttonText,secondary&&s.secondaryText]}>{title}</Text></TouchableOpacity>;
+}
+const s=StyleSheet.create({
+ root:{flex:1,backgroundColor:"#F6F7FB"},center:{flex:1,alignItems:"center",justifyContent:"center"},top:{paddingHorizontal:16,paddingTop:12,paddingBottom:4,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},title:{fontSize:22,fontWeight:"800",color:"#111827"},link:{color:BLUE,fontWeight:"700",fontSize:12},tabs:{maxHeight:50,paddingHorizontal:12},tab:{paddingHorizontal:15,paddingVertical:10,borderRadius:20,marginRight:6,backgroundColor:"#FFF"},tabActive:{backgroundColor:BLUE},tabText:{fontSize:12,color:"#52607A",fontWeight:"700"},tabTextActive:{color:"#FFF"},content:{padding:14,paddingBottom:36},card:{backgroundColor:"#FFF",borderRadius:13,padding:13,marginBottom:12,borderWidth:1,borderColor:"#E7EBF3"},section:{fontSize:15,fontWeight:"800",color:"#111827",marginBottom:8},copy:{fontSize:12,color:"#344054",lineHeight:19,marginTop:6},muted:{fontSize:10,color:"#64748B",marginTop:3},input:{minHeight:44,borderWidth:1,borderColor:"#DCE2EA",borderRadius:9,paddingHorizontal:10,paddingVertical:9,color:"#111827",marginTop:8,backgroundColor:"#FFF"},row:{flexDirection:"row",gap:7,alignItems:"center",flexWrap:"wrap",marginTop:8},button:{backgroundColor:BLUE,minHeight:38,paddingHorizontal:12,borderRadius:9,alignItems:"center",justifyContent:"center"},buttonText:{color:"#FFF",fontSize:11,fontWeight:"700"},secondary:{backgroundColor:"#EFF4FA"},secondaryText:{color:BLUE},author:{marginBottom:8},authorName:{fontSize:13,fontWeight:"800",color:"#111827"},postImage:{width:"100%",height:230,borderRadius:9,marginTop:9},comment:{marginTop:9,padding:10,borderRadius:10,backgroundColor:"#F3F6FA"},reply:{marginLeft:16,backgroundColor:"#F7F8FA"},commentAuthor:{fontSize:11,fontWeight:"800",color:"#344054"},commentBox:{marginTop:10,padding:10,borderRadius:10,backgroundColor:"#F7F9FC"},error:{color:"#9A3412",backgroundColor:"#FFF7ED",padding:10,borderRadius:8,marginBottom:10,fontSize:12},person:{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},personChip:{padding:10,backgroundColor:"#FFF",borderRadius:20,marginRight:7},message:{maxWidth:"88%",padding:11,borderRadius:15,marginVertical:5},myMessage:{alignSelf:"flex-end",backgroundColor:BLUE},theirMessage:{alignSelf:"flex-start",backgroundColor:"#E4E6EB"},myMessageText:{color:"#FFF",fontSize:12},profilePage:{backgroundColor:"#FFF",borderRadius:13,overflow:"hidden",paddingBottom:14,marginTop:10},cover:{width:"100%",height:125},coverPlaceholder:{height:90,backgroundColor:"#EAF2FF"},profileRow:{flexDirection:"row",alignItems:"center",gap:10,padding:12},avatarLarge:{width:58,height:58,borderRadius:29,backgroundColor:"#EAF2FF",alignItems:"center",justifyContent:"center"},avatarText:{fontSize:18,color:BLUE,fontWeight:"800"}
+});
