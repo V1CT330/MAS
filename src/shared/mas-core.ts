@@ -61,8 +61,10 @@ export function normalizeSearch(value: string | null | undefined): string {
 }
 
 export function matchesSearch(values: readonly (string | null | undefined)[], query: string): boolean {
-  const normalizedQuery = normalizeSearch(query);
-  return !normalizedQuery || values.some((value) => normalizeSearch(value).includes(normalizedQuery));
+  const tokens = normalizeSearch(query).split(/[^\\p{L}\\p{N}]+/u).filter(Boolean);
+  if (!tokens.length) return true;
+  const searchableText = normalizeSearch(values.filter(Boolean).join(" "));
+  return tokens.every((token) => searchableText.includes(token));
 }
 
 export function matchesListingFilters<T extends { category?: string | null; kind?: string | null }>(
