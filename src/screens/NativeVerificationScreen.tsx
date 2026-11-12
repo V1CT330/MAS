@@ -44,12 +44,20 @@ export default function NativeVerificationScreen({ onBack }: Props) {
       return;
     }
     setUserId(auth.user.id);
-    const { data, error } = await supabase.from("profiles").select("phone,kyc_status,is_developer,mode").eq("id", auth.user.id).maybeSingle();
-    if (error) setMessage(error.message);
-    else if (!data?.is_developer && data?.mode !== "developer") setMessage("Activate your developer account before starting verification.");
+    const [profileResult, submissionResult] = await Promise.all([
+      supabase.from("profiles").select("phone,kyc_status,is_developer,mode").eq("id", auth.user.id).maybeSingle(),
+      supabase.from("kyc_submissions").select("status,created_at").eq("user_id", auth.user.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if (profileResult.error) setMessage(profileResult.error.message);
+    else if (!profileResult.data?.is_developer && profileResult.data?.mode !== "developer") setMessage("Activate your developer account before starting verification.");
     else {
-      setPhone(data.phone || "");
-      setStatus(data.kyc_status || "none");
+      setPhone(profileResult.data.phone || "");
+      // The profile status is server-authoritative. A manual submission is shown as pending
+      // when its row is pending, without letting the mobile client change KYC status.
+      const profileStatus = profileResult.data.kyc_status || "none";
+      const submissionStatus = submissionResult.data?.status;
+      setStatus(profileStatus === "none" && submissionStatus === "pending" ? "pending" : profileStatus);
+      if (submissionResult.error) setMessage(submissionResult.error.message);
     }
     setLoading(false);
   }, []);
@@ -109,8 +117,7 @@ export default function NativeVerificationScreen({ onBack }: Props) {
         status: "pending",
       });
       if (error) throw error;
-      const { error: profileError } = await supabase.from("profiles").update({ kyc_status: "pending" }).eq("id", userId);
-      if (profileError) throw profileError;
+      // The server/admin review flow owns profiles.kyc_status.
       setStatus("pending");
       setDocument(null);
       setMessage("Verification submitted for manual review.");
