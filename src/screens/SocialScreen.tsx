@@ -11,6 +11,7 @@ type Connection = { id: string; requester_id: string; recipient_id: string; stat
 type Message = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null };
 type InvestmentProfile = { user_id:string; role:"founder"|"investor"|"both"; organization_name:string|null; headline:string|null; bio:string|null; location:string|null; visibility:"public"|"connections" };
 type Opportunity = { id:string; founder_id:string; title:string; description:string; industry:string; stage:string; funding_goal:number|null; currency:string; use_of_funds:string|null; status:"open"|"paused"|"closed"; created_at:string };
+type Sponsored = { id:string; headline:string; body:string|null; image_url:string|null; destination_url:string; starts_at:string|null; ends_at:string|null };
 type PickedMedia = { uri: string; mimeType: string; fileName: string; mediaType: "image" | "video" };
 const BLUE = "#1877F2";
 const socialDb = supabase as any;
@@ -27,6 +28,7 @@ export default function SocialScreen() {
   const [socialAlerts, setSocialAlerts] = useState<{id:string;title:string;body:string;read:boolean;created_at:string}[]>([]);
   const [investorDirectory,setInvestorDirectory] = useState<InvestmentProfile[]>([]);
   const [opportunities,setOpportunities] = useState<Opportunity[]>([]);
+  const [sponsored,setSponsored] = useState<Sponsored[]>([]);
   const [draft, setDraft] = useState("");
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -59,7 +61,7 @@ export default function SocialScreen() {
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
     const me = auth.user.id; setUserId(me);
-    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes] = await Promise.all([
+    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes] = await Promise.all([
       supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
       supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
       supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
@@ -75,6 +77,7 @@ export default function SocialScreen() {
     if (investRes.data) { const saved=investRes.data as InvestmentProfile; setInvestmentProfile(saved); setInvestRole(saved.role); setInvestOrg(saved.organization_name||""); setInvestHeadline(saved.headline||""); setInvestBio(saved.bio||""); setInvestLocation(saved.location||""); }
     if (directoryRes.error) setError(directoryRes.error.message); else setInvestorDirectory((directoryRes.data??[]) as InvestmentProfile[]);
     if (opportunitiesRes.error) setError(opportunitiesRes.error.message); else setOpportunities((opportunitiesRes.data??[]) as Opportunity[]);
+    if (adsRes.error) setError(adsRes.error.message); else { const now=Date.now(); setSponsored(((adsRes.data??[]) as Sponsored[]).filter(ad=>(!ad.starts_at||new Date(ad.starts_at).getTime()<=now)&&(!ad.ends_at||new Date(ad.ends_at).getTime()>now))); }
     const postRows = (postRes.data ?? []) as Post[];
     setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
     const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
@@ -228,6 +231,7 @@ export default function SocialScreen() {
           {picked ? <Text style={s.muted}>{picked.fileName}</Text> : null}
           <View style={s.row}><Action title="Photo or video" secondary onPress={() => void pickMedia()} /><Action title={busy ? "Posting…" : "Post"} disabled={busy} onPress={() => void submitPost()} /></View>
         </View>
+        {sponsored.map(ad=><View key={ad.id} style={s.card}><Text style={s.muted}>SPONSORED</Text><Text style={s.authorName}>{ad.headline}</Text>{ad.body?<Text style={s.copy}>{ad.body}</Text>:null}{ad.image_url?<Image source={{uri:ad.image_url}} style={s.postImage} resizeMode="cover"/>:null}<Action title="Learn more" secondary onPress={()=>{try{const u=new URL(ad.destination_url);if(u.protocol!=="https:")throw new Error();void Linking.openURL(u.toString());}catch{setError("This sponsored link is invalid.");}}}/></View>)}
         {posts.map(post => {
           const list = commentsByPost[post.id] ?? [];
           const liked = false;
