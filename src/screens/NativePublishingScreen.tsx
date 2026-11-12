@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { CATEGORIES, slugify, type ListingKind } from "../shared/mas-core";
@@ -160,7 +160,7 @@ export default function NativePublishingScreen({ onSaved }: Props) {
     { value: "extension", label: "Browser extension" },
   ];
 
-  return <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  return <View style={styles.content}>
     <View style={styles.intro}>
       <Text style={styles.eyebrow}>PUBLISHING</Text>
       <Text style={styles.heading}>Create a listing</Text>
@@ -212,7 +212,7 @@ export default function NativePublishingScreen({ onSaved }: Props) {
       </TouchableOpacity>
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
-  </ScrollView>;
+  </View>;
 }
 
 const styles = StyleSheet.create({
