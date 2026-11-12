@@ -137,17 +137,16 @@ export default function NativePublishingScreen({ onSaved }: Props) {
       setMessage("Draft saved. Complete the publishing checklist and submit it for review.");
       onSaved({ id: listing.id, name: cleanName, kind });
     } catch (error) {
+      let cleanupMessage = "";
       if (listingId) {
         const { error: cleanupError } = await supabase.from("listings").delete().eq("id", listingId);
-        if (cleanupError) setMessage("Upload failed. The incomplete draft could not be removed. Check your products before retrying.");
+        if (cleanupError) cleanupMessage = " The incomplete draft could not be removed. Check your products before retrying.";
       }
       if (uploaded.length) {
         const { error: cleanupError } = await supabase.storage.from("app-assets").remove(uploaded);
-        if (cleanupError) setMessage("Upload failed. Some unused files may remain in storage.");
+        if (cleanupError) cleanupMessage += " Some unused files may remain in storage.";
       }
-      if (!message.includes("could not be removed") && !message.includes("unused files")) {
-        setMessage(error instanceof Error ? error.message : "Could not save this listing draft.");
-      }
+      setMessage((error instanceof Error ? error.message : "Could not save this listing draft.") + cleanupMessage);
     } finally {
       setSaving(false);
     }
