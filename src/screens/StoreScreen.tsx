@@ -18,7 +18,7 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 const ACCENT = "#1877F2";
 const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
 type StoreListing = Listing & { developer?: { developer_name?: string | null; display_name?: string | null } | null; iconDisplayUrl?: string | null };
-type StoreKind = "all" | "app" | "website";
+type StoreKind = "all" | "app" | "website" | "ai_agent" | "extension";
 
 export default function StoreScreen() {
   const [listings, setListings] = useState<StoreListing[]>([]);
@@ -87,13 +87,13 @@ export default function StoreScreen() {
       if (error) throw error;
       const version = versions?.[0];
       if (!version?.file_url) throw new Error("There is no approved download package for this listing yet.");
-      const { data: signed, error: signedError } = await supabase.storage.from("app-assets").createSignedUrl(version.file_url, 3600, { download: `${item.slug}-${version.version}.apk` });
+      const { data: signed, error: signedError } = await supabase.storage.from("app-assets").createSignedUrl(version.file_url, 3600, { download: `${item.slug}-${version.version}.${item.kind === "app" ? "apk" : "zip"}` });
       if (signedError || !signed?.signedUrl) throw new Error("Could not prepare the secure download. Please try again.");
       await Linking.openURL(signed.signedUrl);
     }
     const { error: installError } = await supabase.rpc("register_install", { _listing_id: item.id, _device: "Android" });
     if (installError) throw installError;
-    setNotice(item.kind === "website" ? "Website opened and visit recorded." : "Download opened. Complete installation from your Android downloads.");
+    setNotice(item.kind === "website" ? "Website opened and visit recorded." : `${item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Browser extension" : "App"} package download opened.`);
   };
 
   const toggleSaved = async (item: StoreListing) => {
@@ -117,7 +117,11 @@ export default function StoreScreen() {
   };
 
   const kinds: { value: StoreKind; label: string }[] = [
-    { value: "all", label: "For you" }, { value: "app", label: "Apps" }, { value: "website", label: "Websites" },
+    { value: "all", label: "For you" },
+    { value: "app", label: "Apps" },
+    { value: "website", label: "Websites" },
+    { value: "ai_agent", label: "AI agents" },
+    { value: "extension", label: "Extensions" },
   ];
 
   return (
@@ -136,7 +140,7 @@ export default function StoreScreen() {
         {!loading && !filtered.length ? <View style={styles.empty}><Text style={styles.title}>{notice ? "Store unavailable" : search || kind !== "all" || category !== "All" ? "No matching products" : "Nothing here yet"}</Text><Text style={styles.body}>{notice || (search || kind !== "all" || category !== "All" ? "Try a different search or filter." : "New listings from Malawian developers will appear here.")}</Text>{notice ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void loadListings()}><Text style={styles.secondaryText}>Try again</Text></TouchableOpacity> : null}</View> : null}
         {filtered.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" onPress={() => setSelected(item)} style={styles.card}>
           {item.iconDisplayUrl ? <Image source={{ uri: item.iconDisplayUrl }} style={styles.icon} /> : <View style={[styles.icon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
-          <View style={styles.cardText}><Text numberOfLines={1} style={styles.title}>{item.name}</Text><Text numberOfLines={2} style={styles.body}>{item.tagline || item.description || "Discover this MAS listing"}</Text><Text style={styles.meta}>{item.kind === "website" ? "Website" : "App"} · {item.category} · {Number(item.downloads ?? 0).toLocaleString()} {item.kind === "website" ? "visits" : "installs"}</Text></View>
+          <View style={styles.cardText}><Text numberOfLines={1} style={styles.title}>{item.name}</Text><Text numberOfLines={2} style={styles.body}>{item.tagline || item.description || "Discover this MAS listing"}</Text><Text style={styles.meta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Browser extension" : "App"} · {item.category} · {Number(item.downloads ?? 0).toLocaleString()} {item.kind === "website" ? "visits" : "installs"}</Text></View>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>)}
         {notice && filtered.length ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
@@ -149,7 +153,7 @@ export default function StoreScreen() {
             {selected.description ? <View style={styles.detailSection}><Text style={styles.title}>About</Text><Text style={styles.body}>{selected.description}</Text></View> : null}
             {selected.screenshots?.length ? <><Text style={styles.title}>Screenshots</Text><ScrollView horizontal>{selected.screenshots.map((url, index) => <Image key={`${selected.id}-${index}`} source={{ uri: url }} style={styles.screenshot} resizeMode="cover" />)}</ScrollView></> : null}
             {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
-            <TouchableOpacity disabled={busy} style={styles.primaryButton} onPress={() => void perform(() => runInstall(selected))}><Text style={styles.primaryText}>{busy ? "Please wait…" : selected.kind === "website" ? "Open website" : "Download app"}</Text></TouchableOpacity>
+            <TouchableOpacity disabled={busy} style={styles.primaryButton} onPress={() => void perform(() => runInstall(selected))}><Text style={styles.primaryText}>{busy ? "Please wait…" : selected.kind === "website" ? "Open website" : selected.kind === "ai_agent" ? "Download AI agent" : selected.kind === "extension" ? "Download extension" : "Download app"}</Text></TouchableOpacity>
             <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={() => void perform(() => toggleSaved(selected))}><Text style={styles.secondaryText}>Save / remove from library</Text></TouchableOpacity>
             <Text style={styles.footnote}>Downloads and library access use your MAS account and the existing secure MAS storage and backend services.</Text>
           </ScrollView>
