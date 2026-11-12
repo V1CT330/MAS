@@ -15,6 +15,7 @@ export default function NativeRoot() {
   const [space, setSpace] = useState<Space>("store");
   const [storeTab, setStoreTab] = useState<StoreTab>("apps");
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const isWideScreen = width >= 768;
 
@@ -25,7 +26,10 @@ export default function NativeRoot() {
       if (mounted) setAuthUserId(data.user?.id ?? null);
     };
     void refreshUser();
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => setAuthUserId(session?.user.id ?? null));
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUserId(session?.user.id ?? null);
+      if (session) setAuthErrorMessage(null);
+    });
     const handleUrl = async (url: string) => {
       try {
         const callback = new URL(url);
@@ -34,8 +38,14 @@ export default function NativeRoot() {
         if (errorMessage) throw new Error(errorMessage);
         const code = callback.searchParams.get("code");
         if (!code) throw new Error("Sign-in did not return an authorization code.");
-        await supabase.auth.exchangeCodeForSession(code);
-      } catch (error) { console.warn("MAS sign-in callback failed", error); }
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
+        setAuthErrorMessage(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not complete Google sign-in.";
+        setAuthErrorMessage(message);
+        console.warn("MAS sign-in callback failed", error);
+      }
     };
     const urlSubscription = Linking.addEventListener("url", ({ url }) => { void handleUrl(url); });
     void Linking.getInitialURL().then((url) => { if (url) return handleUrl(url); }).catch(() => undefined);
@@ -43,7 +53,7 @@ export default function NativeRoot() {
   }, []);
 
   const openAccount = () => { setSpace("store"); setStoreTab("account"); };
-  const current = space === "developer" ? <DeveloperScreen /> : space === "social" ? <SocialScreen /> : storeTab === "apps" ? <StoreScreen /> : storeTab === "library" ? <LibraryScreen /> : storeTab === "alerts" ? <NotificationsScreen /> : <AccountScreen />;
+  const current = space === "developer" ? <DeveloperScreen /> : space === "social" ? <SocialScreen /> : storeTab === "apps" ? <StoreScreen /> : storeTab === "library" ? <LibraryScreen /> : storeTab === "alerts" ? <NotificationsScreen /> : <AccountScreen authErrorMessage={authErrorMessage} />;
   const title = space === "developer" ? "Developer Mode" : space === "social" ? "Social" : ({ apps: "Discover", library: "My library", alerts: "Alerts", account: "Account" } satisfies Record<StoreTab, string>)[storeTab];
 
   return <SafeAreaView style={styles.safeArea}>
