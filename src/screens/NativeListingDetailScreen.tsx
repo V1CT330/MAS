@@ -136,7 +136,7 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
  const publishRelease=async()=>{
   if(!listing||listing.kind==="website")return;
   const cleanVersion=releaseVersion.trim();
-  if(!/^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(cleanVersion)){setMessage("Use a version such as 1.2.0.");return;}
+  if(!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(cleanVersion)){setMessage("Use a version such as 1.2.0.");return;}
   if(!releaseFile){setMessage("Choose the APK package first.");return;}
   if(releases.some(x=>x.version===cleanVersion)){setMessage("That version already exists.");return;}
   setBusy(true);setMessage("");let uploadedPath:string|null=null;
