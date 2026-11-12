@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import NativePublishingScreen from "./NativePublishingScreen";
+import NativeListingDetailScreen from "./NativeListingDetailScreen";
 
 type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string };
 type Metric = { day: string; views: number; installs: number };
@@ -30,6 +32,8 @@ export default function DeveloperScreen() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing">("dashboard");
+  const [activeListingId, setActiveListingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +93,9 @@ export default function DeveloperScreen() {
     });
   }, [products, search, statusFilter]);
 
+  if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
+  if (activeWorkflow === "listing" && activeListingId) return <NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
+
   if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
   if (!userId) return <View style={styles.root}><View style={styles.card}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
 
@@ -141,7 +148,7 @@ export default function DeveloperScreen() {
       </View>
 
       <Text style={styles.section}>Developer tools</Text>
-      {LINKS.map((item) => <TouchableOpacity key={item.path} onPress={() => void Linking.openURL(`${WEB}${item.path}`)} style={styles.linkCard}><Text style={styles.linkTitle}>{item.title} ›</Text><Text style={styles.body}>{item.description}</Text></TouchableOpacity>)}
+      {LINKS.map((item) => <TouchableOpacity key={item.path} onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.linkCard}><Text style={styles.linkTitle}>{item.title} ›</Text><Text style={styles.body}>{item.description}</Text></TouchableOpacity>)}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
 
@@ -161,7 +168,7 @@ export default function DeveloperScreen() {
             <View style={styles.detailMetric}><Text style={styles.detailValue}>{Number(selectedProduct.rating_count ?? 0).toLocaleString()}</Text><Text style={styles.detailLabel}>Reviews</Text></View>
           </View>
           <Text style={styles.body}>This native overview uses the live listing record. Editing listings, uploading releases and submitting changes still use the existing authenticated MAS publishing workflow.</Text>
-          <Button title="Open listing management" onPress={() => { setSelectedProduct(null); void Linking.openURL(`${WEB}/console/products/${selectedProduct.id}`); }} />
+          <Button title="Open listing management" onPress={() => { setActiveListingId(selectedProduct.id); setSelectedProduct(null); setActiveWorkflow("listing"); }} />
           <TouchableOpacity onPress={() => setSelectedProduct(null)} style={styles.cancel}><Text style={styles.linkTitle}>Close</Text></TouchableOpacity>
         </View>
       </View> : null}
