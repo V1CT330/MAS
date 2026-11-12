@@ -118,7 +118,14 @@ export default function NativeListingDetailScreen({listingId,onBack}:Props){
   try{
    const {data:auth,error:authError}=await supabase.auth.getUser();
    if(authError||!auth.user)throw new Error("Sign in to upload a release.");
-   uploadedPath=await uploadImage(auth.user.id,{...({} as PickedImage),uri:releaseFile.uri,fileName:releaseFile.name,mimeType:releaseFile.mimeType} as PickedImage,"builds");
+   const response=await fetch(releaseFile.uri);
+   if(!response.ok)throw new Error("Could not read the selected APK.");
+   const body=await response.arrayBuffer();
+   if(!body.byteLength||body.byteLength>50*1024*1024)throw new Error("APK must be larger than 0 bytes and no larger than 50 MB.");
+   const path=auth.user.id+"/builds/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+".apk";
+   const {error:uploadError}=await supabase.storage.from("app-assets").upload(path,body,{upsert:false,contentType:"application/vnd.android.package-archive"});
+   if(uploadError)throw uploadError;
+   uploadedPath=path;
    const {error}=await supabase.from("listing_versions").insert({listing_id:listingId,version:cleanVersion,changelog:releaseNotes.trim()||"Release "+cleanVersion,file_url:uploadedPath,size_bytes:releaseFile.size,status:"pending"});
    if(error)throw error;
    setReleaseVersion("");setReleaseNotes("");setReleaseFile(null);await refresh();setMessage("Release uploaded and submitted for review.");
