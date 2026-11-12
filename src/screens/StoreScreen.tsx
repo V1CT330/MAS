@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 
-import { CATEGORIES, matchesListingFilters, matchesSearch, type Listing } from "../shared/mas-core";
+import { CATEGORIES, matchesListingFilters, matchesSearch, rankListings, type Listing } from "../shared/mas-core";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const ACCENT = "#1877F2";
@@ -65,9 +65,12 @@ export default function StoreScreen() {
 
   useEffect(() => { void loadListings(); }, []);
 
-  const filtered = useMemo(() => listings.filter((item) =>
-    matchesSearch([item.name, item.tagline, item.description, item.category, item.kind, item.developer?.developer_name, item.developer?.display_name], search)
-    && matchesListingFilters(item, { kind, category }),
+  const filtered = useMemo(() => rankListings(
+    listings.filter((item) =>
+      matchesSearch([item.name, item.tagline, item.description, item.category, item.kind, item.developer?.developer_name, item.developer?.display_name], search)
+      && matchesListingFilters(item, { kind, category }),
+    ),
+    { query: search, limit: 200 },
   ), [listings, search, kind, category]);
 
   const runInstall = async (item: StoreListing) => {
