@@ -11,6 +11,7 @@ type Connection = { id: string; requester_id: string; recipient_id: string; stat
 type Message = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string; read_at: string | null };
 type PickedMedia = { uri: string; mimeType: string; fileName: string; mediaType: "image" | "video" };
 const BLUE = "#1877F2";
+const socialDb = supabase as any;
 const MAX_MEDIA = 50 * 1024 * 1024;
 const BUCKET = "social-media";
 
@@ -21,6 +22,7 @@ export default function SocialScreen() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [socialAlerts, setSocialAlerts] = useState<{id:string;title:string;body:string;read:boolean;created_at:string}[]>([]);
   const [draft, setDraft] = useState("");
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -29,7 +31,7 @@ export default function SocialScreen() {
   const [messageDraft, setMessageDraft] = useState("");
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [profilePage, setProfilePage] = useState<string | null>(null);
-  const [section, setSection] = useState<"Feed" | "People" | "Messages" | "My profile">("Feed");
+  const [section, setSection] = useState<"Feed" | "People" | "Messages" | "Notifications" | "My profile">("Feed");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -39,15 +41,19 @@ export default function SocialScreen() {
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
     const me = auth.user.id; setUserId(me);
-    const [postRes, connectionRes, messageRes, meRes] = await Promise.all([
+    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes] = await Promise.all([
       supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
       supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
       supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
+      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").order("display_name",{ascending:true}).limit(100),
+      supabase.from("notifications").select("id,title,body,read,created_at").eq("user_id",me).eq("scope","social").order("created_at",{ascending:false}).limit(50),
     ]);
     if (postRes.error) setError(postRes.error.message);
     if (connectionRes.error) setError(connectionRes.error.message);
     if (messageRes.error) setError(messageRes.error.message);
+    if (alertRes.error) setError(alertRes.error.message);
+    setSocialAlerts((alertRes.data ?? []) as {id:string;title:string;body:string;read:boolean;created_at:string}[]);
     const postRows = (postRes.data ?? []) as Post[];
     setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
     const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
@@ -56,6 +62,7 @@ export default function SocialScreen() {
       postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
     ]);
     const map: Record<string, Profile> = {};
+    for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
     for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
     if (meRes.data) map[me] = meRes.data as Profile;
     setProfiles(map);
@@ -155,6 +162,7 @@ export default function SocialScreen() {
     setBusy(true); const { error: e } = await supabase.from("social_connections").update({ status }).eq("id",connection.id);
     if (e) setError(e.message); else await load(); setBusy(false);
   };
+  const markAlertRead = async (id: string) => { const { error: e } = await supabase.from("notifications").update({read:true}).eq("id",id).eq("user_id",userId); if(e) setError(e.message); else setSocialAlerts(rows => rows.map(row => row.id===id?{...row,read:true}:row)); };
   const sendMessage = async () => {
     if (!userId || !selectedPerson || !messageDraft.trim()) return;
     if (messageDraft.trim().length > 4000) { setError("Messages are limited to 4,000 characters."); return; }
@@ -187,7 +195,7 @@ export default function SocialScreen() {
   if (!userId) return <View style={s.root}><Text style={s.title}>MAS Social</Text><Text style={s.copy}>{error || "Sign in to access Social."}</Text><Action title="Try again" onPress={() => void load()} /></View>;
   return <View style={s.root}>
     <View style={s.top}><Text style={s.title}>Social</Text><TouchableOpacity onPress={() => void load()}><Text style={s.link}>Refresh</Text></TouchableOpacity></View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs}>{(["Feed","People","Messages","My profile"] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {setSection(tab);setProfilePage(null);}} style={[s.tab,section===tab&&s.tabActive]}><Text style={[s.tabText,section===tab&&s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs}>{(["Feed","People","Messages","Notifications","My profile"] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {setSection(tab);setProfilePage(null);}} style={[s.tab,section===tab&&s.tabActive]}><Text style={[s.tabText,section===tab&&s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</ScrollView>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
       {profilePage ? <><TouchableOpacity onPress={() => setProfilePage(null)}><Text style={s.link}>‹ Back</Text></TouchableOpacity>{renderProfile(profilePage)}</> : section === "My profile" ? renderProfile(userId) : null}
@@ -232,6 +240,13 @@ export default function SocialScreen() {
               relation?.status === "pending" ? <Text style={s.muted}>Requested</Text> : <Action title="Add friend" onPress={() => void sendConnection(person.id)} />}
           </View>;
         })}
+      </> : null}
+      {section === "Notifications" && !profilePage ? <>
+        <Text style={s.section}>Social notifications</Text>
+        {socialAlerts.map(alert => <TouchableOpacity key={alert.id} onPress={() => void markAlertRead(alert.id)} style={[s.card,!alert.read&&{borderColor:BLUE}]}>
+          <Text style={s.authorName}>{alert.title}</Text><Text style={s.copy}>{alert.body}</Text><Text style={s.muted}>{new Date(alert.created_at).toLocaleString()} · {alert.read ? "Read" : "Unread"}</Text>
+        </TouchableOpacity>)}
+        {!socialAlerts.length ? <Text style={s.copy}>No Social notifications yet.</Text> : null}
       </> : null}
       {section === "Messages" && !profilePage ? <>
         <Text style={s.section}>Private messages</Text>
