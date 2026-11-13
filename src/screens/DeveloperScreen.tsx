@@ -31,7 +31,7 @@ const LINKS = [
 
 export default function DeveloperScreen() {
   const { width: screenWidth } = useWindowDimensions();
-  const metricWidth = screenWidth >= 1100 ? "18.5%" : screenWidth >= 640 ? "31%" : "48%";
+  const metricWidth = screenWidth >= 1100 ? "23.5%" : "48%";
   const [userId, setUserId] = useState<string | null>(null);
   const [developerName, setDeveloperName] = useState("Developer");
   const [kyc, setKyc] = useState("none");
@@ -91,9 +91,15 @@ export default function DeveloperScreen() {
     void load();
   }, [load]);
 
+  const publishedCount = products.filter((product) => product.status === "published").length;
+  const pendingCount = products.filter((product) => product.status === "pending").length;
+  const draftCount = products.filter((product) => product.status === "draft").length;
+  const rejectedCount = products.filter((product) => product.status === "rejected").length;
   const views = metrics.reduce((sum, item) => sum + Number(item.views ?? 0), 0);
   const installs = metrics.reduce((sum, item) => sum + Number(item.installs ?? 0), 0);
   const conversion = views ? Math.round(installs * 100 / views) : 0;
+  const ratedProducts = products.filter((product) => Number(product.rating_count ?? 0) > 0);
+  const averageRating = ratedProducts.reduce((sum, product) => sum + Number(product.rating_avg ?? 0), 0) / Math.max(1, ratedProducts.length);
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return products.filter((product) => {
@@ -121,15 +127,23 @@ export default function DeveloperScreen() {
       <Text style={styles.body}>Dashboard summary from your MAS account · KYC {kyc}</Text>
       <View style={styles.metrics}>
         {[
-          ["Live products", products.filter((p) => p.status === "published").length],
-          ["In review", products.filter((p) => p.status === "pending").length],
-          ["Installs (30d)", installs],
-          ["Views (30d)", views],
+          ["Published", publishedCount],
+          ["In review", pendingCount],
+          ["Drafts", draftCount],
+          ["Rejected", rejectedCount],
+        ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
+      </View>
+      <Text style={styles.section}>Store performance · last 30 days</Text>
+      <View style={styles.metrics}>
+        {[
+          ["Installs", installs],
+          ["Views", views],
           ["Conversion", `${conversion}%`],
+          ["Average rating", averageRating > 0 ? averageRating.toFixed(1) : "—"],
         ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.productsSection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.section}>Your products</Text>
           <Text style={styles.count}>{filteredProducts.length} / {products.length}</Text>
@@ -202,29 +216,30 @@ const styles = StyleSheet.create({
   kicker: { color: "#1877F2", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
   heading: { color: "#111827", fontSize: 23, fontWeight: "800", marginTop: 4 },
   body: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 5 },
-  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  metric: { minHeight: 68, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 11, padding: 10 },
+  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 14 },
+  metric: { minHeight: 62, justifyContent: "center", paddingVertical: 8, paddingHorizontal: 4 },
+  productsSection: { backgroundColor: "transparent", borderWidth: 0, padding: 0, marginTop: 18 },
   metricValue: { color: "#111827", fontSize: 17, fontWeight: "800" },
   metricLabel: { color: "#64748B", fontSize: 10, marginTop: 4 },
   card: { backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 13, padding: 14, marginTop: 12 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   section: { color: "#111827", fontSize: 16, fontWeight: "800", marginTop: 14, marginBottom: 8 },
   count: { color: "#64748B", fontSize: 11, fontWeight: "700" },
-  search: { minHeight: 42, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, paddingHorizontal: 11, color: "#111827", marginTop: 6 },
+  search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, backgroundColor: "#FFF", paddingHorizontal: 12, color: "#111827", marginTop: 8 },
   filters: { flexDirection: "row", gap: 7, paddingVertical: 10 },
   filter: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFF" },
   filterActive: { backgroundColor: "#1877F2", borderColor: "#1877F2" },
   filterText: { color: "#52607A", fontSize: 11, fontWeight: "600" },
   filterTextActive: { color: "#FFF" },
   inlineLoader: { marginVertical: 14 },
-  product: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#EEF0F5" },
+  product: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 13 },
   productInfo: { flex: 1, minWidth: 0 },
   productName: { color: "#111827", fontSize: 13, fontWeight: "700" },
   status: { color: "#35506F", backgroundColor: "#EFF4FA", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: "hidden", fontSize: 10, fontWeight: "700" },
   chevron: { color: "#64748B", fontSize: 20 },
   button: { backgroundColor: "#1877F2", minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 9, marginTop: 12 },
   buttonText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
-  linkCard: { backgroundColor: "#FFF", padding: 13, borderRadius: 11, borderWidth: 1, borderColor: "#E7EBF3", marginTop: 8 },
+  linkCard: { backgroundColor: "transparent", paddingHorizontal: 0, paddingVertical: 12, borderRadius: 0, borderWidth: 0, marginTop: 2 },
   linkTitle: { color: "#1877F2", fontSize: 13, fontWeight: "700" },
   error: { marginTop: 12, padding: 10, borderRadius: 8, color: "#9A3412", backgroundColor: "#FFF7ED", fontSize: 12 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.35)" },
