@@ -156,7 +156,7 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             APK="android/app/build/outputs/apk/debug/app-debug.apk"
             adb install -r "$APK"
             adb shell monkey -p mw.wealthgrid.mas -c android.intent.category.LAUNCHER 1
