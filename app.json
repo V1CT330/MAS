@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Malawian App Store",
-    "slug": "malawian-app-store-wsf8defenl82zkzevchmj",
+    "slug": "mas",
     "version": "1.0.4",
     "scheme": "mw.wealthgrid.mas",
     "orientation": "default",
