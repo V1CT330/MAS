@@ -16,7 +16,7 @@ import { CATEGORIES, matchesListingFilters, matchesSearch, rankListings, topByNu
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const ACCENT = "#1877F2";
-const WEB_ORIGIN = "https://malawian-app-store-j6pm.vercel.app";
+const WEB_ORIGIN = "https://malawian-app-store.vercel.app";
 type StoreListing = Listing & { developer?: { developer_name?: string | null; display_name?: string | null } | null; iconDisplayUrl?: string | null };
 type StoreKind = "all" | "app" | "website" | "ai_agent" | "extension";
 
