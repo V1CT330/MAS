@@ -18,7 +18,7 @@ The native README describes a user storefront, account/session display, Social f
 
 The production WebApp has authenticated routes for store/library/notifications and a broad developer console including products, product details, publishing, testing, quality, analytics, reviews, verification, subscription, wallet, Social, settings, and administration. The existence of these routes is a parity target, not proof that each can or should be duplicated natively. Secure flows may remain authenticated HTTPS handoffs where native integration would duplicate trusted server-side logic or require privileged credentials.
 
-The app currently uses `https://malawian-app-store-j6pm.vercel.app` for native web handoffs, while the production repository metadata advertises `https://malawian-app-store.vercel.app`. Confirm the canonical production origin before changing the native constant; do not silently redirect authenticated users to a guessed host.
+Native web handoffs now use `https://malawian-app-store.vercel.app`, matching the existing Account and Developer screens. The older `j6pm` deployment alias was inconsistent and has been removed from the native app. The Vercel project is not exposed through the current deployment connection, so the production-domain response still needs an external live check; do not treat repository consistency alone as proof of deployment availability.
 
 ## Feature parity matrix (initial)
 
