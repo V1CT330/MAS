@@ -39,7 +39,7 @@ Native web handoffs now use `https://malawian-app-store.vercel.app`, matching th
 
 ## Correct code locations
 
-- `App.tsx`: Native app composition, route/mode presentation and screen wiring. Split large screens into components as the implementation grows rather than placing all feature code here.
+- `index.ts` registers `NativeRoot.tsx`, which is the active native app composition, space/tab navigation, OAuth deep-link handler and screen wiring. `App.tsx` is a legacy, unreferenced root and is not the runtime source of truth; make product changes in `NativeRoot.tsx` and the imported `src/screens/*` files.
 - `src/lib/supabase.ts`: Shared Supabase client configuration only.
 - `src/lib/`: Native backend adapters and domain-specific client workflows; keep each feature's queries/mutations together and reuse existing Supabase APIs.
 - `src/shared/mas-core.ts`: Platform-neutral MAS business rules; keep byte-for-byte synchronized with the WebApp copy when changed.
