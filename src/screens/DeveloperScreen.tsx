@@ -31,7 +31,10 @@ const LINKS = [
 
 export default function DeveloperScreen() {
   const { width: screenWidth } = useWindowDimensions();
-  const metricWidth = screenWidth >= 1100 ? "23.5%" : "48%";
+  const dashboardWidth = Math.min(screenWidth, 1200) - 32;
+  const metricColumns = screenWidth >= 1100 ? 4 : 2;
+  const metricGap = 12;
+  const metricWidth = (dashboardWidth - metricGap * (metricColumns - 1)) / metricColumns;
   const [userId, setUserId] = useState<string | null>(null);
   const [developerName, setDeveloperName] = useState("Developer");
   const [kyc, setKyc] = useState("none");
@@ -227,7 +230,7 @@ const styles = StyleSheet.create({
   count: { color: "#64748B", fontSize: 11, fontWeight: "700" },
   search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, backgroundColor: "#FFF", paddingHorizontal: 12, color: "#111827", marginTop: 8 },
   filters: { flexDirection: "row", gap: 7, paddingVertical: 10 },
-  filter: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFF" },
+  filter: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 7, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFF" },
   filterActive: { backgroundColor: "#1877F2", borderColor: "#1877F2" },
   filterText: { color: "#52607A", fontSize: 11, fontWeight: "600" },
   filterTextActive: { color: "#FFF" },
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
   detailStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#EEF0F5" },
   detailLabel: { color: "#64748B", fontSize: 11 },
   detailGrid: { flexDirection: "row", gap: 8, marginTop: 12 },
-  detailMetric: { flex: 1, backgroundColor: "#F6F7FB", borderRadius: 10, padding: 11 },
+  detailMetric: { flex: 1, backgroundColor: "transparent", borderRadius: 0, paddingVertical: 8, paddingHorizontal: 4 },
   detailValue: { color: "#111827", fontSize: 17, fontWeight: "800" },
   cancel: { alignItems: "center", padding: 12, marginTop: 4 },
 });
