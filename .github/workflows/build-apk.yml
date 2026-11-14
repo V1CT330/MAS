@@ -34,8 +34,8 @@ jobs:
           node <<'NODE'
           const fs = require("node:fs");
           const config = JSON.parse(fs.readFileSync("app.json", "utf8")).expo;
-          const expectedSlug = "malawian-app-store-wsf8defenl82zkzevchmj";
-          const expectedProjectId = "229fd641-5313-4f0e-af76-b22b120ee61b";
+          const expectedSlug = "mas";
+          const expectedProjectId = "a41f1237-1323-499c-8df1-b9afd98fecc6";
           if (config.slug !== expectedSlug) {
             console.error(`Expected Expo slug ${expectedSlug}, found ${config.slug}`);
             process.exit(1);
