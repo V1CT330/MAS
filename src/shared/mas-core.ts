@@ -61,7 +61,7 @@ export function normalizeSearch(value: string | null | undefined): string {
 }
 
 export function matchesSearch(values: readonly (string | null | undefined)[], query: string): boolean {
-  const tokens = normalizeSearch(query).split(/[^\\p{L}\\p{N}]+/u).filter(Boolean);
+  const tokens = normalizeSearch(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (!tokens.length) return true;
   const searchableText = normalizeSearch(values.filter(Boolean).join(" "));
   return tokens.every((token) => searchableText.includes(token));
