@@ -155,20 +155,23 @@ jobs:
           profile: pixel_2
           emulator-boot-timeout: 600
           disable-animations: true
-          script: |
-            set -eu
-            APK="android/app/build/outputs/apk/debug/app-debug.apk"
-            adb install -r "$APK"
-            adb shell monkey -p mw.wealthgrid.mas -c android.intent.category.LAUNCHER 1
+          # The emulator action executes each newline as a separate shell.
+          # Fold this block to one command so variables and the retry loop share a shell.
+          script: >-
+            set -eu;
+            APK="android/app/build/outputs/apk/debug/app-debug.apk";
+            test -s "$APK";
+            adb install -r "$APK";
+            adb shell monkey -p mw.wealthgrid.mas -c android.intent.category.LAUNCHER 1;
             for attempt in $(seq 1 15); do
               if adb shell pidof mw.wealthgrid.mas | grep -q .; then
-                echo "MAS installed and launched successfully in the clean Android emulator."
-                exit 0
-              fi
-              sleep 2
-            done
-            echo "::error::MAS did not remain running after launch."
-            adb logcat -d -t 500 | grep -E "FATAL EXCEPTION|AndroidRuntime|ReactNativeJS" || true
+                echo "MAS installed and launched successfully in the clean Android emulator.";
+                exit 0;
+              fi;
+              sleep 2;
+            done;
+            echo "::error::MAS did not remain running after launch.";
+            adb logcat -d -t 500 | grep -E "FATAL EXCEPTION|AndroidRuntime|ReactNativeJS" || true;
             exit 1
 
       - name: Upload installable APK
