@@ -20,6 +20,7 @@ export default function LibraryScreen() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [downloadedUpdates, setDownloadedUpdates] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -68,16 +69,24 @@ export default function LibraryScreen() {
     setBusyId(row.id); setError("");
     try {
       await download(version.file_url, row.listings?.slug ?? "mas-app", version.version);
+      const { error: eventError } = await supabase.rpc("register_install", { _listing_id: row.listing_id, _device: "Android" });
+      if (eventError) throw eventError;
+      setDownloadedUpdates((current) => ({ ...current, [row.id]: version.id }));
+      await load();
       setError("Update download opened. Install it from Downloads, then confirm the version below.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open the update download."); }
     finally { setBusyId(null); }
   };
 
   const confirmUpdate = async (row: InstalledRow, version: Version) => {
-    if (!userId) return;
+    if (!userId || downloadedUpdates[row.id] !== version.id) return;
     setBusyId(row.id); setError("");
     const { error: updateError } = await supabase.from("installed_apps").update({ installed_version_id: version.id }).eq("id", row.id).eq("user_id", userId);
-    if (updateError) setError(updateError.message); else await load();
+    if (updateError) setError(updateError.message);
+    else {
+      setDownloadedUpdates((current) => { const next = { ...current }; delete next[row.id]; return next; });
+      await load();
+    }
     setBusyId(null);
   };
 
@@ -95,7 +104,7 @@ export default function LibraryScreen() {
       const latest = [...(product.listing_versions ?? [])].filter((v) => ["released", "published"].includes(v.status)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
       const updateAvailable = Boolean(latest && latest.id !== row.installed_version_id);
       return <View style={styles.card} key={row.id}><Text style={styles.title}>{product.name}</Text><Text style={styles.subtitle}>{product.kind} · Installed {new Date(row.installed_at).toLocaleDateString()}</Text><Text style={styles.subtitle}>{updateAvailable ? `Update available · version ${latest?.version}` : "Up to date"}</Text>
-        <View style={styles.actions}>{updateAvailable && latest ? <><Button label={busyId === row.id ? "Opening…" : "Download update"} disabled={Boolean(busyId)} onPress={() => void downloadUpdate(row, latest)} /><Button label="I installed it" disabled={Boolean(busyId)} secondary onPress={() => void confirmUpdate(row, latest)} /></> : <Button label="Download again" secondary disabled={Boolean(busyId)} onPress={() => { setBusyId(row.id); void download(latest?.file_url ?? null, product.slug, latest?.version).catch((e) => setError(e instanceof Error ? e.message : "Download failed.")).finally(() => setBusyId(null)); }} />}
+        <View style={styles.actions}>{updateAvailable && latest ? <><Button label={busyId === row.id ? "Opening…" : "Download update"} disabled={Boolean(busyId)} onPress={() => void downloadUpdate(row, latest)} />{downloadedUpdates[row.id] === latest.id ? <Button label="I installed it" disabled={Boolean(busyId)} secondary onPress={() => void confirmUpdate(row, latest)} /> : null}</> : <Button label="Download again" secondary disabled={Boolean(busyId)} onPress={() => { setBusyId(row.id); void download(latest?.file_url ?? null, product.slug, latest?.version).catch((e) => setError(e instanceof Error ? e.message : "Download failed.")).finally(() => setBusyId(null)); }} />}
         <Button label="Remove from library" secondary disabled={Boolean(busyId)} onPress={() => void removeInstalled(row.id)} /></View></View>;
     }) : null}
     {!loading && userId && tab === "saved" && saved.length === 0 ? <Empty text="Save any listing to find it here later." /> : null}
