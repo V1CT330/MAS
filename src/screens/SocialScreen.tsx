@@ -22,6 +22,7 @@ export default function SocialScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [posts, setPosts] = useState<Post[]>([]);
+  const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,9 +86,10 @@ export default function SocialScreen() {
     const postRows = (postRes.data ?? []) as Post[];
     setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
     const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
-    const [profileRes, commentRes] = await Promise.all([
+    const [profileRes, commentRes, reactionRes] = await Promise.all([
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
       postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
+      postRows.length ? supabase.from("social_post_reactions").select("post_id").eq("user_id", me).in("post_id", postRows.map(p => p.id)) : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
     ]);
     const map: Record<string, Profile> = {};
     for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
@@ -95,7 +97,9 @@ export default function SocialScreen() {
     if (meRes.data) map[me] = meRes.data as Profile;
     setProfiles(map);
     if (commentRes.error) setError(commentRes.error.message);
+    if (reactionRes.error) setError(reactionRes.error.message);
     setComments((commentRes.data ?? []) as Comment[]);
+    setLikedPostIds((reactionRes.data ?? []).map((reaction) => reaction.post_id));
     setLoading(false);
   }, []);
 
@@ -172,14 +176,24 @@ export default function SocialScreen() {
   };
 
   const toggleLike = async (postId: string) => {
-    if (!userId) return; setBusy(true);
-    const { data: existing, error: readError } = await supabase.from("social_post_reactions").select("id").eq("post_id",postId).eq("user_id",userId).maybeSingle();
-    if (readError) setError(readError.message);
-    else {
-      const result = existing ? await supabase.from("social_post_reactions").delete().eq("id",existing.id) : await supabase.from("social_post_reactions").insert({ post_id:postId,user_id:userId });
-      if (result.error) setError(result.error.message); else await load();
+    if (!userId) return;
+    const wasLiked = likedPostIds.includes(postId);
+    setLikedPostIds((current) => wasLiked ? current.filter((id) => id !== postId) : [...current, postId]);
+    setBusy(true);
+    try {
+      const { data: existing, error: readError } = await supabase.from("social_post_reactions").select("id").eq("post_id",postId).eq("user_id",userId).maybeSingle();
+      if (readError) throw readError;
+      const result = existing
+        ? await supabase.from("social_post_reactions").delete().eq("id",existing.id)
+        : await supabase.from("social_post_reactions").insert({ post_id:postId,user_id:userId });
+      if (result.error) throw result.error;
+      await load();
+    } catch (error) {
+      setLikedPostIds((current) => wasLiked ? [...new Set([...current, postId])] : current.filter((id) => id !== postId));
+      setError(error instanceof Error ? error.message : "Could not update the reaction.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const saveInvestmentProfile = async () => { if(!userId)return; setBusy(true); const {error:e}=await socialDb.from("social_investment_profiles").upsert({user_id:userId,role:investRole,organization_name:investOrg.trim()||null,headline:investHeadline.trim()||null,bio:investBio.trim()||null,location:investLocation.trim()||null,visibility:"public"},{onConflict:"user_id"}); if(e)setError(e.message); else await load(); setBusy(false); };
@@ -239,13 +253,13 @@ export default function SocialScreen() {
         {sponsored.map(ad=><View key={ad.id} style={s.card}><Text style={s.muted}>SPONSORED</Text><Text style={s.authorName}>{ad.headline}</Text>{ad.body?<Text style={s.copy}>{ad.body}</Text>:null}{ad.image_url?<Image source={{uri:ad.image_url}} style={s.postImage} resizeMode="cover"/>:null}<Action title="Learn more" secondary onPress={()=>{try{const u=new URL(ad.destination_url);if(u.protocol!=="https:")throw new Error();void Linking.openURL(u.toString());}catch{setError("This sponsored link is invalid.");}}}/></View>)}
         {posts.map(post => {
           const list = commentsByPost[post.id] ?? [];
-          const liked = false;
+          const liked = likedPostIds.includes(post.id);
           return <View key={post.id} style={s.card}>
             <TouchableOpacity style={s.author} onPress={() => {setProfilePage(post.author_id);setSection("Feed");}}><Text style={s.authorName}>{name(post.author_id)}</Text><Text style={s.muted}>{new Date(post.created_at).toLocaleString()}</Text></TouchableOpacity>
             {post.body ? <Text style={s.copy}>{post.body}</Text> : null}
             {post.media_url && post.media_type === "image" ? <Image source={{uri:post.media_url}} style={s.postImage} resizeMode="cover" /> : null}
             {post.media_url && post.media_type === "video" ? <Action title="Open video" secondary onPress={() => void Linking.openURL(post.media_url!)} /> : null}
-            <View style={s.row}><Action title="Like" secondary onPress={() => void toggleLike(post.id)} /><Action title={"Comment · "+list.length} secondary onPress={() => setCommentTarget({postId:post.id,parentId:null})} /></View>
+            <View style={s.row}><Action title={liked ? "Liked" : "Like"} secondary disabled={busy} onPress={() => void toggleLike(post.id)} /><Action title={"Comment · "+list.length} secondary onPress={() => setCommentTarget({postId:post.id,parentId:null})} /></View>
             {list.map(comment => <View key={comment.id} style={[s.comment,comment.parent_comment_id ? s.reply : null]}>
               <Text style={s.commentAuthor}>{name(comment.author_id)}</Text>{comment.body ? <Text style={s.copy}>{comment.body}</Text> : null}
               {comment.media_url ? <Action title="▶ Play voice reply" secondary onPress={() => void Linking.openURL(comment.media_url!)} /> : null}
