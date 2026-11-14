@@ -6,6 +6,8 @@ import { supabase } from "../lib/supabase";
 type Props = { onBack: () => void };
 type KycStatus = "none" | "pending" | "approved" | "rejected" | string;
 const WEB = "https://malawian-app-store.vercel.app";
+// Manual uploads stay hidden until the production private KYC storage bucket is provisioned.
+const MANUAL_KYC_UPLOAD_ENABLED = false;
 
 async function uploadDocument(userId: string, asset: DocumentPicker.DocumentPickerAsset) {
   const response = await fetch(asset.uri);
@@ -82,7 +84,7 @@ export default function NativeVerificationScreen({ onBack }: Props) {
 
   const savePhone = async () => {
     const normalized = phone.trim();
-    if (!/^\\+[1-9]\\d{7,14}$/.test(normalized)) {
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
       setMessage("Enter a valid international number, for example +265991234567.");
       return;
     }
@@ -174,7 +176,7 @@ export default function NativeVerificationScreen({ onBack }: Props) {
       <TextInput value={phone} onChangeText={setPhone} placeholder="+265991234567" keyboardType="phone-pad" autoComplete="tel" style={s.input} />
       <Action title="Save number" disabled={busy} onPress={() => void savePhone()} />
     </View>
-    {status !== "approved" ? <View style={s.panel}>
+    {MANUAL_KYC_UPLOAD_ENABLED && status !== "approved" ? <View style={s.panel}>
       <Text style={s.heading}>Manual identity review</Text>
       <Text style={s.copy}>Submit your legal name and a clear national ID or passport document. Files are limited to 10 MB.</Text>
       <TextInput value={fullName} onChangeText={setFullName} maxLength={80} placeholder="Full legal name" style={s.input} />
@@ -183,6 +185,7 @@ export default function NativeVerificationScreen({ onBack }: Props) {
       <TouchableOpacity onPress={() => void chooseDocument()} style={s.file}><Text style={s.fileText}>{document?.name || "Choose national ID or passport"}</Text></TouchableOpacity>
       <Action title={busy ? "Submitting…" : "Submit for verification"} disabled={busy || status === "pending"} onPress={() => void submitManual()} />
     </View> : null}
+    {!MANUAL_KYC_UPLOAD_ENABLED && status !== "approved" && status !== "pending" ? <Text style={s.note}>Manual document upload is temporarily unavailable while secure document storage is being provisioned. Use Didit instead.</Text> : null}
     {status !== "approved" && status !== "pending" ? <View style={s.panel}>
       <Text style={s.heading}>Automatic verification</Text>
       <Text style={s.copy}>Didit handles identity capture in its secure hosted flow. MAS changes your status only after the verified provider result is received.</Text>
