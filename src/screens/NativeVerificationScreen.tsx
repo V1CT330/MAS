@@ -168,7 +168,7 @@ export default function NativeVerificationScreen({ onBack }: Props) {
     <View style={s.panel}>
       <Text style={s.label}>Current status</Text>
       <Text style={s.status}>{statusLabel}</Text>
-      {status === "approved" ? <Text style={s.copy}>Your developer identity is verified. You do not need to submit another application.</Text> : status === "pending" ? <Text style={s.copy}>Your verification is awaiting review. Do not submit duplicate documents.</Text> : status === "rejected" ? <Text style={s.copy}>Your previous submission needs attention. Contact MAS support if you need clarification before resubmitting.</Text> : <Text style={s.copy}>Choose manual document review or secure automatic verification through Didit.</Text>}
+      {status === "approved" ? <Text style={s.copy}>Your developer identity is verified. You do not need to submit another application.</Text> : status === "pending" ? <Text style={s.copy}>Your verification is awaiting review. Do not submit duplicate documents.</Text> : status === "rejected" ? <Text style={s.copy}>Your previous submission needs attention. Contact MAS support if you need clarification before resubmitting.</Text> : <Text style={s.copy}>Use secure automatic verification through Didit. Manual document upload is temporarily unavailable.</Text>}
     </View>
     <View style={s.panel}>
       <Text style={s.heading}>WhatsApp contact</Text>
