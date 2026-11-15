@@ -50,6 +50,9 @@
 - Main commit: `8d165b9d0189d4ba2744f80e9ac35c56c5822116` — Social search now matches the WebApp's People, Posts, published Apps and developer Projects result groups. App results open the production listing route; project URLs are restricted to HTTP(S).
 - Native checks: [run 43699573914](https://github.com/V1CT330/MAS/actions/runs/43699573914) — passed.
 - APK build: [run 43699573897](https://github.com/V1CT330/MAS/actions/runs/43699573897) — passed.
+- APK workflow hardening: [commit `408a015`](https://github.com/V1CT330/MAS/commit/408a01544c5b0fdeb0b87dedd0b9c0bc06fa2ea6) switches the build to lockfile-enforced `npm ci` and enables npm dependency caching.
+- Reproducibility verification: [run 43701243458](https://github.com/V1CT330/MAS/actions/runs/43701243458) — passed all build, signature, clean-emulator install/launch and artifact-upload steps.
+- Latest artifact: `mas-android-debug-apk`, ID `14156920960`; ZIP size 39,297,946 bytes; SHA-256 `1c3922e83d1785897643717ad620faa7f5aa4fa571ad5b9169bad0b3050659e9`.
 - Verified workflow steps: debug APK build; APK signature/package metadata; KVM setup; clean-emulator install and launch; artifact upload.
 - Log result: `MAS installed and launched successfully in the clean Android emulator.`
 - Package: `mw.wealthgrid.mas`; version `1.0.4`; versionCode `5`. APK Signature Scheme v2 verification passed.
