@@ -12,8 +12,11 @@ type Message = { id: string; sender_id: string; recipient_id: string; body: stri
 type InvestmentProfile = { user_id:string; role:"founder"|"investor"|"both"; organization_name:string|null; headline:string|null; bio:string|null; location:string|null; visibility:"public"|"connections" };
 type Opportunity = { id:string; founder_id:string; title:string; description:string; industry:string; stage:string; funding_goal:number|null; currency:string; use_of_funds:string|null; status:"open"|"paused"|"closed"; created_at:string };
 type Sponsored = { id:string; headline:string; body:string|null; image_url:string|null; destination_url:string; starts_at:string|null; ends_at:string|null };
+type SearchListing = { id:string; slug:string; name:string; tagline:string|null; kind:string|null; icon_url:string|null };
+type PortfolioProject = { id:string; developer_id:string; title:string; description:string|null; project_type:string; url:string; image_url:string|null; created_at:string };
 type PickedMedia = { uri: string; mimeType: string; fileName: string; mediaType: "image" | "video" };
 const BLUE = "#1877F2";
+const WEB_ORIGIN = "https://malawian-app-store.vercel.app";
 const socialDb = supabase as any;
 const MAX_MEDIA = 50 * 1024 * 1024;
 const BUCKET = "social-media";
@@ -30,6 +33,8 @@ export default function SocialScreen() {
   const [investorDirectory,setInvestorDirectory] = useState<InvestmentProfile[]>([]);
   const [opportunities,setOpportunities] = useState<Opportunity[]>([]);
   const [sponsored,setSponsored] = useState<Sponsored[]>([]);
+  const [searchListings,setSearchListings] = useState<SearchListing[]>([]);
+  const [searchProjects,setSearchProjects] = useState<PortfolioProject[]>([]);
   const [draft, setDraft] = useState("");
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -60,9 +65,9 @@ export default function SocialScreen() {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) { setUserId(null); setPosts([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
+    if (authError || !auth.user) { setUserId(null); setPosts([]); setSearchListings([]); setSearchProjects([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
     const me = auth.user.id; setUserId(me);
-    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes] = await Promise.all([
+    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes, listingsRes, projectsRes] = await Promise.all([
       supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
       supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
       supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
@@ -73,6 +78,8 @@ export default function SocialScreen() {
       socialDb.from("social_investment_profiles").select("*").order("updated_at",{ascending:false}).limit(100),
       socialDb.from("social_investment_opportunities").select("*").order("created_at",{ascending:false}).limit(100),
       socialDb.from("ad_campaigns").select("id,headline,body,image_url,destination_url,placements,starts_at,ends_at,status").eq("status","approved").contains("placements",["social_feed"]).order("created_at",{ascending:false}).limit(10),
+      supabase.from("listings").select("id,slug,name,tagline,kind,icon_url").eq("status","published").order("updated_at",{ascending:false}).limit(100),
+      socialDb.from("developer_portfolio_projects").select("id,developer_id,title,description,project_type,url,image_url,created_at").order("created_at",{ascending:false}).limit(100),
     ]);
     if (postRes.error) setError(postRes.error.message);
     if (connectionRes.error) setError(connectionRes.error.message);
@@ -83,9 +90,12 @@ export default function SocialScreen() {
     if (directoryRes.error) setError(directoryRes.error.message); else setInvestorDirectory((directoryRes.data??[]) as InvestmentProfile[]);
     if (opportunitiesRes.error) setError(opportunitiesRes.error.message); else setOpportunities((opportunitiesRes.data??[]) as Opportunity[]);
     if (adsRes.error) setError(adsRes.error.message); else { const now=Date.now(); setSponsored(((adsRes.data??[]) as Sponsored[]).filter(ad=>(!ad.starts_at||new Date(ad.starts_at).getTime()<=now)&&(!ad.ends_at||new Date(ad.ends_at).getTime()>now))); }
+    if (listingsRes.error) { setSearchListings([]); setError(listingsRes.error.message); } else setSearchListings((listingsRes.data ?? []) as SearchListing[]);
+    if (projectsRes.error) { setSearchProjects([]); setError(projectsRes.error.message); } else setSearchProjects((projectsRes.data ?? []) as PortfolioProject[]);
     const postRows = (postRes.data ?? []) as Post[];
     setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
-    const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
+    const projectRows = (projectsRes.data ?? []) as PortfolioProject[];
+    const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...projectRows.map(project => project.developer_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
     const [profileRes, commentRes, reactionRes] = await Promise.all([
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
       postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
@@ -114,6 +124,24 @@ export default function SocialScreen() {
   const commentsByPost = useMemo(() => { const out: Record<string, Comment[]> = {}; for (const c of comments) (out[c.post_id] ??= []).push(c); return out; }, [comments]);
   const threadMessages = messages.filter(m => selectedPerson && ((m.sender_id === userId && m.recipient_id === selectedPerson) || (m.sender_id === selectedPerson && m.recipient_id === userId)));
   const name = (id: string) => profiles[id]?.developer_name || profiles[id]?.display_name || "MAS member";
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+  const searchedPeople = normalizedSearch ? people.filter(person => `${name(person.id)} ${person.bio ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) : [];
+  const searchedPosts = normalizedSearch ? posts.filter(post => `${post.body} ${name(post.author_id)} ${profiles[post.author_id]?.bio ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) : [];
+  const searchedListings = normalizedSearch ? searchListings.filter(listing => `${listing.name} ${listing.tagline ?? ""} ${listing.kind ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) : [];
+  const searchedProjects = normalizedSearch ? searchProjects.filter(project => `${project.title} ${project.description ?? ""} ${project.project_type} ${name(project.developer_id)}`.toLocaleLowerCase().includes(normalizedSearch)) : [];
+  const openProject = async (value: string) => {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Unsupported project URL.");
+      await Linking.openURL(url.toString());
+    } catch {
+      setError("This project link is invalid or could not be opened.");
+    }
+  };
+  const openListing = async (slug: string) => {
+    try { await Linking.openURL(`${WEB_ORIGIN}/apps/${encodeURIComponent(slug)}`); }
+    catch { setError("Could not open this published app."); }
+  };
 
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -290,11 +318,17 @@ export default function SocialScreen() {
       </> : null}
       {section === "Search" && !profilePage ? <>
         <Text style={s.section}>Search MAS Social</Text>
-        <TextInput value={searchTerm} onChangeText={setSearchTerm} placeholder="Search people and posts…" style={s.input} />
-        {searchTerm.trim().length>0 ? <>
-          {people.filter(p => name(p.id).toLowerCase().includes(searchTerm.trim().toLowerCase()) || (p.bio||"").toLowerCase().includes(searchTerm.trim().toLowerCase())).map(p => <TouchableOpacity key={p.id} onPress={() => setProfilePage(p.id)} style={s.person}><Text style={s.authorName}>{name(p.id)}</Text><Text style={s.muted}>{p.bio||"MAS member"}</Text></TouchableOpacity>)}
-          {posts.filter(p => p.body.toLowerCase().includes(searchTerm.trim().toLowerCase())).map(p => <View key={p.id} style={s.card}><Text style={s.authorName}>{name(p.author_id)}</Text><Text style={s.copy}>{p.body}</Text></View>)}
-        </> : <Text style={s.copy}>Search members and public posts.</Text>}
+        <View style={s.searchField}>
+          <TextInput value={searchTerm} onChangeText={setSearchTerm} placeholder="Search posts, people, apps and projects…" accessibilityLabel="Search posts, people, published apps and developer projects" returnKeyType="search" style={s.searchInput} />
+          {searchTerm ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear Social search" onPress={() => setSearchTerm("")} style={s.searchClear}><Text style={s.searchClearText}>×</Text></TouchableOpacity> : null}
+        </View>
+        {normalizedSearch ? <>
+          {searchedPeople.length ? <><Text style={s.searchGroup}>People ({searchedPeople.length})</Text>{searchedPeople.map(person => <TouchableOpacity key={person.id} onPress={() => setProfilePage(person.id)} style={s.searchResult}><Text style={s.authorName}>{name(person.id)}</Text><Text style={s.muted}>{person.bio || (person.id === userId ? "Your MAS profile" : "MAS member")}</Text></TouchableOpacity>)}</> : null}
+          {searchedPosts.length ? <><Text style={s.searchGroup}>Posts ({searchedPosts.length})</Text>{searchedPosts.map(post => <View key={post.id} style={s.searchResult}><Text style={s.authorName}>{name(post.author_id)}</Text><Text style={s.muted}>{new Date(post.created_at).toLocaleString()}</Text><Text style={s.copy}>{post.body}</Text></View>)}</> : null}
+          {searchedListings.length ? <><Text style={s.searchGroup}>Published apps ({searchedListings.length})</Text>{searchedListings.map(listing => <TouchableOpacity key={listing.id} accessibilityRole="button" onPress={() => void openListing(listing.slug)} style={s.searchResult}><Text style={s.authorName}>{listing.name}</Text><Text style={s.muted}>{listing.tagline || listing.kind || "Published MAS listing"}</Text></TouchableOpacity>)}</> : null}
+          {searchedProjects.length ? <><Text style={s.searchGroup}>Developer projects ({searchedProjects.length})</Text>{searchedProjects.map(project => <TouchableOpacity key={project.id} accessibilityRole="button" onPress={() => void openProject(project.url)} style={s.searchResult}><Text style={s.authorName}>{project.title}</Text><Text style={s.muted}>{name(project.developer_id)} · {project.project_type}</Text>{project.description ? <Text style={s.copy}>{project.description}</Text> : null}</TouchableOpacity>)}</> : null}
+          {!searchedPeople.length && !searchedPosts.length && !searchedListings.length && !searchedProjects.length ? <Text style={s.copy}>No Social results found for “{searchTerm.trim()}”.</Text> : null}
+        </> : <Text style={s.copy}>Search posts, people, published apps and developer projects. This search is separate from Friends and does not manage friend requests.</Text>}
       </> : null}
       {section === "Find Investors" && !profilePage ? <>
         <Text style={s.section}>Find Investors</Text><Text style={s.copy}>Founder and investor introductions. Listings are introductions, not verified investments or financial advice. MAS does not process investments here.</Text>
@@ -370,5 +404,5 @@ function Action({title,onPress,disabled,secondary}:{title:string;onPress:()=>voi
   return <TouchableOpacity accessibilityRole="button" disabled={disabled} onPress={onPress} style={[s.button,secondary&&s.secondary,disabled&&{opacity:0.5}]}><Text style={[s.buttonText,secondary&&s.secondaryText]}>{title}</Text></TouchableOpacity>;
 }
 const s=StyleSheet.create({
- root:{flex:1,backgroundColor:"#F6F7FB"},center:{flex:1,alignItems:"center",justifyContent:"center"},top:{paddingHorizontal:16,paddingTop:12,paddingBottom:4,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},title:{fontSize:22,fontWeight:"800",color:"#111827"},link:{color:BLUE,fontWeight:"700",fontSize:12},tabs:{maxHeight:50,paddingHorizontal:12},tab:{paddingHorizontal:15,paddingVertical:10,borderRadius:8,marginRight:6,backgroundColor:"#FFF"},tabActive:{backgroundColor:BLUE},tabText:{fontSize:12,color:"#52607A",fontWeight:"700"},tabTextActive:{color:"#FFF"},content:{padding:14,paddingBottom:36},card:{backgroundColor:"#FFF",borderRadius:13,padding:13,marginBottom:12,borderWidth:1,borderColor:"#E7EBF3"},section:{fontSize:15,fontWeight:"800",color:"#111827",marginBottom:8},copy:{fontSize:12,color:"#344054",lineHeight:19,marginTop:6},muted:{fontSize:10,color:"#64748B",marginTop:3},input:{minHeight:44,borderWidth:1,borderColor:"#DCE2EA",borderRadius:9,paddingHorizontal:10,paddingVertical:9,color:"#111827",marginTop:8,backgroundColor:"#FFF"},row:{flexDirection:"row",gap:7,alignItems:"center",flexWrap:"wrap",marginTop:8},button:{backgroundColor:BLUE,minHeight:38,paddingHorizontal:12,borderRadius:9,alignItems:"center",justifyContent:"center"},buttonText:{color:"#FFF",fontSize:11,fontWeight:"700"},secondary:{backgroundColor:"#EFF4FA"},secondaryText:{color:BLUE},author:{marginBottom:8},authorName:{fontSize:13,fontWeight:"800",color:"#111827"},postImage:{width:"100%",height:230,borderRadius:9,marginTop:9},comment:{marginTop:9,padding:10,borderRadius:10,backgroundColor:"#F3F6FA"},reply:{marginLeft:16,backgroundColor:"#F7F8FA"},commentAuthor:{fontSize:11,fontWeight:"800",color:"#344054"},commentBox:{marginTop:10,padding:10,borderRadius:10,backgroundColor:"#F7F9FC"},error:{color:"#9A3412",backgroundColor:"#FFF7ED",padding:10,borderRadius:8,marginBottom:10,fontSize:12},person:{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},personChip:{padding:10,backgroundColor:"#FFF",borderRadius:8,marginRight:7},message:{maxWidth:"88%",padding:11,borderRadius:15,marginVertical:5},myMessage:{alignSelf:"flex-end",backgroundColor:BLUE},theirMessage:{alignSelf:"flex-start",backgroundColor:"#E4E6EB"},myMessageText:{color:"#FFF",fontSize:12},monetizationList:{borderTopWidth:1,borderBottomWidth:1,borderColor:"#E7EBF3",marginTop:12},monetizationRow:{paddingVertical:14,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},monetizationRowLast:{borderBottomWidth:0},monetizationHeading:{flexDirection:"row",alignItems:"baseline",justifyContent:"space-between",gap:8,flexWrap:"wrap"},profilePage:{backgroundColor:"#FFF",borderRadius:13,overflow:"hidden",paddingBottom:14,marginTop:10},cover:{width:"100%",height:125},coverPlaceholder:{height:90,backgroundColor:"#EAF2FF"},profileRow:{flexDirection:"row",alignItems:"center",gap:10,padding:12},avatarLarge:{width:58,height:58,borderRadius:29,backgroundColor:"#EAF2FF",alignItems:"center",justifyContent:"center"},avatarText:{fontSize:18,color:BLUE,fontWeight:"800"}
+ root:{flex:1,backgroundColor:"#F6F7FB"},center:{flex:1,alignItems:"center",justifyContent:"center"},top:{paddingHorizontal:16,paddingTop:12,paddingBottom:4,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},title:{fontSize:22,fontWeight:"800",color:"#111827"},link:{color:BLUE,fontWeight:"700",fontSize:12},tabs:{maxHeight:50,paddingHorizontal:12},tab:{paddingHorizontal:15,paddingVertical:10,borderRadius:8,marginRight:6,backgroundColor:"#FFF"},tabActive:{backgroundColor:BLUE},tabText:{fontSize:12,color:"#52607A",fontWeight:"700"},tabTextActive:{color:"#FFF"},content:{padding:14,paddingBottom:36},card:{backgroundColor:"#FFF",borderRadius:13,padding:13,marginBottom:12,borderWidth:1,borderColor:"#E7EBF3"},section:{fontSize:15,fontWeight:"800",color:"#111827",marginBottom:8},copy:{fontSize:12,color:"#344054",lineHeight:19,marginTop:6},muted:{fontSize:10,color:"#64748B",marginTop:3},input:{minHeight:44,borderWidth:1,borderColor:"#DCE2EA",borderRadius:9,paddingHorizontal:10,paddingVertical:9,color:"#111827",marginTop:8,backgroundColor:"#FFF"},searchField:{width:"100%",minHeight:46,flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:"#DCE2EA",borderRadius:9,backgroundColor:"#FFF",paddingHorizontal:12,marginTop:8},searchInput:{flex:1,minWidth:0,minHeight:44,paddingHorizontal:0,paddingVertical:8,marginTop:0,borderWidth:0,backgroundColor:"transparent",color:"#111827"},searchClear:{width:32,minHeight:36,alignItems:"center",justifyContent:"center"},searchClearText:{fontSize:22,color:"#64748B"},searchGroup:{fontSize:13,fontWeight:"800",color:"#111827",marginTop:16,marginBottom:4},searchResult:{paddingVertical:11,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},row:{flexDirection:"row",gap:7,alignItems:"center",flexWrap:"wrap",marginTop:8},button:{backgroundColor:BLUE,minHeight:38,paddingHorizontal:12,borderRadius:9,alignItems:"center",justifyContent:"center"},buttonText:{color:"#FFF",fontSize:11,fontWeight:"700"},secondary:{backgroundColor:"#EFF4FA"},secondaryText:{color:BLUE},author:{marginBottom:8},authorName:{fontSize:13,fontWeight:"800",color:"#111827"},postImage:{width:"100%",height:230,borderRadius:9,marginTop:9},comment:{marginTop:9,padding:10,borderRadius:10,backgroundColor:"#F3F6FA"},reply:{marginLeft:16,backgroundColor:"#F7F8FA"},commentAuthor:{fontSize:11,fontWeight:"800",color:"#344054"},commentBox:{marginTop:10,padding:10,borderRadius:10,backgroundColor:"#F7F9FC"},error:{color:"#9A3412",backgroundColor:"#FFF7ED",padding:10,borderRadius:8,marginBottom:10,fontSize:12},person:{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},personChip:{padding:10,backgroundColor:"#FFF",borderRadius:8,marginRight:7},message:{maxWidth:"88%",padding:11,borderRadius:15,marginVertical:5},myMessage:{alignSelf:"flex-end",backgroundColor:BLUE},theirMessage:{alignSelf:"flex-start",backgroundColor:"#E4E6EB"},myMessageText:{color:"#FFF",fontSize:12},monetizationList:{borderTopWidth:1,borderBottomWidth:1,borderColor:"#E7EBF3",marginTop:12},monetizationRow:{paddingVertical:14,borderBottomWidth:1,borderBottomColor:"#E7EBF3"},monetizationRowLast:{borderBottomWidth:0},monetizationHeading:{flexDirection:"row",alignItems:"baseline",justifyContent:"space-between",gap:8,flexWrap:"wrap"},profilePage:{backgroundColor:"#FFF",borderRadius:13,overflow:"hidden",paddingBottom:14,marginTop:10},cover:{width:"100%",height:125},coverPlaceholder:{height:90,backgroundColor:"#EAF2FF"},profileRow:{flexDirection:"row",alignItems:"center",gap:10,padding:12},avatarLarge:{width:58,height:58,borderRadius:29,backgroundColor:"#EAF2FF",alignItems:"center",justifyContent:"center"},avatarText:{fontSize:18,color:BLUE,fontWeight:"800"}
 });
