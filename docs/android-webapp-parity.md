@@ -1,63 +1,88 @@
 # Android ↔ WebApp Feature-Parity Audit
 
-**Status:** Initial repository audit; not a claim of completed parity or production-device validation.
+**Status:** Partial parity. The GitHub-built APK compiled, passed signature/package checks, installed and launched in a clean Android emulator on 2026-11-15. Physical-device authentication, provider returns and full workflow parity remain unverified.
 
 ## Source of truth and repository boundaries
 
 - Production WebApp: `V1CT330/malawian-app-store`.
 - Native Android app: `V1CT330/MAS`.
-- Keep platform-neutral business rules synchronized in `src/shared/mas-core.ts` in both repositories. The shared module must not depend on React, React Native, browser APIs, or Supabase.
-- Implement Android-specific screens and integrations in `V1CT330/MAS`; do not copy the WebApp into the APK or change production WebApp behavior just to make the native client appear complete.
-- Reuse the existing Supabase project, tables, RPCs, storage buckets, server functions, and authenticated WebApp workflows. Never ship service-role, payment-provider, or identity-provider secrets in the Android app.
+- Treat the production WebApp as the source of truth for product behavior and supported workflows.
+- Keep platform-neutral business rules synchronized in `src/shared/mas-core.ts` in both repositories. The shared module must not depend on React, React Native, browser APIs or Supabase.
+- Implement Android-specific screens and integrations in `V1CT330/MAS`; do not copy the WebApp into the APK or change production WebApp behavior merely to make the native client appear complete.
+- Reuse the existing Supabase project, tables, RPCs, storage buckets, server functions and authenticated WebApp workflows. Never ship service-role, payment-provider or identity-provider secrets in the Android app.
 
-## Initial findings
+## Active native architecture
 
-The native app is a separate Expo/React Native client (not a WebView). Its current entry point is the root `App.tsx`; Supabase client configuration is in `src/lib/supabase.ts`; shared rules are in `src/shared/mas-core.ts`.
+- `index.ts` registers `NativeRoot.tsx`. `App.tsx` is a legacy, unreferenced root and is not the runtime source of truth.
+- `NativeRoot.tsx` owns the native Store/Developer/Social spaces, Store tabs, OAuth deep-link listener and screen wiring.
+- `src/screens/StoreScreen.tsx` implements native published-listing discovery, filters and search.
+- `src/screens/LibraryScreen.tsx` implements installed, saved and history views, signed downloads and explicit update confirmation.
+- `src/screens/NotificationsScreen.tsx` implements user/developer notification lists, mark-all-read, dismiss, refresh and error/empty states.
+- `src/screens/AccountScreen.tsx` implements Google OAuth launch, profile editing and sign-out; `NativeRoot.tsx` exchanges the returned PKCE code.
+- `src/screens/DeveloperScreen.tsx` wires the native dashboard, listing filters/search, listing detail, publishing, analytics, verification, subscription, settings and developer notifications.
+- `src/screens/NativePublishingScreen.tsx` and `NativeListingDetailScreen.tsx` implement native listing/release workflows and asset uploads.
+- `src/screens/NativeAnalyticsScreen.tsx` reads the existing `developer_stats` RPC.
+- `src/screens/NativeVerificationScreen.tsx` reads server-authoritative KYC status and starts a validated HTTPS Didit handoff. Manual document upload is deliberately disabled in the UI until private KYC storage is provisioned.
+- `src/screens/NativeSubscriptionScreen.tsx` reads subscription state and hands checkout/cancellation to the existing secure WebApp/PayChangu flow. It does not write paid status.
+- `src/screens/SocialScreen.tsx` implements feed, media posts, comments/replies, reactions, connections, messages, notifications, Find Investors, monetization setup states and search across people, posts, published apps and developer projects.
 
-The native README describes a user storefront, account/session display, Social feed interactions and messaging, and some developer summary screens. It also explicitly records important gaps: developer workflows are often web handoffs, live backend behavior has not been validated on a real device, some funding links only open Social, and OAuth redirect allowlisting is still required. Code inspection confirms that several developer-console destinations open the WebApp rather than providing native workflows. The native user storefront and Social entry points also hand off to web routes rather than providing all corresponding native screens.
+## Feature-parity matrix
 
-The production WebApp has authenticated routes for store/library/notifications and a broad developer console including products, product details, publishing, testing, quality, analytics, reviews, verification, subscription, wallet, Social, settings, and administration. The existence of these routes is a parity target, not proof that each can or should be duplicated natively. Secure flows may remain authenticated HTTPS handoffs where native integration would duplicate trusted server-side logic or require privileged credentials.
+| Area | Native implementation on main | Remaining gap / verification |
+| --- | --- | --- |
+| Authentication and account | Google OAuth PKCE callback, session listener, account profile edit and sign-out | Real-device redirect allowlisting, session restore/expiry and sign-out acceptance remain untested |
+| Store discovery | Native published catalogue, kind filters, search and listing details | Compare ranking, ratings/reviews, sponsored placements and ad-event behavior against production |
+| Library | Installed, saved and history tabs; signed asset downloads; update download and explicit version confirmation | Test signed downloads and Android package-install handoff on a physical device; removing a library row is not an OS-level uninstall |
+| Notifications | Current-user and scope-filtered list, mark all read, dismiss, retry and empty states | Verify RLS behavior and notification destinations on device |
+| Developer dashboard | Native summary, listing status filters/search, product detail, publishing, analytics, settings and developer notifications | Some team/security/quality/administration destinations remain secure WebApp handoffs; validate all mutations against production RLS |
+| Publishing and releases | Native listing creation, package/image uploads, listing detail, release upload and review-status display | Test upload cleanup, file limits, review transitions and release downloads against production storage/RPC policies |
+| KYC/verification | Server-authoritative status, phone contact update and validated Didit session handoff | Manual document upload is intentionally disabled; test Didit return/webhook/status refresh on a real device |
+| Developer Pro/payments | Native subscription overview; checkout/cancellation remain hosted | Test PayChangu handoff and return on device; never update subscription state from the client |
+| Wallet/earnings | Secure WebApp handoff; no client-side balance or payout writes | Keep withdrawals and unimplemented marketplace settlement disabled until trusted server workflows exist |
+| Social | Feed, media, comments/replies, likes, connections, messages, notifications, investor directory/opportunities, monetization setup states and search across people/posts/apps/projects | Verify production RLS, media permissions, message read state, pagination and external links on device |
+| Administration | Secure WebApp handoff | Keep privileged moderation/KYC decisions server-side; client role checks are not authorization |
+| Responsive UX/accessibility | Native width-aware layouts, full-width search/input fields and responsive dashboard metric columns | Physical-device checks for short/narrow screens, keyboard/IME, safe areas, font scaling, screen readers and touch targets remain outstanding |
 
-Native web handoffs now use `https://malawian-app-store.vercel.app`, matching the existing Account and Developer screens. The older `j6pm` deployment alias was inconsistent and has been removed from the native app. The Vercel project is not exposed through the current deployment connection, so the production-domain response still needs an external live check; do not treat repository consistency alone as proof of deployment availability.
+## Latest verification record — 2026-11-15
 
-## Feature parity matrix (initial)
+### Native Android
 
-| Area | Native status observed | WebApp capability to compare | Next verification/implementation |
-| --- | --- | --- | --- |
-| Authentication and account | Google OAuth/session handling exists; callback allowlisting and real-device flow remain unverified | Authenticated account, profile, settings, developer mode | Validate redirect, session restore/expiry, sign-out, account/profile editing and authorization on Android |
-| Store discovery | Native screen links to the WebApp; catalogue data is available in code/search findings | Published catalogue, product details, search/discovery | Build native catalogue/detail/search using published listings and shared filters; never use preview entries as live results without a clear preview state |
-| Library | No native library implementation found in inspected `App.tsx` | Installed apps, saved listings, download history, updates | Use existing `installed_apps`, `wishlist`, `install_events`, and signed asset workflow; implement clear Android install/update confirmation states |
-| Notifications | Notification destinations are web handoffs | List, mark all read, dismiss, unread state | Use the existing `notifications` records with current-user scoping and RLS; add loading/empty/error/retry states |
-| Developer dashboard/products | Summary and listing query exist; other product routes hand off to web | Dashboard, product CRUD/details, uploads, review status | Keep server-authoritative review states; implement native upload/forms only after confirming existing schema, storage policies and RPCs |
-| Publishing/release | Native app links to existing publishing workflow | Draft creation, media/package uploads, review and release process | Never publish directly or bypass review; mirror the WebApp's validated transitions and backend checks |
-| KYC/verification | Contact phone save and secure Didit session handoff are present; manual documents and full status UX are not native | Phone and identity verification, reviewer outcomes | Keep identity checks server/admin-controlled; test provider return flow and status refresh without allowing client self-approval |
-| Developer Pro/payments | Payment checkout is a WebApp handoff | MK5,000/month subscription with PayChangu server-side confirmation | Keep checkout and settlement on trusted server workflows; do not write paid status from the app |
-| Wallet/earnings | Native wallet view is a limited handoff/placeholder | Existing wallet/ledger information | First confirm current WebApp scope and server-owned ledger semantics; do not invent payout or balance operations |
-| Social | Native text, media, reactions/comments, requests and direct messages are described as implemented; production schema/RLS validation remains outstanding | Feed, profiles, connections, messages, notifications | Validate every query and mutation against production schema/RLS; add pagination, failure states and device media-permission checks |
-| Administration | Admin role is read in the native client, but admin workflows are not native | Listing/release moderation, KYC decisions, people and notices | Prefer secure WebApp admin handoff; do not expose admin mutations or rely on client-side role checks as authorization |
-| Responsive UX/accessibility | Existing responsive native layout work is present | WebApp terminology, visual identity and responsive behavior | Test narrow and large Android screens, keyboard/IME, safe areas, font scaling, screen readers and touch targets |
+- Main commit: `8d165b9d0189d4ba2744f80e9ac35c56c5822116` — Social search now matches the WebApp's People, Posts, published Apps and developer Projects result groups. App results open the production listing route; project URLs are restricted to HTTP(S).
+- Native checks: [run 43699573914](https://github.com/V1CT330/MAS/actions/runs/43699573914) — passed.
+- APK build: [run 43699573897](https://github.com/V1CT330/MAS/actions/runs/43699573897) — passed.
+- Verified workflow steps: debug APK build; APK signature/package metadata; KVM setup; clean-emulator install and launch; artifact upload.
+- Log result: `MAS installed and launched successfully in the clean Android emulator.`
+- Package: `mw.wealthgrid.mas`; version `1.0.4`; versionCode `5`. APK Signature Scheme v2 verification passed.
+- Artifact: `mas-android-debug-apk`, ID `14155533050`; ZIP size 39,297,945 bytes. The contained universal APK is 110,913,302 bytes and includes arm64-v8a, armeabi-v7a, x86 and x86_64 native libraries.
+- This is a debug-signed APK. Updating an existing EAS-signed installation and physical-device installation are not verified.
+- The separate EAS build status is blocked by the account's Free-plan Android build quota, which resets on 2026-12-01. This does not block the independent GitHub Actions APK workflow.
 
-## Correct code locations
+### Production WebApp and shared rules
 
-- `index.ts` registers `NativeRoot.tsx`, which is the active native app composition, space/tab navigation, OAuth deep-link handler and screen wiring. `App.tsx` is a legacy, unreferenced root and is not the runtime source of truth; make product changes in `NativeRoot.tsx` and the imported `src/screens/*` files.
-- `src/lib/supabase.ts`: Shared Supabase client configuration only.
-- `src/lib/`: Native backend adapters and domain-specific client workflows; keep each feature's queries/mutations together and reuse existing Supabase APIs.
-- `src/shared/mas-core.ts`: Platform-neutral MAS business rules; keep byte-for-byte synchronized with the WebApp copy when changed.
-- `src/components/`: Reusable React Native UI components.
-- `src/screens/`: Feature screens (store, library, notifications, account, developer and Social) as they are extracted from the app shell.
-- `assets/`: Bundled icons and static imagery; do not store user uploads here.
-- `.github/workflows/`: Android build and automated checks.
-- `docs/android-webapp-parity.md`: This audit, implementation decisions and verification record. Do not put product screens or executable app code in documentation directories.
+- WebApp main commit: `33c757647825c797f8e583d9eb9d3c1091617753`.
+- Web build: [run 43583155837](https://github.com/V1CT330/malawian-app-store/actions/runs/43583155837) — passed.
+- GitHub's Vercel commit status reports deployment completed. Direct browser inspection of the production UI was not available in this run; the current Vercel connector cannot resolve the linked project, so do not treat the status check as visual acceptance.
+- The two `src/shared/mas-core.ts` files were checked and are byte-for-byte identical (SHA `c12efcd1808a822870932c1b1219f7959983ceb3`).
 
-## Verification gates
+### Open work and safety constraints
+
+- No open GitHub issues were found in either repository.
+- Open native PR #5 and WebApp PR #19 contain responsive navigation/drawer changes. Do not merge them without review; the approved side menu must remain unchanged.
+- WebApp PR #18 requires a Supabase migration and PayChangu test/pricing confirmation. It was not merged, and no production database or payment configuration was changed.
+- Native PR #2 targets `native/expo-foundation`, not `main`; it is not a production change set.
+- No Vercel project settings, Supabase settings, secrets, environment variables, payment configuration or identity-verification configuration were modified.
+
+## Release verification gates
 
 Before calling parity complete:
 
-1. Compare each WebApp workflow's inputs, validation, backend calls, authorization, error states, and success state with its native counterpart.
-2. Run `npm ci` and `npm run typecheck` in `V1CT330/MAS`; run the Android build/check workflow and fix failures.
-3. Test configured and unconfigured builds separately so preview/fallback data can never be mistaken for live backend data.
-4. Exercise OAuth callback, expired sessions, RLS-denied requests, upload failures, slow/offline connectivity, empty data, retries, and Android back navigation.
-5. Install and test the generated APK on real Android devices at multiple screen sizes. Verify OAuth, media permissions, file downloads/install handoff, external links, and return from secure web/provider flows.
-6. Record any backend configuration/schema/RLS prerequisites as blockers; do not change production Supabase settings or WebApp code without explicit authorization.
+1. Compare each supported WebApp workflow's inputs, validation, backend calls, authorization, error states and success state with its native counterpart.
+2. Keep `src/shared/mas-core.ts` synchronized in both repositories.
+3. Run native TypeScript/config checks and the GitHub Android APK build; verify the artifact and signature.
+4. Install and launch the APK on a physical Android device. Test both clean install and update compatibility without deleting user data.
+5. Test OAuth callback, session restore/expiry, RLS-denied requests, offline/slow network, media permissions, signed downloads, Android back navigation and external/provider return flows.
+6. Test Didit and PayChangu handoffs without changing provider configuration or allowing the client to self-approve KYC or payment state.
+7. Verify production WebApp deployment and visually inspect the actual production site at phone and desktop widths.
+8. Record any backend schema/RLS or external-service prerequisites as blockers; do not change production Supabase/Vercel settings or secrets without Victor's approval.
 
-This audit is based on repository source inspection only. No production credentials, live Supabase data, payment settlement, Didit session, APK installation, or physical Android device were available for verification in this change.
+A successful clean-emulator install proves the APK can install and launch in that environment. It does not prove physical-device compatibility, OAuth/provider return, EAS-signature update compatibility or complete feature parity.
