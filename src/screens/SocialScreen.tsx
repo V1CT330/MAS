@@ -244,10 +244,32 @@ export default function SocialScreen() {
     if (e) setError(e.message); else { setMessageDraft(""); await load(); } setBusy(false);
   };
   const openConversation = async (id: string) => {
-    setSelectedPerson(id); setSection("Messages");
+    setSelectedPerson(id);
+    setSection("Messages");
     if (!userId) return;
-    const unread = messages.filter(m => m.sender_id === id && m.recipient_id === userId && !m.read_at).map(m => m.id);
-    if (unread.length) await supabase.from("social_messages").update({ read_at:new Date().toISOString() }).in("id",unread);
+
+    const unreadIds = messages
+      .filter((message) => message.sender_id === id && message.recipient_id === userId && !message.read_at)
+      .map((message) => message.id);
+    if (!unreadIds.length) return;
+
+    const readAt = new Date().toISOString();
+    const { error: readError } = await supabase
+      .from("social_messages")
+      .update({ read_at: readAt })
+      .in("id", unreadIds)
+      .eq("recipient_id", userId);
+
+    if (readError) {
+      setError("Could not mark messages as read. Please try again.");
+      return;
+    }
+
+    setMessages((current) =>
+      current.map((message) =>
+        unreadIds.includes(message.id) ? { ...message, read_at: readAt } : message,
+      ),
+    );
   };
   const renderProfile = (id: string) => {
     const p = profiles[id]; if (!p) return null;
