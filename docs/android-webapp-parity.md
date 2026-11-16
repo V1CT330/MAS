@@ -75,6 +75,13 @@
 - Native PR #2 targets `native/expo-foundation`, not `main`; it is not a production change set.
 - No Vercel project settings, Supabase settings, secrets, environment variables, payment configuration or identity-verification configuration were modified.
 
+### Native Social message-read parity — 2026-11-16
+
+- Main commit: [`d933396`](https://github.com/V1CT330/MAS/commit/d9333967b9f74d9a218238f196155bcd1853fcaa).
+- The native conversation-open handler now checks the recipient-scoped `read_at` update, reports failures instead of silently ignoring them, and synchronizes local message state only after the backend confirms success. This matches the production WebApp's error and query-refresh behavior without changing the database or RLS rules.
+- Native checks: [run 43836005497](https://github.com/V1CT330/MAS/actions/runs/43836005497) — passed.
+- APK build/emulator verification: [run 43836005332](https://github.com/V1CT330/MAS/actions/runs/43836005332) — in progress when this note was written; do not count it as passed until the run completes.
+
 ## Release verification gates
 
 Before calling parity complete:
