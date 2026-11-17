@@ -76,19 +76,31 @@ export default function DeveloperScreen() {
       return;
     }
     setUserId(auth.user.id);
-    const [profile, listingResult, statsResult] = await Promise.all([
-      supabase.from("profiles").select("display_name,developer_name,mode,is_developer,kyc_status").eq("id", auth.user.id).maybeSingle(),
-      supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
-      supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
-    ]);
-    if (profile.error) setError(profile.error.message);
-    if (!profile.data?.is_developer && profile.data?.mode !== "developer") {
+    const { data: profile, error: profileError } = await supabase.from("profiles")
+      .select("display_name,developer_name,mode,kyc_status")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+    if (profileError) {
+      setError(profileError.message);
       setUserId(null);
       setLoading(false);
       return;
     }
-    setDeveloperName(profile.data.developer_name || profile.data.display_name || "Developer");
-    setKyc(profile.data.kyc_status || "none");
+    // Match the WebApp guard: profiles.mode is the authoritative workspace permission.
+    // Do not query developer listings or analytics until the server confirms developer mode.
+    if (profile?.mode !== "developer") {
+      setUserId(null);
+      setProducts([]);
+      setMetrics([]);
+      setLoading(false);
+      return;
+    }
+    setDeveloperName(profile.developer_name || profile.display_name || "Developer");
+    setKyc(profile.kyc_status || "none");
+    const [listingResult, statsResult] = await Promise.all([
+      supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
+      supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
+    ]);
     if (listingResult.error) setError(listingResult.error.message);
     else setProducts((listingResult.data ?? []) as Product[]);
     if (statsResult.error) {
