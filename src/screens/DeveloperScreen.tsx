@@ -24,7 +24,7 @@ const isIncompleteDraft = (product: Product) => {
     || !product.category
     || !product.icon_url
     || (product.screenshots?.length ?? 0) < 2
-    || (website && !/^https?:\\/\\/.+\\..+/.test(product.website_url ?? ""));
+    || (website && !/^https?:\/\/.+\..+/.test(product.website_url ?? ""));
 };
 const LINKS = [
   { title: "Publishing", path: "/upload", description: "Create drafts and submit products for review." },
