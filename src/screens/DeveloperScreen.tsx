@@ -9,13 +9,23 @@ import NativeSubscriptionScreen from "./NativeSubscriptionScreen";
 import NativeDeveloperSettingsScreen from "./NativeDeveloperSettingsScreen";
 import NotificationsScreen from "./NotificationsScreen";
 
-type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string };
+type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string; tagline: string | null; description: string | null; category: string; icon_url: string | null; screenshots: string[] | null; website_url: string | null };
 type Metric = { day: string; views: number; installs: number };
 type ProductStatus = "all" | "published" | "pending" | "draft" | "rejected" | "archived";
 
 const WEB = "https://malawian-app-store.vercel.app";
 const STATUS_FILTERS: ProductStatus[] = ["all", "published", "pending", "draft", "rejected", "archived"];
 const displayStatus = (value: string) => value === "published" ? "Live" : value === "pending" ? "In review" : value.charAt(0).toUpperCase() + value.slice(1);
+const isIncompleteDraft = (product: Product) => {
+  const website = product.kind === "website";
+  return product.name.trim().length < 3
+    || (product.tagline?.trim().length ?? 0) < 20
+    || (product.description?.trim().length ?? 0) < 200
+    || !product.category
+    || !product.icon_url
+    || (product.screenshots?.length ?? 0) < 2
+    || (website && !/^https?:\\/\\/.+\\..+/.test(product.website_url ?? ""));
+};
 const LINKS = [
   { title: "Publishing", path: "/upload", description: "Create drafts and submit products for review." },
   { title: "Developer Pro", path: "/console/subscription", description: "View plan status and use secure PayChangu checkout." },
@@ -68,7 +78,7 @@ export default function DeveloperScreen() {
     setUserId(auth.user.id);
     const [profile, listingResult, statsResult] = await Promise.all([
       supabase.from("profiles").select("display_name,developer_name,mode,is_developer,kyc_status").eq("id", auth.user.id).maybeSingle(),
-      supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
+      supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
       supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
     ]);
     if (profile.error) setError(profile.error.message);
@@ -98,6 +108,7 @@ export default function DeveloperScreen() {
   const pendingCount = products.filter((product) => product.status === "pending").length;
   const draftCount = products.filter((product) => product.status === "draft").length;
   const rejectedCount = products.filter((product) => product.status === "rejected").length;
+  const needsAttentionCount = products.filter((product) => product.status === "rejected" || (product.status === "draft" && isIncompleteDraft(product))).length;
   const views = metrics.reduce((sum, item) => sum + Number(item.views ?? 0), 0);
   const installs = metrics.reduce((sum, item) => sum + Number(item.installs ?? 0), 0);
   const conversion = views ? Math.round(installs * 100 / views) : 0;
@@ -133,7 +144,7 @@ export default function DeveloperScreen() {
           ["Published", publishedCount],
           ["In review", pendingCount],
           ["Drafts", draftCount],
-          ["Rejected", rejectedCount],
+          ["Needs attention", needsAttentionCount],
         ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
       </View>
       <Text style={styles.section}>Store performance · last 30 days</Text>
