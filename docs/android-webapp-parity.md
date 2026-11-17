@@ -91,6 +91,24 @@
 - APK workflow: [run 44051014173](https://github.com/V1CT330/MAS/actions/runs/44051014173) — first attempt hit Maven Central HTTP 429 while resolving Gson; the failed build job was rerun. Do not count this new commit's APK as verified until retry attempt 2 completes.
 - No side-menu, Supabase, Vercel, payment or identity-verification configuration was changed.
 
+
+### Native Developer workspace authorization — 2026-11-17
+
+- Main code commit: [`eed81ec`](https://github.com/V1CT330/MAS/commit/eed81ec6567c7a91fc74eaad08efa60fd3dd0c68).
+- The native Developer workspace now uses the same authoritative `profiles.mode === "developer"` check as the WebApp's `useRequireDeveloper` guard. It checks the profile before querying developer listings or analytics and clears stale dashboard data when access is not confirmed.
+- This removes the previous fallback that treated `is_developer === true` as sufficient even when the active mode was `user`.
+- Native checks: [run 44061880450](https://github.com/V1CT330/MAS/actions/runs/44061880450) — passed Expo configuration validation, TypeScript and Android JavaScript bundling.
+- APK build: [run 44061880617](https://github.com/V1CT330/MAS/actions/runs/44061880617) — build started; signature, clean-emulator install/launch and artifact upload were still pending when this audit note was added. Do not count this commit's APK as verified until all steps complete.
+- The WebApp, Vercel, Supabase settings and environment variables were not changed.
+
+### Parity gaps reconfirmed — 2026-11-17
+
+- User Mode: discovery shelves and core filters are native; sponsored store placements are not. Account appearance controls (dark theme and accent presets) remain hosted in WebApp settings rather than native.
+- Developer Mode: dashboard, product list/detail, publishing, analytics, verification, subscription, settings and notifications have native counterparts. Testing, quality, reviews, wallet/earnings, advertise, spotlight, AI assistant, resources and team management are not all native workflows; some remain secure WebApp handoffs or are not exposed in the native dashboard.
+- Social: native Feed, People, Messages, Notifications, Search, Find Investors, Monetization and My profile sections exist. The WebApp labels People as Friends and exposes extra Collabo/Grants/Crowdfund menu entries that currently show unavailable notices; the native horizontal navigation is not a pixel-identical shell.
+- Responsive layout: native root and developer dashboard use width-aware layouts. Physical-device checks for safe areas, keyboard/IME, font scaling, narrow/short screens and touch targets remain outstanding. The app config currently disables Android edge-to-edge; this does not replace device verification.
+- Shared rules: `src/shared/mas-core.ts` remains byte-for-byte identical in both repositories (blob SHA `c12efcd1808a822870932c1b1219f7959983ceb3`).
+
 ## Release verification gates
 
 Before calling parity complete:
