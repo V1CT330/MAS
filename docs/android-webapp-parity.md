@@ -52,7 +52,7 @@
 - APK build: [run 43699573897](https://github.com/V1CT330/MAS/actions/runs/43699573897) — passed.
 - APK workflow hardening: [commit `408a015`](https://github.com/V1CT330/MAS/commit/408a01544c5b0fdeb0b87dedd0b9c0bc06fa2ea6) switches the build to lockfile-enforced `npm ci` and enables npm dependency caching.
 - Reproducibility verification: [run 43701243458](https://github.com/V1CT330/MAS/actions/runs/43701243458) — passed all build, signature, clean-emulator install/launch and artifact-upload steps.
-- Latest artifact: `mas-android-debug-apk`, ID `14156920960`; ZIP size 39,297,946 bytes; SHA-256 `1c3922e83d1785897643717ad620faa7f5aa4fa571ad5b9169bad0b3050659e9`.
+- Latest artifact at that verification point: `mas-android-debug-apk`, ID `14212125951`; ZIP size 39,297,939 bytes; SHA-256 `a3d7a7241c9588b6c94415653d88333619297b6a6a3c69dc830f033e2d1fe384`.
 - Verified workflow steps: debug APK build; APK signature/package metadata; KVM setup; clean-emulator install and launch; artifact upload.
 - Log result: `MAS installed and launched successfully in the clean Android emulator.`
 - Package: `mw.wealthgrid.mas`; version `1.0.4`; versionCode `5`. APK Signature Scheme v2 verification passed.
@@ -80,7 +80,16 @@
 - Main commit: [`d933396`](https://github.com/V1CT330/MAS/commit/d9333967b9f74d9a218238f196155bcd1853fcaa).
 - The native conversation-open handler now checks the recipient-scoped `read_at` update, reports failures instead of silently ignoring them, and synchronizes local message state only after the backend confirms success. This matches the production WebApp's error and query-refresh behavior without changing the database or RLS rules.
 - Native checks: [run 43836005497](https://github.com/V1CT330/MAS/actions/runs/43836005497) — passed.
-- APK build/emulator verification: [run 43836005332](https://github.com/V1CT330/MAS/actions/runs/43836005332) — in progress when this note was written; do not count it as passed until the run completes.
+- APK build/emulator verification: [run 43836208958](https://github.com/V1CT330/MAS/actions/runs/43836208958) — completed successfully on commit `ef1610f`; all build, signature, clean-emulator install/launch and artifact-upload steps passed.
+
+## Native Developer dashboard parity — 2026-11-17
+
+- Main code commit: [`e9eeaa6`](https://github.com/V1CT330/MAS/commit/e9eeaa670c41421bb35971d53bb06eb537b893b5) aligns the dashboard's fourth summary metric with the production WebApp's **Needs attention** count: rejected listings plus incomplete drafts.
+- The native listing query now reads the fields required by the WebApp's `submissionRequirements`: name, tagline, description, category, icon, screenshots and website URL. The native completeness checks mirror the production WebApp rules, including the website-address requirement.
+- Follow-up commit [`9fc039c`](https://github.com/V1CT330/MAS/commit/9fc039c4525fa5b21d6dd15022a107dd2e6324e4) corrects the website URL validation expression after the first CI attempt caught a malformed regex.
+- Native checks: [run 44051014186](https://github.com/V1CT330/MAS/actions/runs/44051014186) — passed TypeScript and Android JavaScript bundling.
+- APK workflow: [run 44051014173](https://github.com/V1CT330/MAS/actions/runs/44051014173) — first attempt hit Maven Central HTTP 429 while resolving Gson; the failed build job was rerun. Do not count this new commit's APK as verified until retry attempt 2 completes.
+- No side-menu, Supabase, Vercel, payment or identity-verification configuration was changed.
 
 ## Release verification gates
 
