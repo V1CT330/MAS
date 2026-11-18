@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, AppState, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import NativePublishingScreen from "./NativePublishingScreen";
 import NativeListingDetailScreen from "./NativeListingDetailScreen";
@@ -57,6 +57,7 @@ export default function DeveloperScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications">("dashboard");
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
+  const previousAppState = useRef(AppState.currentState);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,11 +72,13 @@ export default function DeveloperScreen() {
       setUserId(null);
       setProducts([]);
       setMetrics([]);
+      setActiveWorkflow("dashboard");
+      setActiveListingId(null);
+      setSelectedProduct(null);
       setLoading(false);
-      if (authError) setError(authError.message);
+      setError(authError?.message || "Sign in to access your developer workspace.");
       return;
     }
-    setUserId(auth.user.id);
     const { data: profile, error: profileError } = await supabase.from("profiles")
       .select("display_name,developer_name,mode,kyc_status")
       .eq("id", auth.user.id)
@@ -83,6 +86,11 @@ export default function DeveloperScreen() {
     if (profileError) {
       setError(profileError.message);
       setUserId(null);
+      setProducts([]);
+      setMetrics([]);
+      setActiveWorkflow("dashboard");
+      setActiveListingId(null);
+      setSelectedProduct(null);
       setLoading(false);
       return;
     }
@@ -92,9 +100,13 @@ export default function DeveloperScreen() {
       setUserId(null);
       setProducts([]);
       setMetrics([]);
+      setActiveWorkflow("dashboard");
+      setActiveListingId(null);
+      setSelectedProduct(null);
       setLoading(false);
       return;
     }
+    setUserId(auth.user.id);
     setDeveloperName(profile.developer_name || profile.display_name || "Developer");
     setKyc(profile.kyc_status || "none");
     const [listingResult, statsResult] = await Promise.all([
@@ -116,6 +128,21 @@ export default function DeveloperScreen() {
     void load();
   }, [load]);
 
+  // Re-check server-authoritative workspace permission whenever the app resumes.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const wasInactive = previousAppState.current === "background" || previousAppState.current === "inactive";
+      previousAppState.current = nextState;
+      if (wasInactive && nextState === "active") {
+        setUserId(null);
+        setProducts([]);
+        setMetrics([]);
+        void load();
+      }
+    });
+    return () => subscription.remove();
+  }, [load]);
+
   const publishedCount = products.filter((product) => product.status === "published").length;
   const pendingCount = products.filter((product) => product.status === "pending").length;
   const draftCount = products.filter((product) => product.status === "draft").length;
@@ -135,6 +162,9 @@ export default function DeveloperScreen() {
     });
   }, [products, search, statusFilter]);
 
+  if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
+  if (!userId) return <View style={styles.root}><View style={styles.card}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
+
   if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
   if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "verification") return <NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
@@ -142,9 +172,6 @@ export default function DeveloperScreen() {
   if (activeWorkflow === "settings") return <NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "notifications") return <View style={{flex:1}}><TouchableOpacity onPress={() => setActiveWorkflow("dashboard")} style={{padding:14}}><Text style={{color:"#1A73E8",fontWeight:"700"}}>‹ Developer dashboard</Text></TouchableOpacity><NotificationsScreen scope="developer" /></View>;
   if (activeWorkflow === "listing" && activeListingId) return <NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-
-  if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
-  if (!userId) return <View style={styles.root}><View style={styles.card}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
 
   return <>
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
