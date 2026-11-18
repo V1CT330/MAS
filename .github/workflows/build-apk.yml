@@ -111,15 +111,15 @@ jobs:
           echo "Could not install NDK $NDK_VERSION after three attempts."
           exit 1
 
-      - name: Build debug APK
+      - name: Build optimized release APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -Pandroid.enableProguardInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true
 
       - name: Verify APK signature and Android package metadata
         shell: bash
         run: |
           set -euo pipefail
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
@@ -158,12 +158,12 @@ jobs:
           disable-animations: true
           # The action splits input on newlines; keep the entire smoke test in one shell command.
           script: >-
-            set -eu; test -s android/app/build/outputs/apk/debug/app-debug.apk; adb install -r android/app/build/outputs/apk/debug/app-debug.apk; adb shell monkey -p mw.wealthgrid.mas -c android.intent.category.LAUNCHER 1; for attempt in $(seq 1 15); do if adb shell pidof mw.wealthgrid.mas | grep -q .; then echo "MAS installed and launched successfully in the clean Android emulator."; exit 0; fi; sleep 2; done; echo "::error::MAS did not remain running after launch."; adb logcat -d -t 500 | grep -E "FATAL EXCEPTION|AndroidRuntime|ReactNativeJS" || true; exit 1
+            set -eu; test -s android/app/build/outputs/apk/release/app-release.apk; adb install -r android/app/build/outputs/apk/release/app-release.apk; adb shell monkey -p mw.wealthgrid.mas -c android.intent.category.LAUNCHER 1; for attempt in $(seq 1 15); do if adb shell pidof mw.wealthgrid.mas | grep -q .; then echo "MAS installed and launched successfully in the clean Android emulator."; exit 0; fi; sleep 2; done; echo "::error::MAS did not remain running after launch."; adb logcat -d -t 500 | grep -E "FATAL EXCEPTION|AndroidRuntime|ReactNativeJS" || true; exit 1
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v7
         with:
-          name: mas-android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: mas-android-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
