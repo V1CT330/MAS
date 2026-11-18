@@ -111,9 +111,10 @@
 
 ### Developer workspace resume authorization — 2026-11-18
 
-- Main code commit: [`1959407`](https://github.com/V1CT330/MAS/commit/195940782f014721cfff7caa7db9312114b152c8).
+- Main code commits: [`1959407`](https://github.com/V1CT330/MAS/commit/195940782f014721cfff7caa7db9312114b152c8) and [`65fe179`](https://github.com/V1CT330/MAS/commit/65fe179be300171607f0dbde0cde993aec2b142d).
 - The active native Developer screen now revalidates the signed-in user and authoritative `profiles.mode === "developer"` permission when Android returns from the background.
 - It clears cached developer data while rechecking, delays assigning the authenticated developer user ID until the profile confirms access, and gates nested publishing/listing/analytics/KYC/subscription/settings/notification workflows behind that check.
+- A request-generation guard prevents an older in-flight profile check from overwriting a newer foreground refresh; async network exceptions now clear protected dashboard state and produce a visible error instead of leaving the loading indicator stuck.
 - When the session is missing, the profile lookup fails, or workspace mode is no longer developer, it exits the nested workflow and clears selected listing state.
 - This mirrors the WebApp's `useRequireDeveloper` rule and avoids leaving a stale native developer workflow visible after an account/mode change made outside the app.
 - Latest previously verified APK remains commit [`eed81ec`](https://github.com/V1CT330/MAS/commit/eed81ec6567c7a91fc74eaad08efa60fd3dd0c68): run [44061880617](https://github.com/V1CT330/MAS/actions/runs/44061880617) passed all 16 build, signature, clean-emulator install/launch and artifact-upload steps; artifact ID `14318249552`, 39,297,940 bytes.
