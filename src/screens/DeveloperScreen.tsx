@@ -58,70 +58,87 @@ export default function DeveloperScreen() {
   const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications">("dashboard");
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const previousAppState = useRef(AppState.currentState);
+  const loadGeneration = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++loadGeneration.current;
     setLoading(true);
     setError("");
-    if (!isSupabaseConfigured) {
+    try {
+      if (!isSupabaseConfigured) {
+        setLoading(false);
+        setError("Configure the public MAS Supabase client to access developer data.");
+        return;
+      }
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (requestId !== loadGeneration.current) return;
+      if (authError || !auth.user) {
+        setUserId(null);
+        setProducts([]);
+        setMetrics([]);
+        setActiveWorkflow("dashboard");
+        setActiveListingId(null);
+        setSelectedProduct(null);
+        setLoading(false);
+        setError(authError?.message || "Sign in to access your developer workspace.");
+        return;
+      }
+      const { data: profile, error: profileError } = await supabase.from("profiles")
+        .select("display_name,developer_name,mode,kyc_status")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      if (requestId !== loadGeneration.current) return;
+      if (profileError) {
+        setError(profileError.message);
+        setUserId(null);
+        setProducts([]);
+        setMetrics([]);
+        setActiveWorkflow("dashboard");
+        setActiveListingId(null);
+        setSelectedProduct(null);
+        setLoading(false);
+        return;
+      }
+      // Match the WebApp guard: profiles.mode is the authoritative workspace permission.
+      // Do not query developer listings or analytics until the server confirms developer mode.
+      if (profile?.mode !== "developer") {
+        setUserId(null);
+        setProducts([]);
+        setMetrics([]);
+        setActiveWorkflow("dashboard");
+        setActiveListingId(null);
+        setSelectedProduct(null);
+        setLoading(false);
+        return;
+      }
+      setUserId(auth.user.id);
+      setDeveloperName(profile.developer_name || profile.display_name || "Developer");
+      setKyc(profile.kyc_status || "none");
+      const [listingResult, statsResult] = await Promise.all([
+        supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
+        supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
+      ]);
+      if (requestId !== loadGeneration.current) return;
+      if (listingResult.error) {
+        setProducts([]);
+        setError(listingResult.error.message);
+      } else setProducts((listingResult.data ?? []) as Product[]);
+      if (statsResult.error) {
+        setMetrics([]);
+        if (!listingResult.error) setError(statsResult.error.message);
+      } else setMetrics((statsResult.data ?? []) as Metric[]);
       setLoading(false);
-      setError("Configure the public MAS Supabase client to access developer data.");
-      return;
-    }
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) {
+    } catch (error) {
+      if (requestId !== loadGeneration.current) return;
       setUserId(null);
       setProducts([]);
       setMetrics([]);
       setActiveWorkflow("dashboard");
       setActiveListingId(null);
       setSelectedProduct(null);
+      setError(error instanceof Error ? error.message : "Could not load developer workspace. Check your connection and try again.");
       setLoading(false);
-      setError(authError?.message || "Sign in to access your developer workspace.");
-      return;
     }
-    const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("display_name,developer_name,mode,kyc_status")
-      .eq("id", auth.user.id)
-      .maybeSingle();
-    if (profileError) {
-      setError(profileError.message);
-      setUserId(null);
-      setProducts([]);
-      setMetrics([]);
-      setActiveWorkflow("dashboard");
-      setActiveListingId(null);
-      setSelectedProduct(null);
-      setLoading(false);
-      return;
-    }
-    // Match the WebApp guard: profiles.mode is the authoritative workspace permission.
-    // Do not query developer listings or analytics until the server confirms developer mode.
-    if (profile?.mode !== "developer") {
-      setUserId(null);
-      setProducts([]);
-      setMetrics([]);
-      setActiveWorkflow("dashboard");
-      setActiveListingId(null);
-      setSelectedProduct(null);
-      setLoading(false);
-      return;
-    }
-    setUserId(auth.user.id);
-    setDeveloperName(profile.developer_name || profile.display_name || "Developer");
-    setKyc(profile.kyc_status || "none");
-    const [listingResult, statsResult] = await Promise.all([
-      supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
-      supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
-    ]);
-    if (listingResult.error) setError(listingResult.error.message);
-    else setProducts((listingResult.data ?? []) as Product[]);
-    if (statsResult.error) {
-      setMetrics([]);
-      if (!listingResult.error) setError(statsResult.error.message);
-    } else {
-      setMetrics((statsResult.data ?? []) as Metric[]);
-    }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -140,7 +157,10 @@ export default function DeveloperScreen() {
         void load();
       }
     });
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      loadGeneration.current += 1;
+    };
   }, [load]);
 
   const publishedCount = products.filter((product) => product.status === "published").length;
