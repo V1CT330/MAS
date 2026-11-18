@@ -109,6 +109,17 @@
 - Responsive layout: native root and developer dashboard use width-aware layouts. Physical-device checks for safe areas, keyboard/IME, font scaling, narrow/short screens and touch targets remain outstanding. The app config currently disables Android edge-to-edge; this does not replace device verification.
 - Shared rules: `src/shared/mas-core.ts` remains byte-for-byte identical in both repositories (blob SHA `c12efcd1808a822870932c1b1219f7959983ceb3`).
 
+### Developer workspace resume authorization — 2026-11-18
+
+- Main code commit: [`1959407`](https://github.com/V1CT330/MAS/commit/195940782f014721cfff7caa7db9312114b152c8).
+- The active native Developer screen now revalidates the signed-in user and authoritative `profiles.mode === "developer"` permission when Android returns from the background.
+- It clears cached developer data while rechecking, delays assigning the authenticated developer user ID until the profile confirms access, and gates nested publishing/listing/analytics/KYC/subscription/settings/notification workflows behind that check.
+- When the session is missing, the profile lookup fails, or workspace mode is no longer developer, it exits the nested workflow and clears selected listing state.
+- This mirrors the WebApp's `useRequireDeveloper` rule and avoids leaving a stale native developer workflow visible after an account/mode change made outside the app.
+- Latest previously verified APK remains commit [`eed81ec`](https://github.com/V1CT330/MAS/commit/eed81ec6567c7a91fc74eaad08efa60fd3dd0c68): run [44061880617](https://github.com/V1CT330/MAS/actions/runs/44061880617) passed all 16 build, signature, clean-emulator install/launch and artifact-upload steps; artifact ID `14318249552`, 39,297,940 bytes.
+- The new resume-authorization commit `1959407` still requires its own native-check and APK/emulator run; do not inherit the previous build's result.
+- No side-menu, Supabase, Vercel, payment or identity-verification configuration was changed.
+
 ## Release verification gates
 
 Before calling parity complete:
