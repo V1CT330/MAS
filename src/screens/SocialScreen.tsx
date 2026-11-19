@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, AppState, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "../lib/supabase";
@@ -63,6 +63,7 @@ export default function SocialScreen() {
   const [error, setError] = useState("");
   const loadGeneration = useRef(0);
   const activeUserId = useRef<string | null>(null);
+  const previousAppState = useRef(AppState.currentState);
 
   // Clear account-scoped Social data before showing another account or when
   // authentication can no longer be confirmed.
@@ -179,10 +180,21 @@ export default function SocialScreen() {
     }
   }, [clearSocialState]);
 
-  useEffect(() => { void load(); const channel = supabase.channel("mas-native-social")
-    .on("postgres_changes", { event: "*", schema: "public", table: "social_messages" }, () => { void load(); })
-    .subscribe();
-    return () => { loadGeneration.current += 1; void supabase.removeChannel(channel); };
+  useEffect(() => {
+    void load();
+    const channel = supabase.channel("mas-native-social")
+      .on("postgres_changes", { event: "*", schema: "public", table: "social_messages" }, () => { void load(); })
+      .subscribe();
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      const wasInactive = previousAppState.current === "background" || previousAppState.current === "inactive";
+      previousAppState.current = nextState;
+      if (wasInactive && nextState === "active") void load();
+    });
+    return () => {
+      loadGeneration.current += 1;
+      appStateSubscription.remove();
+      void supabase.removeChannel(channel);
+    };
   }, [load]);
 
   const acceptedIds = useMemo(() => new Set(connections.filter(c => c.status === "accepted").map(c => c.requester_id === userId ? c.recipient_id : c.requester_id)), [connections,userId]);
