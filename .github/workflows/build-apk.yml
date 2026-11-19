@@ -113,7 +113,7 @@ jobs:
 
       - name: Build optimized release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon -Pandroid.enableProguardInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true
+        run: ./gradlew assembleRelease --no-daemon -Pandroid.enableMinifyInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true
 
       - name: Verify APK signature and Android package metadata
         shell: bash
