@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -30,40 +30,47 @@ export default function StoreScreen() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const loadListings = async () => {
-    if (!isSupabaseConfigured) {
-      setListings([]);
-      setNotice("MAS catalogue is unavailable until the app is configured with the public Supabase client.");
-      setLoading(false);
-      return;
-    }
+  const loadGeneration = useRef(0);
+  const loadListings = useCallback(async () => {
+    const requestId = ++loadGeneration.current;
     setLoading(true);
     setNotice("");
-    const [listingResult, profileResult] = await Promise.all([
-      supabase.from("listings").select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,screenshots,website_url,price_mwk,status,downloads,rating_avg,rating_count,created_at,updated_at").eq("status", "published").order("created_at", { ascending: false }).limit(200),
-      supabase.from("public_profiles").select("id,developer_name,display_name"),
-    ]);
-    if (listingResult.error || profileResult.error) {
-      setNotice(listingResult.error?.message ?? profileResult.error?.message ?? "Could not load the MAS catalogue.");
-      setLoading(false);
-      return;
-    }
-    const profiles = new Map((profileResult.data ?? []).map((p) => [p.id, p]));
-    const rows = await Promise.all((listingResult.data ?? []).map(async (row) => {
-      const rawIcon = row.icon_url;
-      let iconDisplayUrl: string | null = null;
-      if (rawIcon?.startsWith("https://")) iconDisplayUrl = rawIcon;
-      else if (rawIcon) {
-        const { data } = await supabase.storage.from("app-assets").createSignedUrl(rawIcon, 3600);
-        iconDisplayUrl = data?.signedUrl ?? null;
+    try {
+      if (!isSupabaseConfigured) {
+        setListings([]);
+        setNotice("MAS catalogue is unavailable until the app is configured with the public Supabase client.");
+        return;
       }
-      return { ...(row as unknown as Listing), developer: profiles.get(row.developer_id) ?? null, iconDisplayUrl };
-    }));
-    setListings(rows);
-    setLoading(false);
-  };
-
-  useEffect(() => { void loadListings(); }, []);
+      const [listingResult, profileResult] = await Promise.all([
+        supabase.from("listings").select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,screenshots,website_url,price_mwk,status,downloads,rating_avg,rating_count,created_at,updated_at").eq("status", "published").order("created_at", { ascending: false }).limit(200),
+        supabase.from("public_profiles").select("id,developer_name,display_name"),
+      ]);
+      if (requestId !== loadGeneration.current) return;
+      if (listingResult.error || profileResult.error) {
+        setNotice(listingResult.error?.message ?? profileResult.error?.message ?? "Could not load the MAS catalogue.");
+        return;
+      }
+      const profiles = new Map((profileResult.data ?? []).map((profile) => [profile.id, profile]));
+      const rows = await Promise.all((listingResult.data ?? []).map(async (row) => {
+        const rawIcon = row.icon_url;
+        let iconDisplayUrl: string | null = null;
+        if (rawIcon?.startsWith("https://")) iconDisplayUrl = rawIcon;
+        else if (rawIcon) {
+          const { data } = await supabase.storage.from("app-assets").createSignedUrl(rawIcon, 3600);
+          iconDisplayUrl = data?.signedUrl ?? null;
+        }
+        return { ...(row as unknown as Listing), developer: profiles.get(row.developer_id) ?? null, iconDisplayUrl };
+      }));
+      if (requestId !== loadGeneration.current) return;
+      setListings(rows);
+    } catch (error) {
+      if (requestId !== loadGeneration.current) return;
+      setNotice(error instanceof Error ? error.message : "Could not load the MAS catalogue. Check your connection and try again.");
+    } finally {
+      if (requestId === loadGeneration.current) setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void loadListings(); return () => { loadGeneration.current += 1; }; }, [loadListings]);
 
   const filtered = useMemo(() => rankListings(
     listings.filter((item) =>
