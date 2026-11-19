@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -61,12 +61,70 @@ export default function SocialScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const loadGeneration = useRef(0);
+  const activeUserId = useRef<string | null>(null);
+
+  // Clear account-scoped Social data before showing another account or when
+  // authentication can no longer be confirmed.
+  const clearSocialState = useCallback(() => {
+    activeUserId.current = null;
+    setUserId(null);
+    setProfiles({});
+    setPosts([]);
+    setLikedPostIds([]);
+    setComments([]);
+    setConnections([]);
+    setMessages([]);
+    setSocialAlerts([]);
+    setInvestorDirectory([]);
+    setOpportunities([]);
+    setSponsored([]);
+    setSearchListings([]);
+    setSearchProjects([]);
+    setDraft("");
+    setPicked(null);
+    setCommentDraft("");
+    setCommentTarget(null);
+    setCommentAudio(null);
+    setMessageDraft("");
+    setSelectedPerson(null);
+    setProfilePage(null);
+    setSection("Feed");
+    setSearchTerm("");
+    setInvestmentProfile(null);
+    setInvestRole("both");
+    setInvestOrg("");
+    setInvestHeadline("");
+    setInvestBio("");
+    setInvestLocation("");
+    setOpportunityTitle("");
+    setOpportunityDescription("");
+    setOpportunityIndustry("");
+    setOpportunityStage("idea");
+    setOpportunityGoal("");
+    setOpportunityCurrency("MWK");
+    setOpportunityFunds("");
+  }, []);
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) { setUserId(null); setPosts([]); setSearchListings([]); setSearchProjects([]); setLoading(false); setError("Sign in to use MAS Social."); return; }
-    const me = auth.user.id; setUserId(me);
+    const requestId = ++loadGeneration.current;
+    setLoading(true);
+    setError("");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (requestId !== loadGeneration.current) return;
+      if (authError || !auth.user) {
+        clearSocialState();
+        setLoading(false);
+        setError(authError?.message || "Sign in to use MAS Social.");
+        return;
+      }
+      const me = auth.user.id;
+      if (activeUserId.current !== me) {
+        clearSocialState();
+        activeUserId.current = me;
+      }
+      setUserId(me);
     const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes, listingsRes, projectsRes] = await Promise.all([
       supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
       supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
@@ -80,7 +138,8 @@ export default function SocialScreen() {
       socialDb.from("ad_campaigns").select("id,headline,body,image_url,destination_url,placements,starts_at,ends_at,status").eq("status","approved").contains("placements",["social_feed"]).order("created_at",{ascending:false}).limit(10),
       supabase.from("listings").select("id,slug,name,tagline,kind,icon_url").eq("status","published").order("updated_at",{ascending:false}).limit(100),
       socialDb.from("developer_portfolio_projects").select("id,developer_id,title,description,project_type,url,image_url,created_at").order("created_at",{ascending:false}).limit(100),
-    ]);
+    ])
+    if (requestId !== loadGeneration.current) return;;
     if (postRes.error) setError(postRes.error.message);
     if (connectionRes.error) setError(connectionRes.error.message);
     if (messageRes.error) setError(messageRes.error.message);
@@ -100,7 +159,8 @@ export default function SocialScreen() {
       supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
       postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
       postRows.length ? supabase.from("social_post_reactions").select("post_id").eq("user_id", me).in("post_id", postRows.map(p => p.id)) : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
-    ]);
+    ])
+    if (requestId !== loadGeneration.current) return;;
     const map: Record<string, Profile> = {};
     for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
     for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
@@ -111,12 +171,18 @@ export default function SocialScreen() {
     setComments((commentRes.data ?? []) as Comment[]);
     setLikedPostIds((reactionRes.data ?? []).map((reaction) => reaction.post_id));
     setLoading(false);
-  }, []);
+    } catch (loadError) {
+      if (requestId !== loadGeneration.current) return;
+      clearSocialState();
+      setLoading(false);
+      setError(loadError instanceof Error ? loadError.message : "Could not load MAS Social. Check your connection and try again.");
+    }
+  }, [clearSocialState]);
 
   useEffect(() => { void load(); const channel = supabase.channel("mas-native-social")
     .on("postgres_changes", { event: "*", schema: "public", table: "social_messages" }, () => { void load(); })
     .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { loadGeneration.current += 1; void supabase.removeChannel(channel); };
   }, [load]);
 
   const acceptedIds = useMemo(() => new Set(connections.filter(c => c.status === "accepted").map(c => c.requester_id === userId ? c.recipient_id : c.requester_id)), [connections,userId]);
