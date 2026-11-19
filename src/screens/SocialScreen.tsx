@@ -125,52 +125,52 @@ export default function SocialScreen() {
         activeUserId.current = me;
       }
       setUserId(me);
-    const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes, listingsRes, projectsRes] = await Promise.all([
-      supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
-      supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
-      supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
-      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
-      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").order("display_name",{ascending:true}).limit(100),
-      supabase.from("social_notifications").select("id,title,body,read,created_at").eq("user_id",me).order("created_at",{ascending:false}).limit(50),
-      socialDb.from("social_investment_profiles").select("*").eq("user_id",me).maybeSingle(),
-      socialDb.from("social_investment_profiles").select("*").order("updated_at",{ascending:false}).limit(100),
-      socialDb.from("social_investment_opportunities").select("*").order("created_at",{ascending:false}).limit(100),
-      socialDb.from("ad_campaigns").select("id,headline,body,image_url,destination_url,placements,starts_at,ends_at,status").eq("status","approved").contains("placements",["social_feed"]).order("created_at",{ascending:false}).limit(10),
-      supabase.from("listings").select("id,slug,name,tagline,kind,icon_url").eq("status","published").order("updated_at",{ascending:false}).limit(100),
-      socialDb.from("developer_portfolio_projects").select("id,developer_id,title,description,project_type,url,image_url,created_at").order("created_at",{ascending:false}).limit(100),
-    ])
-    if (requestId !== loadGeneration.current) return;;
-    if (postRes.error) setError(postRes.error.message);
-    if (connectionRes.error) setError(connectionRes.error.message);
-    if (messageRes.error) setError(messageRes.error.message);
-    if (alertRes.error) setError(alertRes.error.message);
-    setSocialAlerts((alertRes.data ?? []) as {id:string;title:string;body:string;read:boolean;created_at:string}[]);
-    if (investRes.data) { const saved=investRes.data as InvestmentProfile; setInvestmentProfile(saved); setInvestRole(saved.role); setInvestOrg(saved.organization_name||""); setInvestHeadline(saved.headline||""); setInvestBio(saved.bio||""); setInvestLocation(saved.location||""); }
-    if (directoryRes.error) setError(directoryRes.error.message); else setInvestorDirectory((directoryRes.data??[]) as InvestmentProfile[]);
-    if (opportunitiesRes.error) setError(opportunitiesRes.error.message); else setOpportunities((opportunitiesRes.data??[]) as Opportunity[]);
-    if (adsRes.error) setError(adsRes.error.message); else { const now=Date.now(); setSponsored(((adsRes.data??[]) as Sponsored[]).filter(ad=>(!ad.starts_at||new Date(ad.starts_at).getTime()<=now)&&(!ad.ends_at||new Date(ad.ends_at).getTime()>now))); }
-    if (listingsRes.error) { setSearchListings([]); setError(listingsRes.error.message); } else setSearchListings((listingsRes.data ?? []) as SearchListing[]);
-    if (projectsRes.error) { setSearchProjects([]); setError(projectsRes.error.message); } else setSearchProjects((projectsRes.data ?? []) as PortfolioProject[]);
-    const postRows = (postRes.data ?? []) as Post[];
-    setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
-    const projectRows = (projectsRes.data ?? []) as PortfolioProject[];
-    const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...projectRows.map(project => project.developer_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
-    const [profileRes, commentRes, reactionRes] = await Promise.all([
-      supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
-      postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
-      postRows.length ? supabase.from("social_post_reactions").select("post_id").eq("user_id", me).in("post_id", postRows.map(p => p.id)) : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
-    ])
-    if (requestId !== loadGeneration.current) return;;
-    const map: Record<string, Profile> = {};
-    for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
-    for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
-    if (meRes.data) map[me] = meRes.data as Profile;
-    setProfiles(map);
-    if (commentRes.error) setError(commentRes.error.message);
-    if (reactionRes.error) setError(reactionRes.error.message);
-    setComments((commentRes.data ?? []) as Comment[]);
-    setLikedPostIds((reactionRes.data ?? []).map((reaction) => reaction.post_id));
-    setLoading(false);
+      const [postRes, connectionRes, messageRes, meRes, peopleRes, alertRes, investRes, directoryRes, opportunitiesRes, adsRes, listingsRes, projectsRes] = await Promise.all([
+        supabase.from("social_posts").select("id,author_id,body,created_at,media_url,media_type").order("created_at", { ascending: false }).limit(50),
+        supabase.from("social_connections").select("id,requester_id,recipient_id,status,created_at").or("requester_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: false }),
+        supabase.from("social_messages").select("id,sender_id,recipient_id,body,created_at,read_at").or("sender_id.eq."+me+",recipient_id.eq."+me).order("created_at", { ascending: true }).limit(300),
+        supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").eq("id", me).maybeSingle(),
+        supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").order("display_name",{ascending:true}).limit(100),
+        supabase.from("social_notifications").select("id,title,body,read,created_at").eq("user_id",me).order("created_at",{ascending:false}).limit(50),
+        socialDb.from("social_investment_profiles").select("*").eq("user_id",me).maybeSingle(),
+        socialDb.from("social_investment_profiles").select("*").order("updated_at",{ascending:false}).limit(100),
+        socialDb.from("social_investment_opportunities").select("*").order("created_at",{ascending:false}).limit(100),
+        socialDb.from("ad_campaigns").select("id,headline,body,image_url,destination_url,placements,starts_at,ends_at,status").eq("status","approved").contains("placements",["social_feed"]).order("created_at",{ascending:false}).limit(10),
+        supabase.from("listings").select("id,slug,name,tagline,kind,icon_url").eq("status","published").order("updated_at",{ascending:false}).limit(100),
+        socialDb.from("developer_portfolio_projects").select("id,developer_id,title,description,project_type,url,image_url,created_at").order("created_at",{ascending:false}).limit(100),
+      ]);
+        if (requestId !== loadGeneration.current) return;
+      if (postRes.error) setError(postRes.error.message);
+      if (connectionRes.error) setError(connectionRes.error.message);
+      if (messageRes.error) setError(messageRes.error.message);
+      if (alertRes.error) setError(alertRes.error.message);
+      setSocialAlerts((alertRes.data ?? []) as {id:string;title:string;body:string;read:boolean;created_at:string}[]);
+      if (investRes.data) { const saved=investRes.data as InvestmentProfile; setInvestmentProfile(saved); setInvestRole(saved.role); setInvestOrg(saved.organization_name||""); setInvestHeadline(saved.headline||""); setInvestBio(saved.bio||""); setInvestLocation(saved.location||""); }
+      if (directoryRes.error) setError(directoryRes.error.message); else setInvestorDirectory((directoryRes.data??[]) as InvestmentProfile[]);
+      if (opportunitiesRes.error) setError(opportunitiesRes.error.message); else setOpportunities((opportunitiesRes.data??[]) as Opportunity[]);
+      if (adsRes.error) setError(adsRes.error.message); else { const now=Date.now(); setSponsored(((adsRes.data??[]) as Sponsored[]).filter(ad=>(!ad.starts_at||new Date(ad.starts_at).getTime()<=now)&&(!ad.ends_at||new Date(ad.ends_at).getTime()>now))); }
+      if (listingsRes.error) { setSearchListings([]); setError(listingsRes.error.message); } else setSearchListings((listingsRes.data ?? []) as SearchListing[]);
+      if (projectsRes.error) { setSearchProjects([]); setError(projectsRes.error.message); } else setSearchProjects((projectsRes.data ?? []) as PortfolioProject[]);
+      const postRows = (postRes.data ?? []) as Post[];
+      setPosts(postRows); setConnections((connectionRes.data ?? []) as Connection[]); setMessages((messageRes.data ?? []) as Message[]);
+      const projectRows = (projectsRes.data ?? []) as PortfolioProject[];
+      const ids = [...new Set([me, ...postRows.map(p => p.author_id), ...projectRows.map(project => project.developer_id), ...(connectionRes.data ?? []).flatMap((x: Connection) => [x.requester_id,x.recipient_id]), ...(messageRes.data ?? []).flatMap((x: Message) => [x.sender_id,x.recipient_id])])];
+      const [profileRes, commentRes, reactionRes] = await Promise.all([
+        supabase.from("public_profiles").select("id,display_name,developer_name,bio,avatar_url,cover_image_url").in("id", ids),
+        postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
+        postRows.length ? supabase.from("social_post_reactions").select("post_id").eq("user_id", me).in("post_id", postRows.map(p => p.id)) : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
+      ]);
+        if (requestId !== loadGeneration.current) return;
+      const map: Record<string, Profile> = {};
+      for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
+      for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
+      if (meRes.data) map[me] = meRes.data as Profile;
+      setProfiles(map);
+      if (commentRes.error) setError(commentRes.error.message);
+      if (reactionRes.error) setError(reactionRes.error.message);
+      setComments((commentRes.data ?? []) as Comment[]);
+      setLikedPostIds((reactionRes.data ?? []).map((reaction) => reaction.post_id));
+      setLoading(false);
     } catch (loadError) {
       if (requestId !== loadGeneration.current) return;
       clearSocialState();
