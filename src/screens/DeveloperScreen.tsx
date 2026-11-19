@@ -42,7 +42,7 @@ const LINKS = [
 export default function DeveloperScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const dashboardWidth = Math.min(screenWidth, 1200) - 32;
-  const metricColumns = screenWidth >= 1100 ? 4 : 2;
+  const metricColumns = screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
   const metricGap = 12;
   const metricWidth = (dashboardWidth - metricGap * (metricColumns - 1)) / metricColumns;
   const [userId, setUserId] = useState<string | null>(null);
