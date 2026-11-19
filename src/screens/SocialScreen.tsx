@@ -139,7 +139,7 @@ export default function SocialScreen() {
         supabase.from("listings").select("id,slug,name,tagline,kind,icon_url").eq("status","published").order("updated_at",{ascending:false}).limit(100),
         socialDb.from("developer_portfolio_projects").select("id,developer_id,title,description,project_type,url,image_url,created_at").order("created_at",{ascending:false}).limit(100),
       ]);
-        if (requestId !== loadGeneration.current) return;
+      if (requestId !== loadGeneration.current) return;
       if (postRes.error) setError(postRes.error.message);
       if (connectionRes.error) setError(connectionRes.error.message);
       if (messageRes.error) setError(messageRes.error.message);
@@ -160,7 +160,7 @@ export default function SocialScreen() {
         postRows.length ? supabase.from("social_post_comments").select("id,post_id,author_id,body,created_at,parent_comment_id,media_url,media_type").in("post_id", postRows.map(p => p.id)).order("created_at", { ascending: true }).limit(500) : Promise.resolve({ data: [], error: null }),
         postRows.length ? supabase.from("social_post_reactions").select("post_id").eq("user_id", me).in("post_id", postRows.map(p => p.id)) : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
       ]);
-        if (requestId !== loadGeneration.current) return;
+      if (requestId !== loadGeneration.current) return;
       const map: Record<string, Profile> = {};
       for (const p of (peopleRes.data ?? []) as Profile[]) map[p.id] = p;
       for (const p of (profileRes.data ?? []) as Profile[]) map[p.id] = p;
