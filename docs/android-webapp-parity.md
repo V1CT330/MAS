@@ -135,3 +135,44 @@ Before calling parity complete:
 8. Record any backend schema/RLS or external-service prerequisites as blockers; do not change production Supabase/Vercel settings or secrets without Victor's approval.
 
 A successful clean-emulator install proves the APK can install and launch in that environment. It does not prove physical-device compatibility, OAuth/provider return, EAS-signature update compatibility or complete feature parity.
+
+
+## Native reliability and responsive pass — 2026-11-19
+
+### Developer dashboard layout
+
+- Main commit: [`b04d622`](https://github.com/V1CT330/MAS/commit/b04d622bc0d57a474285b67f0acb9980964ea2a5).
+- Dashboard metric columns now adapt at 2 columns below 600 px, 3 columns from 600 px, and 4 columns from 900 px. This avoids leaving tablet-width screens in a two-column layout while preserving the existing phone layout.
+- Native checks: [run 44493683185](https://github.com/V1CT330/MAS/actions/runs/44493683185) — passed.
+- The APK job [44493683154](https://github.com/V1CT330/MAS/actions/runs/44493683154) failed during Gradle configuration because the release workflow used the obsolete Expo Gradle minification property. The metric change itself passed the TypeScript/bundle checks.
+
+### Social data freshness and account isolation
+
+- Main code commits: [`503e3f1`](https://github.com/V1CT330/MAS/commit/503e3f10e1a5b4f533d6d075138580c0aa606ede), [`9398164`](https://github.com/V1CT330/MAS/commit/93981648329f2c903bc968268822995e85cff8b3), [`2c6dec0`](https://github.com/V1CT330/MAS/commit/2c6dec0d594a1918e9fe6955871d26f31b4a18c1), and [`108a723`](https://github.com/V1CT330/MAS/commit/108a723c8694ec8f0d3205231248a3e27ea6b00d).
+- Social refreshes now use request-generation guards so an older request cannot overwrite a newer refresh. In-flight loads are invalidated on unmount.
+- Account-scoped Social data and unsent drafts are cleared when the signed-in account changes or authentication can no longer be confirmed. Unexpected fetch rejections now produce a visible error and clear the loading state.
+- Social data is refreshed when Android returns from background to active, in addition to the existing message realtime refresh.
+- Native checks: [run 44494681333](https://github.com/V1CT330/MAS/actions/runs/44494681333) — passed TypeScript and Android JavaScript bundling.
+- The APK run on the pre-fix workflow [44494681239](https://github.com/V1CT330/MAS/actions/runs/44494681239) failed at Gradle configuration for the same obsolete minification property; the Social code was not the cause.
+
+### Store catalogue loading
+
+- Main commit: [`efc1dc4`](https://github.com/V1CT330/MAS/commit/efc1dc48f2141ee7af8eb2467fb4ab73dc8da1d8).
+- The Store catalogue loader now catches rejected network/storage requests, prevents stale loads from overwriting newer requests, always ends the active loading state, and invalidates pending loads when the screen unmounts.
+- Native checks: [run 44495165683](https://github.com/V1CT330/MAS/actions/runs/44495165683) — queued at the time this note was written.
+- APK build: [run 44495165663](https://github.com/V1CT330/MAS/actions/runs/44495165663) — pending at the time this note was written.
+
+### Release APK workflow root cause and correction
+
+- The optimized release build was introduced in [`06fab90`](https://github.com/V1CT330/MAS/commit/06fab90f589c971c2225b1f514c2c1e70e8d3787) to enable R8 and resource shrinking and reduce the APK footprint.
+- CI logs from [run 44381339926](https://github.com/V1CT330/MAS/actions/runs/44381339926) showed the precise failure: Android resource shrinking was enabled while code minification remained disabled. Expo SDK 54's generated Gradle template reads `android.enableMinifyInReleaseBuilds`; the workflow was still passing the older `android.enableProguardInReleaseBuilds` property.
+- Corrected the workflow in [`43b6c97`](https://github.com/V1CT330/MAS/commit/43b6c97c9c7a52090c97283899642806d7cec093) to pass `android.enableMinifyInReleaseBuilds=true` together with `android.enableShrinkResourcesInReleaseBuilds=true`.
+- The corrected release APK job [44495005243](https://github.com/V1CT330/MAS/actions/runs/44495005243) was in progress at the time of this note. Do not claim the optimized release artifact, its size, signature, emulator install or launch as verified until this run finishes all steps.
+- The subsequent Store commit has its own build [44495165663](https://github.com/V1CT330/MAS/actions/runs/44495165663), which will validate the accumulated changes if it completes successfully.
+
+### Current release gate
+
+- The last proven installable artifact remains the debug APK from [run 44061880617](https://github.com/V1CT330/MAS/actions/runs/44061880617), commit `eed81ec`. Its signature, clean-emulator installation, launch and artifact upload passed.
+- The optimized release APK is not yet verified. Physical-device installation, existing EAS-signed update compatibility, Google OAuth/session restoration, Didit return, PayChangu return and complete feature parity remain untested.
+- The Vercel team connection still lists no linked projects; direct production visual inspection remains blocked. GitHub's Vercel status for WebApp main commit `33c7576` is successful, but that is not visual acceptance.
+- No approved side-menu changes, Supabase/Vercel settings, secrets, environment variables, payment settings or identity-verification settings were made.
