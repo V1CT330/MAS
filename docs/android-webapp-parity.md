@@ -176,3 +176,12 @@ A successful clean-emulator install proves the APK can install and launch in tha
 - The optimized release APK is not yet verified. Physical-device installation, existing EAS-signed update compatibility, Google OAuth/session restoration, Didit return, PayChangu return and complete feature parity remain untested.
 - The Vercel team connection still lists no linked projects; direct production visual inspection remains blocked. GitHub's Vercel status for WebApp main commit `33c7576` is successful, but that is not visual acceptance.
 - No approved side-menu changes, Supabase/Vercel settings, secrets, environment variables, payment settings or identity-verification settings were made.
+
+## Developer dashboard density and catalogue pass — 2026-11-20
+
+- Main code commit: [`768eb0a`](https://github.com/V1CT330/MAS/commit/768eb0a04ce4a5dec9f60bc6ceaba6f2835290d1).
+- Removed the duplicate product presentation: the dashboard previously showed the first five listings and then repeated them in the searchable/filterable catalogue. The native dashboard now renders each product once in a single searchable, status-filtered list, with a first-listing empty state.
+- Flattened the Developer dashboard's performance, attention, catalogue and tools sections into transparent sections separated by faint horizontal rules. Summary metrics use restrained left accents rather than individual cards; controls use smaller, sharper radii. The full-width horizontal search field and status filters remain available.
+- This keeps the approved side menu untouched and does not alter backend queries, listing status rules, publishing, authentication, KYC or payment flows.
+- The WebApp source-of-truth Social feed restoration is now on main at [`f9a0403`](https://github.com/V1CT330/malawian-app-store/commit/f9a0403abd3d0e02caf19815781e1e0671a8b57b); GitHub reports its Vercel commit status as successful. Live visual acceptance is still unavailable through the current Vercel connection.
+- The native change is committed, but its TypeScript/bundle and APK/emulator checks have not yet been confirmed. Do not count it as runtime-verified until the corresponding GitHub Actions run completes.
