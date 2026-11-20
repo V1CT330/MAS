@@ -7,6 +7,7 @@ import NativeAnalyticsScreen from "./NativeAnalyticsScreen";
 import NativeVerificationScreen from "./NativeVerificationScreen";
 import NativeSubscriptionScreen from "./NativeSubscriptionScreen";
 import NativeDeveloperSettingsScreen from "./NativeDeveloperSettingsScreen";
+import NativeQualityScreen from "./NativeQualityScreen";
 import NotificationsScreen from "./NotificationsScreen";
 
 type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string; tagline: string | null; description: string | null; category: string; icon_url: string | null; screenshots: string[] | null; website_url: string | null };
@@ -55,7 +56,7 @@ export default function DeveloperScreen() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications">("dashboard");
+  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications" | "quality">("dashboard");
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const previousAppState = useRef(AppState.currentState);
   const loadGeneration = useRef(0);
@@ -187,6 +188,7 @@ export default function DeveloperScreen() {
 
   if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
   if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
+  if (activeWorkflow === "quality") return <NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} />;
   if (activeWorkflow === "verification") return <NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "subscription") return <NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "settings") return <NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
@@ -319,7 +321,7 @@ export default function DeveloperScreen() {
 
       <View style={styles.panel}>
         <Text style={styles.kicker}>WORKSPACE</Text><Text style={styles.panelTitle}>Developer tools</Text>
-        {LINKS.map((item) => <TouchableOpacity key={item.path} accessibilityRole="button" onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.toolRow}>
+        {LINKS.map((item) => <TouchableOpacity key={item.path} accessibilityRole="button" onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : item.path === "/console/quality" ? setActiveWorkflow("quality") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.toolRow}>
           <View style={styles.toolCopy}><Text style={styles.linkTitle}>{item.title}</Text><Text style={styles.body}>{item.description}</Text></View><Text style={styles.chevron}>›</Text>
         </TouchableOpacity>)}
       </View>
