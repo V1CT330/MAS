@@ -184,7 +184,7 @@ export default function DeveloperScreen() {
   }, [products, search, statusFilter]);
 
   if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
-  if (!userId) return <View style={styles.root}><View style={styles.card}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
+  if (!userId) return <View style={styles.root}><View style={styles.emptyState}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
 
   if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
   if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
@@ -381,6 +381,7 @@ const styles = StyleSheet.create({
   panel: { backgroundColor: "transparent", borderWidth: 0, borderBottomWidth: 1, borderBottomColor: "#E5ECF5", borderRadius: 0, paddingHorizontal: 0, paddingVertical: 14, gap: 12 },
   panelHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   panelTitle: { color: "#27364A", fontSize: 17, fontWeight: "700", marginTop: 3 },
+  count: { color: "#748197", fontSize: 11, fontWeight: "700" },
   textAction: { alignSelf: "flex-start", paddingVertical: 5 },
   textActionLabel: { color: "#1A73E8", fontSize: 11, fontWeight: "700" },
   performanceGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 16, paddingTop: 6 },
