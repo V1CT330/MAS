@@ -205,7 +205,6 @@ export default function DeveloperScreen() {
       action: () => setSelectedProduct(product), tone: "info" as const,
     })),
   ];
-  const visibleProducts = products.slice(0, 5);
 
   return <>
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -290,20 +289,17 @@ export default function DeveloperScreen() {
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
-          <View><Text style={styles.kicker}>YOUR CATALOGUE</Text><Text style={styles.panelTitle}>Recent products</Text></View>
-          <Text style={styles.count}>{products.length} total</Text>
+          <View><Text style={styles.kicker}>YOUR CATALOGUE</Text><Text style={styles.panelTitle}>Your products</Text></View>
+          <Text style={styles.count}>{filteredProducts.length} / {products.length}</Text>
         </View>
-        {visibleProducts.length ? visibleProducts.map((product) => <TouchableOpacity key={product.id} accessibilityRole="button" onPress={() => setSelectedProduct(product)} style={styles.product}>
-          <View style={styles.productIcon}><Text style={styles.productIconText}>{product.name.trim().charAt(0).toUpperCase() || "M"}</Text></View>
-          <View style={styles.productInfo}><Text numberOfLines={1} style={styles.productName}>{product.name}</Text><Text style={styles.body}>{product.kind} · {Number(product.downloads ?? 0).toLocaleString()} installs</Text></View>
-          <Text style={[styles.status, product.status === "published" ? styles.statusLive : product.status === "rejected" ? styles.statusRejected : product.status === "pending" ? styles.statusPending : styles.statusNeutral]}>{displayStatus(product.status)}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>) : <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Start publishing</Text><Text style={styles.body}>Create your first app, website or digital product listing.</Text>
-          <Button title="Create your first product" onPress={() => setActiveWorkflow("publishing")} />
-        </View>}
-        <TouchableOpacity accessibilityRole="button" onPress={() => { setSearch(""); setStatusFilter("all"); }} style={styles.textAction}><Text style={styles.textActionLabel}>Browse and filter products ↓</Text></TouchableOpacity>
-        <TextInput value={search} onChangeText={setSearch} placeholder="Search your products" accessibilityLabel="Search developer products" returnKeyType="search" style={styles.search} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search your products"
+          accessibilityLabel="Search developer products"
+          returnKeyType="search"
+          style={styles.search}
+        />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {STATUS_FILTERS.map((status) => <TouchableOpacity key={status} accessibilityRole="button" accessibilityState={{ selected: statusFilter === status }} onPress={() => setStatusFilter(status)} style={[styles.filter, statusFilter === status && styles.filterActive]}>
             <Text style={[styles.filterText, statusFilter === status && styles.filterTextActive]}>{status === "all" ? "All" : displayStatus(status)}</Text>
@@ -313,7 +309,11 @@ export default function DeveloperScreen() {
           <View style={styles.productInfo}><Text numberOfLines={1} style={styles.productName}>{product.name}</Text><Text style={styles.body}>{product.kind} · {Number(product.downloads ?? 0).toLocaleString()} installs</Text></View>
           <Text style={[styles.status, product.status === "published" ? styles.statusLive : product.status === "rejected" ? styles.statusRejected : product.status === "pending" ? styles.statusPending : styles.statusNeutral]}>{displayStatus(product.status)}</Text>
           <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>) : <Text style={styles.body}>{products.length ? "No products match this search or status." : "No products found on this developer account."}</Text>}
+        </TouchableOpacity>) : products.length ? <Text style={styles.body}>No products match this search or status.</Text> : <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No products yet</Text>
+          <Text style={styles.body}>Publish an app, website or digital product to build your catalogue.</Text>
+          <Button title="Create your first product" onPress={() => setActiveWorkflow("publishing")} />
+        </View>}
         <Button title="Refresh products" onPress={() => void load()} />
       </View>
 
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F5F8FD" },
   content: { padding: 16, paddingBottom: 36, gap: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  welcome: { backgroundColor: "#FFFFFF", borderRadius: 22, borderWidth: 1, borderColor: "#E5ECF5", padding: 18, gap: 14 },
+  welcome: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E5ECF5", padding: 18, gap: 14 },
   welcomeCopy: { gap: 3 },
   kicker: { color: "#5F78A0", fontSize: 10, fontWeight: "800", letterSpacing: 1.1 },
   heading: { color: "#202A3A", fontSize: 24, lineHeight: 30, fontWeight: "700", marginTop: 5 },
@@ -371,12 +371,12 @@ const styles = StyleSheet.create({
   section: { color: "#27364A", fontSize: 16, fontWeight: "700" },
   sectionMeta: { color: "#8391A5", fontSize: 9, fontWeight: "800", letterSpacing: 0.9 },
   metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  metric: { minHeight: 104, justifyContent: "center", paddingVertical: 12, paddingHorizontal: 12, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5ECF5", borderRadius: 17, borderTopWidth: 3 },
-  metricGreen: { borderTopColor: "#26966D" }, metricBlue: { borderTopColor: "#4285E8" }, metricNeutral: { borderTopColor: "#A8B4C4" }, metricAmber: { borderTopColor: "#D49A36" },
+  metric: { minHeight: 92, justifyContent: "center", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "transparent", borderWidth: 0, borderLeftWidth: 3, borderRadius: 0 },
+  metricGreen: { borderLeftColor: "#26966D" }, metricBlue: { borderLeftColor: "#4285E8" }, metricNeutral: { borderLeftColor: "#A8B4C4" }, metricAmber: { borderLeftColor: "#D49A36" },
   metricValue: { color: "#202A3A", fontSize: 25, fontWeight: "700", marginTop: 5, fontVariant: ["tabular-nums"] },
   metricLabel: { color: "#56667C", fontSize: 12, fontWeight: "600" },
   metricNote: { color: "#8793A4", fontSize: 10, marginTop: 3, lineHeight: 14 },
-  panel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5ECF5", borderRadius: 20, padding: 16, gap: 12 },
+  panel: { backgroundColor: "transparent", borderWidth: 0, borderBottomWidth: 1, borderBottomColor: "#E5ECF5", borderRadius: 0, paddingHorizontal: 0, paddingVertical: 14, gap: 12 },
   panelHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   panelTitle: { color: "#27364A", fontSize: 17, fontWeight: "700", marginTop: 3 },
   textAction: { alignSelf: "flex-start", paddingVertical: 5 },
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   performanceItem: { width: "50%", paddingRight: 8 },
   performanceLabel: { color: "#748197", fontSize: 11 },
   performanceValue: { color: "#263448", fontSize: 20, fontWeight: "700", marginTop: 3, fontVariant: ["tabular-nums"] },
-  countPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  countPill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6 },
   countPillWarning: { backgroundColor: "#FFF3DF" }, countPillGood: { backgroundColor: "#E8F5EF" },
   countPillText: { fontSize: 10, fontWeight: "700" },
   countPillWarningText: { color: "#94621A" }, countPillGoodText: { color: "#217653" },
@@ -393,28 +393,28 @@ const styles = StyleSheet.create({
   actionMark: { width: 8, height: 8, borderRadius: 4 },
   actionMarkWarning: { backgroundColor: "#D97757" }, actionMarkInfo: { backgroundColor: "#4285E8" },
   actionCopy: { flex: 1, minWidth: 0 }, actionTitle: { color: "#334257", fontSize: 12, fontWeight: "700" },
-  allCaughtUp: { backgroundColor: "#EFF8F3", borderRadius: 14, padding: 13 },
+  allCaughtUp: { backgroundColor: "transparent", borderRadius: 0, paddingVertical: 10, paddingHorizontal: 0 },
   allCaughtUpTitle: { color: "#217653", fontSize: 12, fontWeight: "700" },
   product: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 11, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
   productIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#EAF1FC", alignItems: "center", justifyContent: "center" },
   productIconText: { color: "#2767B7", fontSize: 16, fontWeight: "700" },
   productInfo: { flex: 1, minWidth: 0 }, productName: { color: "#2B394D", fontSize: 12, fontWeight: "700" },
-  status: { overflow: "hidden", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, fontSize: 9, fontWeight: "700" },
+  status: { overflow: "hidden", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, fontSize: 9, fontWeight: "700" },
   statusLive: { color: "#217653", backgroundColor: "#E8F5EF" }, statusRejected: { color: "#A33E36", backgroundColor: "#FCEDEA" }, statusPending: { color: "#8A641E", backgroundColor: "#FFF4DF" }, statusNeutral: { color: "#64748B", backgroundColor: "#EEF2F7" },
   chevron: { color: "#8996A8", fontSize: 20 },
   emptyState: { backgroundColor: "#F7F9FC", borderRadius: 14, padding: 14 }, emptyTitle: { color: "#334257", fontSize: 13, fontWeight: "700" },
-  search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 12, backgroundColor: "#FBFCFE", paddingHorizontal: 12, color: "#263448", marginTop: 5 },
+  search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 8, backgroundColor: "#FBFCFE", paddingHorizontal: 12, color: "#263448", marginTop: 5 },
   filters: { flexDirection: "row", gap: 7, paddingVertical: 8 },
-  filter: { borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFFFFF" },
+  filter: { borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFFFFF" },
   filterActive: { backgroundColor: "#E8F0FE", borderColor: "#C8DAFA" },
   filterText: { color: "#596A80", fontSize: 10, fontWeight: "600" }, filterTextActive: { color: "#174EA6" },
   inlineLoader: { marginVertical: 14 },
   filteredProduct: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
-  button: { backgroundColor: "#1A73E8", minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 24, paddingHorizontal: 18, marginTop: 5 },
+  button: { backgroundColor: "#1A73E8", minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8, paddingHorizontal: 18, marginTop: 5 },
   buttonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   toolRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
   toolCopy: { flex: 1, minWidth: 0 }, linkTitle: { color: "#2869B7", fontSize: 12, fontWeight: "700" },
-  error: { marginTop: 12, padding: 12, borderRadius: 12, color: "#9A3412", backgroundColor: "#FFF7ED", fontSize: 12 },
+  error: { marginTop: 12, padding: 12, borderRadius: 8, color: "#9A3412", backgroundColor: "#FFF7ED", fontSize: 12 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.38)" },
   modalCard: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 28 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   detailStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#EEF2F7" },
   detailLabel: { color: "#748197", fontSize: 11 },
   detailGrid: { flexDirection: "row", gap: 8, marginTop: 12 },
-  detailMetric: { flex: 1, backgroundColor: "#F7F9FC", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 9 },
+  detailMetric: { flex: 1, backgroundColor: "#F7F9FC", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 9 },
   detailValue: { color: "#263448", fontSize: 17, fontWeight: "700" },
   cancel: { alignItems: "center", padding: 12, marginTop: 4 },
 });
