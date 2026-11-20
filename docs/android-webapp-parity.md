@@ -185,3 +185,11 @@ A successful clean-emulator install proves the APK can install and launch in tha
 - This keeps the approved side menu untouched and does not alter backend queries, listing status rules, publishing, authentication, KYC or payment flows.
 - The WebApp source-of-truth Social feed restoration is now on main at [`f9a0403`](https://github.com/V1CT330/malawian-app-store/commit/f9a0403abd3d0e02caf19815781e1e0671a8b57b); GitHub reports its Vercel commit status as successful. Live visual acceptance is still unavailable through the current Vercel connection.
 - The native change is committed, but its TypeScript/bundle and APK/emulator checks have not yet been confirmed. Do not count it as runtime-verified until the corresponding GitHub Actions run completes.
+
+## Native Developer Quality workflow — 2026-11-20
+
+- Added `src/screens/NativeQualityScreen.tsx` and wired it to the existing Developer Mode Quality review tool in [`DeveloperScreen.tsx`](https://github.com/V1CT330/MAS/blob/main/src/screens/DeveloperScreen.tsx). Commits: [`eb31c11`](https://github.com/V1CT330/MAS/commit/eb31c11546345e239887af8ba17ff186235eb156) and [`6182a14`](https://github.com/V1CT330/MAS/commit/6182a140ea33efd475367c00b0f36fadc62699df).
+- The native screen mirrors the WebApp Quality page: listing-readiness percentage, store-optimisation percentage from the byte-identical shared `asoReport` rule, and up to four unmet submission requirements per listing.
+- It revalidates `profiles.mode === "developer"` before querying the developer's listings, uses request-generation guards, shows loading/error/empty states, and opens the existing native listing-management workflow.
+- The query reads existing listing columns only; no schema, RLS, payment, KYC, authentication or provider configuration was changed.
+- Native TypeScript/bundle checks and APK/emulator verification for this implementation are pending. The Expo workflow status is reported as an error, but the available connection does not expose its job logs. The independent GitHub APK workflow remains the required release verification path.
