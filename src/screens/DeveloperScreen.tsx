@@ -42,7 +42,7 @@ const LINKS = [
 export default function DeveloperScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const dashboardWidth = Math.min(screenWidth, 1200) - 32;
-  const metricColumns = screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
+  const metricColumns = screenWidth >= 900 ? 4 : 2;
   const metricGap = 12;
   const metricWidth = (dashboardWidth - metricGap * (metricColumns - 1)) / metricColumns;
   const [userId, setUserId] = useState<string | null>(null);
@@ -193,64 +193,136 @@ export default function DeveloperScreen() {
   if (activeWorkflow === "notifications") return <View style={{flex:1}}><TouchableOpacity onPress={() => setActiveWorkflow("dashboard")} style={{padding:14}}><Text style={{color:"#1A73E8",fontWeight:"700"}}>‹ Developer dashboard</Text></TouchableOpacity><NotificationsScreen scope="developer" /></View>;
   if (activeWorkflow === "listing" && activeListingId) return <NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
 
+  const actionItems = [
+    ...products.filter((product) => product.status === "rejected").map((product) => ({
+      key: product.id, title: product.name,
+      description: "Listing rejected · review the feedback and resubmit",
+      action: () => setSelectedProduct(product), tone: "warning" as const,
+    })),
+    ...products.filter((product) => product.status === "draft" && isIncompleteDraft(product)).map((product) => ({
+      key: product.id, title: product.name,
+      description: "Incomplete draft · finish the listing before submission",
+      action: () => setSelectedProduct(product), tone: "info" as const,
+    })),
+  ];
+  const visibleProducts = products.slice(0, 5);
+
   return <>
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.kicker}>DEVELOPER MODE</Text>
-      <Text style={styles.heading}>Welcome, {developerName}</Text>
-      <Text style={styles.body}>Dashboard summary from your MAS account · KYC {kyc}</Text>
-      <View style={styles.metrics}>
-        {[
-          ["Published", publishedCount],
-          ["In review", pendingCount],
-          ["Drafts", draftCount],
-          ["Needs attention", needsAttentionCount],
-        ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
-      </View>
-      <Text style={styles.section}>Store performance · last 30 days</Text>
-      <View style={styles.metrics}>
-        {[
-          ["Installs", installs],
-          ["Views", views],
-          ["Conversion", `${conversion}%`],
-          ["Average rating", averageRating > 0 ? averageRating.toFixed(1) : "—"],
-        ].map(([label, value]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }]}><Text style={styles.metricValue}>{String(value)}</Text><Text style={styles.metricLabel}>{String(label)}</Text></View>)}
+      <View style={styles.welcome}>
+        <View style={styles.welcomeCopy}>
+          <Text style={styles.kicker}>DEVELOPER WORKSPACE</Text>
+          <Text style={styles.heading}>Your publishing overview</Text>
+          <Text style={styles.body}>Track your products, understand store performance and keep every publication moving.</Text>
+          <View style={styles.identityRow}>
+            <View style={styles.identityDot} />
+            <Text style={styles.identityText}>{developerName}</Text>
+            <View style={styles.identityDivider} />
+            <Text style={styles.identityText}>KYC · {kyc}</Text>
+          </View>
+        </View>
+        <Button title="＋ Publish a product" onPress={() => setActiveWorkflow("publishing")} />
       </View>
 
-      <View style={styles.productsSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.section}>Your products</Text>
-          <Text style={styles.count}>{filteredProducts.length} / {products.length}</Text>
-        </View>
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search your products"
-          accessibilityLabel="Search developer products"
-          returnKeyType="search"
-          style={styles.search}
-        />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          {STATUS_FILTERS.map((status) => (
-            <TouchableOpacity key={status} accessibilityRole="button" accessibilityState={{ selected: statusFilter === status }} onPress={() => setStatusFilter(status)} style={[styles.filter, statusFilter === status && styles.filterActive]}>
-              <Text style={[styles.filterText, statusFilter === status && styles.filterTextActive]}>{status === "all" ? "All" : displayStatus(status)}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        {loading ? <ActivityIndicator color="#1877F2" style={styles.inlineLoader} /> : filteredProducts.length ? filteredProducts.map((product) => (
-          <TouchableOpacity key={product.id} accessibilityRole="button" onPress={() => setSelectedProduct(product)} style={styles.product}>
-            <View style={styles.productInfo}>
-              <Text numberOfLines={1} style={styles.productName}>{product.name}</Text>
-              <Text style={styles.body}>{product.kind} · {Number(product.downloads ?? 0).toLocaleString()} installs</Text>
-            </View>
-            <Text style={styles.status}>{displayStatus(product.status)}</Text>
-            <Text style={styles.chevron}>›</Text>
+      <View style={styles.sectionHeadingRow}>
+        <Text style={styles.section}>Publishing summary</Text>
+        <Text style={styles.sectionMeta}>YOUR CATALOGUE</Text>
+      </View>
+      <View style={styles.metrics}>
+        {[
+          ["Published", publishedCount, "Live in the store", "green"],
+          ["In review", pendingCount, "Awaiting moderation", "blue"],
+          ["Drafts", draftCount, "Not yet submitted", "neutral"],
+          ["Needs attention", needsAttentionCount, "Fix or complete", "amber"],
+        ].map(([label, value, note, tone]) => <View key={String(label)} style={[styles.metric, { width: metricWidth }, tone === "green" ? styles.metricGreen : tone === "blue" ? styles.metricBlue : tone === "amber" ? styles.metricAmber : styles.metricNeutral]}>
+          <Text style={styles.metricLabel}>{String(label)}</Text>
+          <Text style={styles.metricValue}>{String(value)}</Text>
+          <Text style={styles.metricNote}>{String(note)}</Text>
+        </View>)}
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View>
+            <Text style={styles.kicker}>STORE PERFORMANCE</Text>
+            <Text style={styles.panelTitle}>The last 30 days</Text>
+            <Text style={styles.body}>Views and installs recorded across your products.</Text>
+          </View>
+          <TouchableOpacity accessibilityRole="button" onPress={() => setActiveWorkflow("analytics")} style={styles.textAction}>
+            <Text style={styles.textActionLabel}>Full report ›</Text>
           </TouchableOpacity>
-        )) : <Text style={styles.body}>{products.length ? "No products match this search or status." : "No products found on this developer account."}</Text>}
+        </View>
+        <View style={styles.performanceGrid}>
+          {[
+            ["Installs", installs.toLocaleString(), "30-day total"],
+            ["Store views", views.toLocaleString(), "30-day total"],
+            ["Conversion", `${conversion}%`, "Views to installs"],
+            ["Average rating", averageRating > 0 ? averageRating.toFixed(1) : "N/A", `${ratedProducts.reduce((sum, product) => sum + Number(product.rating_count ?? 0), 0)} ratings`],
+          ].map(([label, value, note]) => <View key={label} style={styles.performanceItem}>
+            <Text style={styles.performanceLabel}>{label}</Text>
+            <Text style={styles.performanceValue}>{value}</Text>
+            <Text style={styles.metricNote}>{note}</Text>
+          </View>)}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View><Text style={styles.kicker}>NEXT STEPS</Text><Text style={styles.panelTitle}>Needs your attention</Text></View>
+          <View style={[styles.countPill, actionItems.length ? styles.countPillWarning : styles.countPillGood]}>
+            <Text style={[styles.countPillText, actionItems.length ? styles.countPillWarningText : styles.countPillGoodText]}>{actionItems.length} {actionItems.length === 1 ? "item" : "items"}</Text>
+          </View>
+        </View>
+        {actionItems.length ? actionItems.slice(0, 5).map((item) => <TouchableOpacity key={item.key} accessibilityRole="button" onPress={item.action} style={styles.actionRow}>
+          <View style={[styles.actionMark, item.tone === "warning" ? styles.actionMarkWarning : styles.actionMarkInfo]} />
+          <View style={styles.actionCopy}><Text style={styles.actionTitle}>{item.title}</Text><Text style={styles.body}>{item.description}</Text></View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>) : <View style={styles.allCaughtUp}>
+          <Text style={styles.allCaughtUpTitle}>✓  You are all caught up</Text>
+          <Text style={styles.body}>Nothing is blocked. Keep your listings complete and up to date.</Text>
+        </View>}
+        {kyc !== "approved" ? <TouchableOpacity accessibilityRole="button" onPress={() => setActiveWorkflow("verification")} style={styles.actionRow}>
+          <View style={[styles.actionMark, styles.actionMarkInfo]} />
+          <View style={styles.actionCopy}><Text style={styles.actionTitle}>Developer verification</Text><Text style={styles.body}>Current status: {kyc}. Open verification to review the next step.</Text></View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity> : null}
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View><Text style={styles.kicker}>YOUR CATALOGUE</Text><Text style={styles.panelTitle}>Recent products</Text></View>
+          <Text style={styles.count}>{products.length} total</Text>
+        </View>
+        {visibleProducts.length ? visibleProducts.map((product) => <TouchableOpacity key={product.id} accessibilityRole="button" onPress={() => setSelectedProduct(product)} style={styles.product}>
+          <View style={styles.productIcon}><Text style={styles.productIconText}>{product.name.trim().charAt(0).toUpperCase() || "M"}</Text></View>
+          <View style={styles.productInfo}><Text numberOfLines={1} style={styles.productName}>{product.name}</Text><Text style={styles.body}>{product.kind} · {Number(product.downloads ?? 0).toLocaleString()} installs</Text></View>
+          <Text style={[styles.status, product.status === "published" ? styles.statusLive : product.status === "rejected" ? styles.statusRejected : product.status === "pending" ? styles.statusPending : styles.statusNeutral]}>{displayStatus(product.status)}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>) : <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Start publishing</Text><Text style={styles.body}>Create your first app, website or digital product listing.</Text>
+          <Button title="Create your first product" onPress={() => setActiveWorkflow("publishing")} />
+        </View>}
+        <TouchableOpacity accessibilityRole="button" onPress={() => { setSearch(""); setStatusFilter("all"); }} style={styles.textAction}><Text style={styles.textActionLabel}>Browse and filter products ↓</Text></TouchableOpacity>
+        <TextInput value={search} onChangeText={setSearch} placeholder="Search your products" accessibilityLabel="Search developer products" returnKeyType="search" style={styles.search} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+          {STATUS_FILTERS.map((status) => <TouchableOpacity key={status} accessibilityRole="button" accessibilityState={{ selected: statusFilter === status }} onPress={() => setStatusFilter(status)} style={[styles.filter, statusFilter === status && styles.filterActive]}>
+            <Text style={[styles.filterText, statusFilter === status && styles.filterTextActive]}>{status === "all" ? "All" : displayStatus(status)}</Text>
+          </TouchableOpacity>)}
+        </ScrollView>
+        {loading ? <ActivityIndicator color="#1A73E8" style={styles.inlineLoader} /> : filteredProducts.length ? filteredProducts.map((product) => <TouchableOpacity key={product.id} accessibilityRole="button" onPress={() => setSelectedProduct(product)} style={styles.filteredProduct}>
+          <View style={styles.productInfo}><Text numberOfLines={1} style={styles.productName}>{product.name}</Text><Text style={styles.body}>{product.kind} · {Number(product.downloads ?? 0).toLocaleString()} installs</Text></View>
+          <Text style={[styles.status, product.status === "published" ? styles.statusLive : product.status === "rejected" ? styles.statusRejected : product.status === "pending" ? styles.statusPending : styles.statusNeutral]}>{displayStatus(product.status)}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>) : <Text style={styles.body}>{products.length ? "No products match this search or status." : "No products found on this developer account."}</Text>}
         <Button title="Refresh products" onPress={() => void load()} />
       </View>
 
-      <Text style={styles.section}>Developer tools</Text>
-      {LINKS.map((item) => <TouchableOpacity key={item.path} onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.linkCard}><Text style={styles.linkTitle}>{item.title} ›</Text><Text style={styles.body}>{item.description}</Text></TouchableOpacity>)}
+      <View style={styles.panel}>
+        <Text style={styles.kicker}>WORKSPACE</Text><Text style={styles.panelTitle}>Developer tools</Text>
+        {LINKS.map((item) => <TouchableOpacity key={item.path} accessibilityRole="button" onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.toolRow}>
+          <View style={styles.toolCopy}><Text style={styles.linkTitle}>{item.title}</Text><Text style={styles.body}>{item.description}</Text></View><Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>)}
+      </View>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
 
@@ -259,7 +331,7 @@ export default function DeveloperScreen() {
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Product overview</Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close product overview" onPress={() => setSelectedProduct(null)}><Text style={styles.close}>×</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setSelectedProduct(null)} accessibilityRole="button" accessibilityLabel="Close product overview"><Text style={styles.close}>×</Text></TouchableOpacity>
           </View>
           <Text style={styles.productHeading}>{selectedProduct.name}</Text>
           <Text style={styles.body}>{selectedProduct.kind} · Updated {selectedProduct.updated_at ? new Date(selectedProduct.updated_at).toLocaleDateString() : "date unavailable"}</Text>
@@ -283,48 +355,76 @@ function Button({ title, onPress }: { title: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F6F7FB" },
-  content: { padding: 16, paddingBottom: 32 },
+  root: { flex: 1, backgroundColor: "#F5F8FD" },
+  content: { padding: 16, paddingBottom: 36, gap: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  kicker: { color: "#1877F2", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
-  heading: { color: "#111827", fontSize: 23, fontWeight: "800", marginTop: 4 },
-  body: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 5 },
-  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 14 },
-  metric: { minHeight: 62, justifyContent: "center", paddingVertical: 8, paddingHorizontal: 4 },
-  productsSection: { backgroundColor: "transparent", borderWidth: 0, padding: 0, marginTop: 18 },
-  metricValue: { color: "#111827", fontSize: 17, fontWeight: "800" },
-  metricLabel: { color: "#64748B", fontSize: 10, marginTop: 4 },
-  card: { backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7EBF3", borderRadius: 13, padding: 14, marginTop: 12 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  section: { color: "#111827", fontSize: 16, fontWeight: "800", marginTop: 14, marginBottom: 8 },
-  count: { color: "#64748B", fontSize: 11, fontWeight: "700" },
-  search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, backgroundColor: "#FFF", paddingHorizontal: 12, color: "#111827", marginTop: 8 },
-  filters: { flexDirection: "row", gap: 7, paddingVertical: 10 },
-  filter: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 7, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFF" },
-  filterActive: { backgroundColor: "#1877F2", borderColor: "#1877F2" },
-  filterText: { color: "#52607A", fontSize: 11, fontWeight: "600" },
-  filterTextActive: { color: "#FFF" },
+  welcome: { backgroundColor: "#FFFFFF", borderRadius: 22, borderWidth: 1, borderColor: "#E5ECF5", padding: 18, gap: 14 },
+  welcomeCopy: { gap: 3 },
+  kicker: { color: "#5F78A0", fontSize: 10, fontWeight: "800", letterSpacing: 1.1 },
+  heading: { color: "#202A3A", fontSize: 24, lineHeight: 30, fontWeight: "700", marginTop: 5 },
+  body: { color: "#66758A", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  identityRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10, flexWrap: "wrap" },
+  identityDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#18865B" },
+  identityText: { color: "#66758A", fontSize: 11, fontWeight: "600" },
+  identityDivider: { height: 12, width: 1, backgroundColor: "#DCE4EF", marginHorizontal: 2 },
+  sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  section: { color: "#27364A", fontSize: 16, fontWeight: "700" },
+  sectionMeta: { color: "#8391A5", fontSize: 9, fontWeight: "800", letterSpacing: 0.9 },
+  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metric: { minHeight: 104, justifyContent: "center", paddingVertical: 12, paddingHorizontal: 12, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5ECF5", borderRadius: 17, borderTopWidth: 3 },
+  metricGreen: { borderTopColor: "#26966D" }, metricBlue: { borderTopColor: "#4285E8" }, metricNeutral: { borderTopColor: "#A8B4C4" }, metricAmber: { borderTopColor: "#D49A36" },
+  metricValue: { color: "#202A3A", fontSize: 25, fontWeight: "700", marginTop: 5, fontVariant: ["tabular-nums"] },
+  metricLabel: { color: "#56667C", fontSize: 12, fontWeight: "600" },
+  metricNote: { color: "#8793A4", fontSize: 10, marginTop: 3, lineHeight: 14 },
+  panel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5ECF5", borderRadius: 20, padding: 16, gap: 12 },
+  panelHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  panelTitle: { color: "#27364A", fontSize: 17, fontWeight: "700", marginTop: 3 },
+  textAction: { alignSelf: "flex-start", paddingVertical: 5 },
+  textActionLabel: { color: "#1A73E8", fontSize: 11, fontWeight: "700" },
+  performanceGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 16, paddingTop: 6 },
+  performanceItem: { width: "50%", paddingRight: 8 },
+  performanceLabel: { color: "#748197", fontSize: 11 },
+  performanceValue: { color: "#263448", fontSize: 20, fontWeight: "700", marginTop: 3, fontVariant: ["tabular-nums"] },
+  countPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  countPillWarning: { backgroundColor: "#FFF3DF" }, countPillGood: { backgroundColor: "#E8F5EF" },
+  countPillText: { fontSize: 10, fontWeight: "700" },
+  countPillWarningText: { color: "#94621A" }, countPillGoodText: { color: "#217653" },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
+  actionMark: { width: 8, height: 8, borderRadius: 4 },
+  actionMarkWarning: { backgroundColor: "#D97757" }, actionMarkInfo: { backgroundColor: "#4285E8" },
+  actionCopy: { flex: 1, minWidth: 0 }, actionTitle: { color: "#334257", fontSize: 12, fontWeight: "700" },
+  allCaughtUp: { backgroundColor: "#EFF8F3", borderRadius: 14, padding: 13 },
+  allCaughtUpTitle: { color: "#217653", fontSize: 12, fontWeight: "700" },
+  product: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 11, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
+  productIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#EAF1FC", alignItems: "center", justifyContent: "center" },
+  productIconText: { color: "#2767B7", fontSize: 16, fontWeight: "700" },
+  productInfo: { flex: 1, minWidth: 0 }, productName: { color: "#2B394D", fontSize: 12, fontWeight: "700" },
+  status: { overflow: "hidden", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, fontSize: 9, fontWeight: "700" },
+  statusLive: { color: "#217653", backgroundColor: "#E8F5EF" }, statusRejected: { color: "#A33E36", backgroundColor: "#FCEDEA" }, statusPending: { color: "#8A641E", backgroundColor: "#FFF4DF" }, statusNeutral: { color: "#64748B", backgroundColor: "#EEF2F7" },
+  chevron: { color: "#8996A8", fontSize: 20 },
+  emptyState: { backgroundColor: "#F7F9FC", borderRadius: 14, padding: 14 }, emptyTitle: { color: "#334257", fontSize: 13, fontWeight: "700" },
+  search: { width: "100%", minHeight: 44, borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 12, backgroundColor: "#FBFCFE", paddingHorizontal: 12, color: "#263448", marginTop: 5 },
+  filters: { flexDirection: "row", gap: 7, paddingVertical: 8 },
+  filter: { borderWidth: 1, borderColor: "#DCE4EF", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: "#FFFFFF" },
+  filterActive: { backgroundColor: "#E8F0FE", borderColor: "#C8DAFA" },
+  filterText: { color: "#596A80", fontSize: 10, fontWeight: "600" }, filterTextActive: { color: "#174EA6" },
   inlineLoader: { marginVertical: 14 },
-  product: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 13 },
-  productInfo: { flex: 1, minWidth: 0 },
-  productName: { color: "#111827", fontSize: 13, fontWeight: "700" },
-  status: { color: "#35506F", backgroundColor: "#EFF4FA", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: "hidden", fontSize: 10, fontWeight: "700" },
-  chevron: { color: "#64748B", fontSize: 20 },
-  button: { backgroundColor: "#1877F2", minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 9, marginTop: 12 },
-  buttonText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
-  linkCard: { backgroundColor: "transparent", paddingHorizontal: 0, paddingVertical: 12, borderRadius: 0, borderWidth: 0, marginTop: 2 },
-  linkTitle: { color: "#1877F2", fontSize: 13, fontWeight: "700" },
-  error: { marginTop: 12, padding: 10, borderRadius: 8, color: "#9A3412", backgroundColor: "#FFF7ED", fontSize: 12 },
-  modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.35)" },
-  modalCard: { backgroundColor: "#FFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28 },
+  filteredProduct: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
+  button: { backgroundColor: "#1A73E8", minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 24, paddingHorizontal: 18, marginTop: 5 },
+  buttonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  toolRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#EEF2F7" },
+  toolCopy: { flex: 1, minWidth: 0 }, linkTitle: { color: "#2869B7", fontSize: 12, fontWeight: "700" },
+  error: { marginTop: 12, padding: 12, borderRadius: 12, color: "#9A3412", backgroundColor: "#FFF7ED", fontSize: 12 },
+  modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.38)" },
+  modalCard: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 28 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  modalTitle: { color: "#64748B", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.7 },
-  close: { color: "#64748B", fontSize: 28, paddingHorizontal: 5 },
-  productHeading: { color: "#111827", fontSize: 21, fontWeight: "800", marginTop: 12 },
-  detailStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#EEF0F5" },
-  detailLabel: { color: "#64748B", fontSize: 11 },
+  modalTitle: { color: "#748197", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
+  close: { color: "#748197", fontSize: 28, paddingHorizontal: 5 },
+  productHeading: { color: "#202A3A", fontSize: 21, fontWeight: "700", marginTop: 12 },
+  detailStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#EEF2F7" },
+  detailLabel: { color: "#748197", fontSize: 11 },
   detailGrid: { flexDirection: "row", gap: 8, marginTop: 12 },
-  detailMetric: { flex: 1, backgroundColor: "transparent", borderRadius: 0, paddingVertical: 8, paddingHorizontal: 4 },
-  detailValue: { color: "#111827", fontSize: 17, fontWeight: "800" },
+  detailMetric: { flex: 1, backgroundColor: "#F7F9FC", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 9 },
+  detailValue: { color: "#263448", fontSize: 17, fontWeight: "700" },
   cancel: { alignItems: "center", padding: 12, marginTop: 4 },
 });
