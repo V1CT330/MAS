@@ -43,7 +43,7 @@ const LINKS = [
 export default function DeveloperScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const dashboardWidth = Math.min(screenWidth, 1200) - 32;
-  const metricColumns = screenWidth >= 900 ? 4 : 2;
+  const metricColumns = screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
   const metricGap = 12;
   const metricWidth = (dashboardWidth - metricGap * (metricColumns - 1)) / metricColumns;
   const [userId, setUserId] = useState<string | null>(null);
@@ -116,7 +116,7 @@ export default function DeveloperScreen() {
       setDeveloperName(profile.developer_name || profile.display_name || "Developer");
       setKyc(profile.kyc_status || "none");
       const [listingResult, statsResult] = await Promise.all([
-        supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }).limit(100),
+        supabase.from("listings").select("id,name,kind,status,downloads,rating_avg,rating_count,updated_at,tagline,description,category,icon_url,screenshots,website_url").eq("developer_id", auth.user.id).order("updated_at", { ascending: false }),
         supabase.rpc("developer_stats", { _developer: auth.user.id, _days: 30 }),
       ]);
       if (requestId !== loadGeneration.current) return;
@@ -188,7 +188,7 @@ export default function DeveloperScreen() {
 
   if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
   if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-  if (activeWorkflow === "quality") return <NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} />;
+  if (activeWorkflow === "quality") return <NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onStartListing={() => setActiveWorkflow("publishing")} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} />;
   if (activeWorkflow === "verification") return <NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "subscription") return <NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
   if (activeWorkflow === "settings") return <NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
