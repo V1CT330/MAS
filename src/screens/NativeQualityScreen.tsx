@@ -5,6 +5,7 @@ import { asoReport } from "../shared/mas-core";
 
 type Props = {
   onBack: () => void;
+  onStartListing: () => void;
   onSelectListing: (listingId: string) => void;
 };
 
@@ -78,8 +79,7 @@ export default function NativeQualityScreen({ onBack, onSelectListing }: Props) 
         .from("listings")
         .select("id,name,kind,status,tagline,description,category,icon_url,screenshots,website_url,banner_url,tags,rating_avg,downloads")
         .eq("developer_id", auth.user.id)
-        .order("updated_at", { ascending: false })
-        .limit(100);
+        .order("updated_at", { ascending: false });
       if (requestId !== requestGeneration.current) return;
       if (listingsError) throw listingsError;
       setListings((data ?? []) as QualityListing[]);
@@ -119,8 +119,8 @@ export default function NativeQualityScreen({ onBack, onSelectListing }: Props) 
         <View style={styles.empty}>
           <Text style={styles.listingTitle}>No products to check yet</Text>
           <Text style={styles.copy}>Once you create a listing, its readiness and optimisation checks appear here.</Text>
-          <TouchableOpacity accessibilityRole="button" onPress={onBack} style={styles.retry}>
-            <Text style={styles.backText}>Return to publishing overview</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={onStartListing} style={styles.retry}>
+            <Text style={styles.backText}>Start a listing</Text>
           </TouchableOpacity>
         </View>
       ) : listings.map((listing) => {
