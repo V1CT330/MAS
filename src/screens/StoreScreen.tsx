@@ -42,7 +42,7 @@ export default function StoreScreen() {
         return;
       }
       const [listingResult, profileResult] = await Promise.all([
-        supabase.from("listings").select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,screenshots,website_url,price_mwk,status,downloads,rating_avg,rating_count,created_at,updated_at").eq("status", "published").order("created_at", { ascending: false }).limit(200),
+        supabase.from("listings").select("id,developer_id,slug,name,tagline,description,category,kind,icon_url,screenshots,website_url,price_mwk,status,downloads,rating_avg,rating_count,created_at,updated_at").eq("status", "published").order("created_at", { ascending: false }),
         supabase.from("public_profiles").select("id,developer_name,display_name"),
       ]);
       if (requestId !== loadGeneration.current) return;
