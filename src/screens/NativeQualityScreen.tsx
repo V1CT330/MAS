@@ -51,7 +51,7 @@ function submissionChecks(listing: QualityListing): Requirement[] {
 const statusLabel = (status: string) =>
   status === "published" ? "Live" : status === "pending" ? "In review" : status.charAt(0).toUpperCase() + status.slice(1);
 
-export default function NativeQualityScreen({ onBack, onSelectListing }: Props) {
+export default function NativeQualityScreen({ onBack, onStartListing, onSelectListing }: Props) {
   const [listings, setListings] = useState<QualityListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
