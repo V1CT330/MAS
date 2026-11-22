@@ -193,3 +193,37 @@ A successful clean-emulator install proves the APK can install and launch in tha
 - It revalidates `profiles.mode === "developer"` before querying the developer's listings, uses request-generation guards, shows loading/error/empty states, and opens the existing native listing-management workflow.
 - The query reads existing listing columns only; no schema, RLS, payment, KYC, authentication or provider configuration was changed.
 - Native TypeScript/bundle checks and APK/emulator verification for this implementation are pending. The Expo workflow status is reported as an error, but the available connection does not expose its job logs. The independent GitHub APK workflow remains the required release verification path.
+
+## Release verification and Social UI cleanup — 2026-11-22
+
+### Production WebApp
+
+- Main commit: [`66f2a97`](https://github.com/V1CT330/malawian-app-store/commit/66f2a97f7ff2d84517046a68f55908b52bde6e14) adds an accessible workspace-switching state while the User Mode / Developer Mode mutation is pending, preventing stale settings content from remaining interactive.
+- Web build: [run 45004914511](https://github.com/V1CT330/malawian-app-store/actions/runs/45004914511) — passed.
+- GitHub's Vercel commit status — success. Direct production visual acceptance remains blocked: the connected Vercel team lists no linked projects and deployment listing returns 403. Do not treat the status check as a visual review.
+
+### Native Social UI
+
+- Main commits: [`e9c3e2d`](https://github.com/V1CT330/MAS/commit/e9c3e2d49dec865cda38f433a8bbcc5e620358a8) and [`a3927d2`](https://github.com/V1CT330/MAS/commit/a3927d21bdb39cdda625c39f3eb4b5b0e60eb814).
+- Social feed, notifications, opportunity entries and other shared content rows no longer render as repeated white rounded cards. They use transparent surfaces with restrained separators, matching the production WebApp's flatter content hierarchy.
+- Social form fields explicitly fill the available content width. Existing comment/reply and message bubbles remain rounded. Unread notification accent behavior is preserved.
+- The approved navigation/side menu, authentication, Supabase queries, RLS, KYC and payment flows were not changed.
+
+### Latest Android release verification
+
+- Native checks: [run 45005239677](https://github.com/V1CT330/MAS/actions/runs/45005239677) — passed TypeScript, Expo configuration and Android JS bundling.
+- APK build: [run 45005239704](https://github.com/V1CT330/MAS/actions/runs/45005239704) — passed every step, including optimized release compilation, APK signature/package checks, clean API 35 Android emulator installation, launch and artifact upload.
+- Package: `mw.wealthgrid.mas`; version `1.0.4`; versionCode `5`.
+- APK size: 54,892,010 bytes. APK Signature Scheme v2 verification passed. Universal native libraries include `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`.
+- Artifact: `mas-android-release-apk`, ID `14747409305`; ZIP size 22,730,059 bytes; SHA-256 `0d57d22c0c559342f67ef6939e071e17c26fc15077f843ba7168ec3dcbc41747`. Artifact expires 2026-12-06.
+- The APK was also downloaded and extracted from the exact artifact; the ZIP contents and APK file size were verified locally.
+- The separate Expo/EAS status check still reports an error. The independent GitHub Actions APK workflow above is successful; the available EAS status does not expose a root cause in this run.
+
+### Remaining release blockers
+
+- Physical-device installation and updating an existing EAS-signed installation are not verified. The clean-emulator test proves fresh installation and launch in that environment only.
+- Real-device Google OAuth callback/session restoration, Didit return/status refresh, PayChangu return, storage permissions/RLS and the supported end-to-end workflows still require acceptance testing.
+- Complete Android-to-production-WebApp feature parity is not yet verified.
+- Production visual inspection remains blocked by the Vercel connection limitation described above.
+
+No production Supabase/Vercel settings, secrets, environment variables, payment configuration or identity-verification configuration were changed.
