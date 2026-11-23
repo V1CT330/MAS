@@ -1,6 +1,6 @@
 # Android ↔ WebApp Feature-Parity Audit
 
-**Status:** Partial parity. The GitHub-built APK compiled, passed signature/package checks, installed and launched in a clean Android emulator on 2026-11-15. Physical-device authentication, provider returns and full workflow parity remain unverified.
+**Status:** Partial parity. The GitHub-built release APK compiled, passed signature/package checks, installed and launched in a clean Android emulator on 2026-11-23. Physical-device authentication, provider returns and full workflow parity remain unverified.
 
 ## Source of truth and repository boundaries
 
@@ -31,7 +31,7 @@
 | Area | Native implementation on main | Remaining gap / verification |
 | --- | --- | --- |
 | Authentication and account | Google OAuth PKCE callback, session listener, account profile edit and sign-out | Real-device redirect allowlisting, session restore/expiry and sign-out acceptance remain untested |
-| Store discovery | Native published catalogue, kind filters, search and listing details | Compare ranking, ratings/reviews, sponsored placements and ad-event behavior against production |
+| Store discovery | Native published catalogue, kind filters, search, listing details and sponsored app/website placements using the production `active_ad_creatives` view | Verify live ad-view access, ad-event RLS/telemetry and click destinations on a physical device; compare remaining ranking and review behavior |
 | Library | Installed, saved and history tabs; signed asset downloads; update download and explicit version confirmation | Test signed downloads and Android package-install handoff on a physical device; removing a library row is not an OS-level uninstall |
 | Notifications | Current-user and scope-filtered list, mark all read, dismiss, retry and empty states | Verify RLS behavior and notification destinations on device |
 | Developer dashboard | Native summary, listing status filters/search, product detail, publishing, analytics, settings and developer notifications | Some team/security/quality/administration destinations remain secure WebApp handoffs; validate all mutations against production RLS |
@@ -70,7 +70,7 @@
 ### Open work and safety constraints
 
 - No open GitHub issues were found in either repository.
-- Open native PR #5 and WebApp PR #19 contain responsive navigation/drawer changes. Do not merge them without review; the approved side menu must remain unchanged.
+- Open native PR #5 and WebApp PR #18/#28 remain unmerged. Review their diffs before any merge; preserve the approved side menu. WebApp PR #18 still requires its Supabase migration and PayChangu test/pricing confirmation.
 - WebApp PR #18 requires a Supabase migration and PayChangu test/pricing confirmation. It was not merged, and no production database or payment configuration was changed.
 - Native PR #2 targets `native/expo-foundation`, not `main`; it is not a production change set.
 - No Vercel project settings, Supabase settings, secrets, environment variables, payment configuration or identity-verification configuration were modified.
@@ -227,3 +227,37 @@ A successful clean-emulator install proves the APK can install and launch in tha
 - Production visual inspection remains blocked by the Vercel connection limitation described above.
 
 No production Supabase/Vercel settings, secrets, environment variables, payment configuration or identity-verification configuration were changed.
+
+
+## Production and native parity pass — 2026-11-23
+
+### Native Store sponsored placements
+
+- Main commit: [`5636d15`](https://github.com/V1CT330/MAS/commit/5636d150bc36e4156bfe876ba2cf2fe8cac58ab3).
+- `StoreScreen.tsx` now mirrors the production WebApp's Store sponsored-creative query: up to four `app_listing` and four `website_banner` creatives from `active_ad_creatives` with the `store` placement.
+- Sponsored apps and websites appear only when the search field is empty and the selected kind allows that creative type. App icons and website banners resolve through the existing `app-assets` storage bucket or unchanged HTTPS URLs.
+- Published sponsored apps open their production listing route. Website destinations are accepted only over HTTPS. Coming-soon app creatives are displayed without an active navigation action.
+- Signed-in impression/click telemetry mirrors the WebApp's `ad_events` writes. Telemetry errors are deliberately non-blocking; live view/RLS and event acceptance still need production verification.
+- No database migration, Supabase setting, credential, payment or KYC configuration was changed.
+- Native checks: [run 45148958071](https://github.com/V1CT330/MAS/actions/runs/45148958071) — passed TypeScript and Android JavaScript bundling.
+- Release APK: [run 45148957795](https://github.com/V1CT330/MAS/actions/runs/45148957795) — passed optimized release compilation, signature/package metadata verification, clean Android emulator installation and launch, and artifact upload.
+- Artifact: `mas-android-release-apk`, ID `14805871884`; ZIP size 22,733,198 bytes; SHA-256 `8a4c0bffe6e33d33dec566bbf1c37500ad6ed7378a350d5fece37208f9895294`; expires 2026-12-07.
+- Extracted APK: 54,898,542 bytes; SHA-256 `92f1f9290b25e501f14e692fbd1085dcfbee3c581d5619c5bc93a830ef15186e`.
+- The APK is verified in the clean emulator only. Physical-device install/update and the complete Store click/install workflow remain untested.
+
+### User Mode Settings — targeted reference correction
+
+- WebApp main commit: [`eb22313`](https://github.com/V1CT330/malawian-app-store/commit/eb22313fab099260097f5bbab5dd60e87caf7b28).
+- Changed only `src/routes/_authenticated/settings.tsx`. The approved side menu, AppShell, top navigation/header and all other User Mode screens were not changed.
+- The Settings overview now uses the reference's gear heading, profile banner with a restrained sunrise treatment, conditional verification badge only when KYC status is approved, five compact settings rows with distinct pastel icon treatments and right chevrons, and the bottom information banner.
+- Settings row minimum height is 84 px on narrow screens and 92 px at the small-screen breakpoint; icon size is 56 px. Navigation targets, mode-switch behavior, profile upload and sign-out handlers remain unchanged.
+- Web build: [run 45150186584](https://github.com/V1CT330/malawian-app-store/actions/runs/45150186584) — passed.
+- GitHub's Vercel status for the main commit reports **Deployment has completed**. The connected Vercel API still returns 404 for the project and direct production visual acceptance remains unavailable. Do not treat deployment status as a visual review.
+
+### Current release gates
+
+- Shared `src/shared/mas-core.ts` remains byte-for-byte identical in both repositories: blob SHA `c12efcd1808a822870932c1b1219f7959983ceb3`.
+- No open GitHub issues were found in either repository during this run.
+- Still untested: physical-device install/update, Google OAuth callback and session restore, Didit return/status refresh, PayChangu return, production ad-event/RLS behavior, and complete native feature parity.
+- Production visual acceptance remains blocked by the Vercel connector's project lookup failure. The successful Vercel status is deployment evidence only.
+- No approved side-menu changes, preview-only fixes, Supabase/Vercel settings, secrets, environment variables, payment configuration or identity-verification configuration were changed.
