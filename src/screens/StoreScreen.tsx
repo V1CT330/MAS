@@ -18,6 +18,22 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 const ACCENT = "#1877F2";
 const WEB_ORIGIN = "https://malawian-app-store.vercel.app";
 type StoreListing = Listing & { developer?: { developer_name?: string | null; display_name?: string | null } | null; iconDisplayUrl?: string | null };
+type SponsoredCreative = {
+  id: string;
+  headline: string;
+  body: string | null;
+  image_url: string | null;
+  destination_url: string;
+  placements: string[];
+  creative_type: "app_listing" | "website_banner" | "custom";
+  listing_slug: string | null;
+  listing_name: string | null;
+  listing_icon_url: string | null;
+  listing_banner_url: string | null;
+  listing_kind: string | null;
+  listing_status: string | null;
+  imageDisplayUrl: string | null;
+};
 type StoreKind = "all" | "app" | "website" | "ai_agent" | "extension";
 
 export default function StoreScreen() {
@@ -29,8 +45,11 @@ export default function StoreScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [sponsoredAds, setSponsoredAds] = useState<SponsoredCreative[]>([]);
+  const [adsLoading, setAdsLoading] = useState(true);
 
   const loadGeneration = useRef(0);
+  const trackedSponsoredImpressions = useRef(new Set<string>());
   const loadListings = useCallback(async () => {
     const requestId = ++loadGeneration.current;
     setLoading(true);
@@ -72,6 +91,46 @@ export default function StoreScreen() {
   }, []);
   useEffect(() => { void loadListings(); return () => { loadGeneration.current += 1; }; }, [loadListings]);
 
+  useEffect(() => {
+    let active = true;
+    const loadSponsoredAds = async () => {
+      try {
+        if (!isSupabaseConfigured) return;
+        const adsDb = supabase as any;
+        const columns = "id,headline,body,image_url,destination_url,placements,creative_type,listing_slug,listing_name,listing_icon_url,listing_banner_url,listing_kind,listing_status";
+        const [apps, websites] = await Promise.all([
+          adsDb.from("active_ad_creatives").select(columns).eq("creative_type", "app_listing").contains("placements", ["store"]).limit(4),
+          adsDb.from("active_ad_creatives").select(columns).eq("creative_type", "website_banner").contains("placements", ["store"]).limit(4),
+        ]);
+        if (!active) return;
+        if (apps.error || websites.error) {
+          console.warn("MAS sponsored store placements could not be loaded.", apps.error ?? websites.error);
+          return;
+        }
+        const creatives = [...(apps.data ?? []), ...(websites.data ?? [])] as Array<Omit<SponsoredCreative, "imageDisplayUrl">>;
+        const resolved = await Promise.all(creatives.map(async (ad) => {
+          const rawImage = ad.creative_type === "app_listing"
+            ? ad.listing_icon_url
+            : ad.image_url || ad.listing_banner_url || ad.listing_icon_url;
+          let imageDisplayUrl: string | null = null;
+          if (rawImage && /^https?:\/\//i.test(rawImage)) imageDisplayUrl = rawImage;
+          else if (rawImage) {
+            const { data, error } = await supabase.storage.from("app-assets").createSignedUrl(rawImage, 3600);
+            if (!error) imageDisplayUrl = data?.signedUrl ?? null;
+          }
+          return { ...ad, imageDisplayUrl };
+        }));
+        if (active) setSponsoredAds(resolved.filter((ad) => ad.creative_type === "app_listing" || ad.creative_type === "website_banner"));
+      } catch (error) {
+        console.warn("MAS sponsored store placements could not be loaded.", error);
+      } finally {
+        if (active) setAdsLoading(false);
+      }
+    };
+    void loadSponsoredAds();
+    return () => { active = false; };
+  }, []);
+
   const filtered = useMemo(() => rankListings(
     listings.filter((item) =>
       matchesSearch([item.name, item.tagline, item.description, item.category, item.kind, item.developer?.developer_name, item.developer?.display_name], search)
@@ -81,6 +140,38 @@ export default function StoreScreen() {
   ), [listings, search, kind, category]);
 
   const isBrowsing = !search.trim() && kind === "all" && category === "All";
+  const sponsoredApps = useMemo(() => sponsoredAds.filter((ad) => ad.creative_type === "app_listing" && ad.listing_kind === "app"), [sponsoredAds]);
+  const sponsoredWebsites = useMemo(() => sponsoredAds.filter((ad) => ad.creative_type === "website_banner" && (!ad.listing_kind || ad.listing_kind === "website")), [sponsoredAds]);
+  const showSponsoredApps = !search.trim() && kind !== "website";
+  const showSponsoredWebsites = !search.trim() && kind !== "app";
+  const visibleSponsoredIds = sponsoredAds
+    .filter((ad) => ad.creative_type === "app_listing" ? showSponsoredApps : showSponsoredWebsites)
+    .map((ad) => ad.id)
+    .join(",");
+  const hasVisibleSponsored = (showSponsoredApps && sponsoredApps.length > 0) || (showSponsoredWebsites && sponsoredWebsites.length > 0);
+  useEffect(() => {
+    if (!visibleSponsoredIds) return;
+    let active = true;
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!active || !data.user) return;
+        for (const campaignId of visibleSponsoredIds.split(",").filter(Boolean)) {
+          if (trackedSponsoredImpressions.current.has(campaignId)) continue;
+          trackedSponsoredImpressions.current.add(campaignId);
+          try {
+            const { error } = await (supabase as any).from("ad_events").insert({ campaign_id: campaignId, event_type: "impression", viewer_id: data.user.id });
+            if (error && error.code !== "23505") trackedSponsoredImpressions.current.delete(campaignId);
+          } catch {
+            trackedSponsoredImpressions.current.delete(campaignId);
+          }
+        }
+      } catch {
+        // Ad telemetry must never block the catalogue.
+      }
+    })();
+    return () => { active = false; };
+  }, [visibleSponsoredIds]);
   const recommended = useMemo(() => rankListings(listings, { limit: 8, maxPerCategory: 2 }), [listings]);
   const topCharts = useMemo(() => topByNumber(listings, (item) => item.downloads, 8), [listings]);
   const topRated = useMemo(() => topByNumber(listings, (item) => Number(item.rating_avg ?? 0) * Number(item.rating_count ?? 0), 8), [listings]);
@@ -128,6 +219,38 @@ export default function StoreScreen() {
     finally { setBusy(false); }
   };
 
+  const recordSponsoredClick = async (campaignId: string) => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return;
+      const { error } = await (supabase as any).from("ad_events").insert({ campaign_id: campaignId, event_type: "click", viewer_id: data.user.id });
+      if (error) console.warn("MAS sponsored click could not be recorded.", error);
+    } catch (error) {
+      console.warn("MAS sponsored click could not be recorded.", error);
+    }
+  };
+
+  const openSponsored = async (ad: SponsoredCreative) => {
+    if (ad.creative_type === "app_listing") {
+      if (ad.listing_status !== "published" || !ad.listing_slug) return;
+      void recordSponsoredClick(ad.id);
+      try {
+        await Linking.openURL(`${WEB_ORIGIN}/apps/${encodeURIComponent(ad.listing_slug)}`);
+      } catch {
+        setNotice("Could not open this sponsored app.");
+      }
+      return;
+    }
+    try {
+      const destination = new URL(ad.destination_url);
+      if (destination.protocol !== "https:") throw new Error("This sponsored website does not have a secure HTTPS address.");
+      void recordSponsoredClick(ad.id);
+      await Linking.openURL(destination.toString());
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not open this sponsored website.");
+    }
+  };
+
   const kinds: { value: StoreKind; label: string }[] = [
     { value: "all", label: "For you" },
     { value: "app", label: "Apps" },
@@ -149,7 +272,34 @@ export default function StoreScreen() {
           {["All", ...CATEGORIES].map((item) => <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.chip, category === item && styles.chipActive]}><Text style={[styles.chipText, category === item && styles.chipTextActive]}>{item}</Text></TouchableOpacity>)}
         </ScrollView>
         {loading ? <ActivityIndicator style={styles.loading} color={ACCENT} /> : null}
-        {!loading && !filtered.length ? <View style={styles.empty}><Text style={styles.title}>{notice ? "Store unavailable" : search || kind !== "all" || category !== "All" ? "No matching products" : "Nothing here yet"}</Text><Text style={styles.body}>{notice || (search || kind !== "all" || category !== "All" ? "Try a different search or filter." : "New listings from Malawian developers will appear here.")}</Text>{notice ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void loadListings()}><Text style={styles.secondaryText}>Try again</Text></TouchableOpacity> : null}</View> : null}
+        {!loading && showSponsoredApps && sponsoredApps.length > 0 ? <View style={styles.sponsoredSection}>
+          <Text style={styles.sponsoredHeading}>Sponsored apps</Text>
+          {sponsoredApps.map((ad) => {
+            const canOpen = ad.listing_status === "published" && Boolean(ad.listing_slug);
+            const content = <View style={styles.sponsoredAppRow}>
+              {ad.imageDisplayUrl ? <Image source={{ uri: ad.imageDisplayUrl }} style={styles.sponsoredAppIcon} /> : <View style={styles.sponsoredIconFallback}><Text style={styles.iconLetter}>{(ad.listing_name || ad.headline).slice(0, 1).toUpperCase()}</Text></View>}
+              <View style={styles.sponsoredCopy}>
+                <Text numberOfLines={1} style={styles.sponsoredTitle}>{ad.listing_name || ad.headline}</Text>
+                {ad.body ? <Text numberOfLines={2} style={styles.sponsoredBody}>{ad.body}</Text> : null}
+                <View style={styles.sponsoredMetaRow}><Text style={styles.sponsoredMeta}>Sponsored</Text>{!canOpen ? <Text style={styles.sponsoredComingSoon}>Coming soon</Text> : null}</View>
+              </View>
+            </View>;
+            return canOpen
+              ? <TouchableOpacity key={ad.id} accessibilityRole="button" onPress={() => void openSponsored(ad)}>{content}</TouchableOpacity>
+              : <View key={ad.id}>{content}</View>;
+          })}
+        </View> : null}
+        {!loading && showSponsoredWebsites && sponsoredWebsites.length > 0 ? <View style={styles.sponsoredSection}>
+          {sponsoredWebsites.map((ad) => <TouchableOpacity key={ad.id} accessibilityRole="button" onPress={() => void openSponsored(ad)} style={styles.sponsoredWebsite}>
+            {ad.imageDisplayUrl ? <Image source={{ uri: ad.imageDisplayUrl }} style={styles.sponsoredBanner} resizeMode="cover" /> : null}
+            <View style={styles.sponsoredWebsiteCopy}>
+              <Text numberOfLines={1} style={styles.sponsoredTitle}>{ad.listing_name || ad.headline}</Text>
+              {ad.body ? <Text numberOfLines={2} style={styles.sponsoredBody}>{ad.body}</Text> : null}
+              <Text style={styles.sponsoredMeta}>Sponsored website</Text>
+            </View>
+          </TouchableOpacity>)}
+        </View> : null}
+        {!loading && !filtered.length && !hasVisibleSponsored && !adsLoading ? <View style={styles.empty}><Text style={styles.title}>{notice ? "Store unavailable" : search || kind !== "all" || category !== "All" ? "No matching products" : "Nothing here yet"}</Text><Text style={styles.body}>{notice || (search || kind !== "all" || category !== "All" ? "Try a different search or filter." : "New listings from Malawian developers will appear here.")}</Text>{notice ? <TouchableOpacity style={styles.secondaryButton} onPress={() => void loadListings()}><Text style={styles.secondaryText}>Try again</Text></TouchableOpacity> : null}</View> : null}
         {isBrowsing && !loading && filtered.length > 0 ? <>
           <DiscoveryShelf title="Recommended for you" subtitle="Fresh from Malawian developers" items={recommended} onSelect={setSelected} />
           <DiscoveryShelf title="Top charts" subtitle="Most popular listings" items={topCharts} onSelect={setSelected} />
@@ -196,5 +346,5 @@ function DiscoveryShelf({ title, subtitle, items, onSelect }: { title: string; s
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F6F7FB" }, shelf: { marginTop: 18 }, shelfTitle: { color: "#111827", fontSize: 17, fontWeight: "800" }, shelfSubtitle: { color: "#64748B", fontSize: 11, marginTop: 3 }, shelfRow: { gap: 10, paddingVertical: 10 }, shelfTile: { width: 104, padding: 0, backgroundColor: "transparent" }, shelfIcon: { width: 104, height: 104, borderRadius: 22, backgroundColor: "#EFF4FA", alignSelf: "center" }, shelfName: { color: "#111827", fontSize: 13, fontWeight: "600", marginTop: 8 }, shelfMeta: { color: "#64748B", fontSize: 11, marginTop: 3 }, content: { padding: 16, paddingBottom: 32 }, heading: { color: "#111827", fontSize: 23, fontWeight: "800" }, subheading: { color: "#64748B", fontSize: 13, marginTop: 5, marginBottom: 14 }, listHeading: { color: "#111827", fontSize: 17, fontWeight: "700", marginTop: 16, marginBottom: 6 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#111827", fontSize: 15, fontWeight: "700" }, body: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "transparent", paddingHorizontal: 4, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 12 }, icon: { width: 64, height: 64, borderRadius: 18, backgroundColor: "#EFF4FA" }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#64748B", fontSize: 11, marginTop: 5, textTransform: "capitalize" }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#F6F7FB" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#FFF", borderRadius: 13, padding: 14, marginVertical: 10 }, screenshot: { width: 190, height: 300, borderRadius: 12, marginRight: 10, marginVertical: 10, backgroundColor: "#E7EBF3" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
+  root: { flex: 1, backgroundColor: "#F6F7FB" }, sponsoredSection: { marginTop: 14, marginBottom: 6 }, sponsoredHeading: { color: "#52607A", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }, sponsoredAppRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E7EBF3" }, sponsoredAppIcon: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA" }, sponsoredIconFallback: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA", alignItems: "center", justifyContent: "center" }, sponsoredCopy: { flex: 1, minWidth: 0 }, sponsoredTitle: { color: "#111827", fontSize: 14, fontWeight: "700" }, sponsoredBody: { color: "#64748B", fontSize: 12, lineHeight: 17, marginTop: 3 }, sponsoredMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 5 }, sponsoredMeta: { color: "#64748B", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.35 }, sponsoredComingSoon: { color: ACCENT, fontSize: 10, fontWeight: "700" }, sponsoredWebsite: { borderBottomWidth: 1, borderBottomColor: "#E7EBF3", paddingBottom: 10, marginBottom: 10 }, sponsoredBanner: { width: "100%", height: 136, backgroundColor: "#EFF4FA" }, sponsoredWebsiteCopy: { paddingTop: 9 }, shelf: { marginTop: 18 }, shelfTitle: { color: "#111827", fontSize: 17, fontWeight: "800" }, shelfSubtitle: { color: "#64748B", fontSize: 11, marginTop: 3 }, shelfRow: { gap: 10, paddingVertical: 10 }, shelfTile: { width: 104, padding: 0, backgroundColor: "transparent" }, shelfIcon: { width: 104, height: 104, borderRadius: 22, backgroundColor: "#EFF4FA", alignSelf: "center" }, shelfName: { color: "#111827", fontSize: 13, fontWeight: "600", marginTop: 8 }, shelfMeta: { color: "#64748B", fontSize: 11, marginTop: 3 }, content: { padding: 16, paddingBottom: 32 }, heading: { color: "#111827", fontSize: 23, fontWeight: "800" }, subheading: { color: "#64748B", fontSize: 13, marginTop: 5, marginBottom: 14 }, listHeading: { color: "#111827", fontSize: 17, fontWeight: "700", marginTop: 16, marginBottom: 6 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#111827", fontSize: 15, fontWeight: "700" }, body: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "transparent", paddingHorizontal: 4, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 12 }, icon: { width: 64, height: 64, borderRadius: 18, backgroundColor: "#EFF4FA" }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#64748B", fontSize: 11, marginTop: 5, textTransform: "capitalize" }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#F6F7FB" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#FFF", borderRadius: 13, padding: 14, marginVertical: 10 }, screenshot: { width: 190, height: 300, borderRadius: 12, marginRight: 10, marginVertical: 10, backgroundColor: "#E7EBF3" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
 });
