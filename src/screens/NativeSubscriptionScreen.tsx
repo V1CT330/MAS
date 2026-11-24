@@ -7,7 +7,7 @@ type Subscription = { plan: string; status: string; current_period_end: string |
 
 function hasAccess(subscription: Subscription) {
   if (!subscription || subscription.plan !== "pro") return false;
-  if (subscription.status !== "active" && subscription.status !== "cancelled") return false;
+  if (subscription.status !== "active" && subscription.status !== "cancelled" && subscription.status !== "trialing") return false;
   const end = subscription.current_period_end ? new Date(subscription.current_period_end).getTime() : Number.NaN;
   return Number.isFinite(end) && end > Date.now();
 }
@@ -62,6 +62,7 @@ export default function NativeSubscriptionScreen({ onBack }: Props) {
 
   const active = hasAccess(subscription);
   const cancelled = subscription?.status === "cancelled" && active;
+  const trialing = subscription?.status === "trialing" && active;
   const periodEnd = subscription?.current_period_end
     ? new Date(subscription.current_period_end).toLocaleDateString()
     : null;
@@ -76,13 +77,13 @@ export default function NativeSubscriptionScreen({ onBack }: Props) {
     <View style={s.panel}>
       <Text style={s.price}>MK 5,000</Text>
       <Text style={s.copy}>per month</Text>
-      <View style={[s.statusPill, active ? s.active : s.inactive]}><Text style={s.statusText}>{active ? (cancelled ? "Cancelled · access remains active" : "Active") : "Free plan"}</Text></View>
-      {periodEnd ? <Text style={s.copy}>{cancelled ? "Access ends" : "Current period ends"} {periodEnd}</Text> : null}
-      <Text style={s.body}>{active ? "Your Pro entitlement is currently active." : "Upgrade when you need the additional publishing and growth tools."}</Text>
+      <View style={[s.statusPill, active ? s.active : s.inactive]}><Text style={s.statusText}>{active ? (trialing ? "Free trial" : cancelled ? "Cancelled · access remains active" : "Active") : "Free plan"}</Text></View>
+      {periodEnd ? <Text style={s.copy}>{cancelled ? "Access ends" : trialing ? "Trial ends" : "Current period ends"} {periodEnd}</Text> : null}
+      <Text style={s.body}>{active ? (trialing ? "Your Developer Pro trial is active. Pro access continues until the trial period ends." : "Your Pro entitlement is currently active.") : "Upgrade when you need the additional publishing and growth tools."}</Text>
       <TouchableOpacity accessibilityRole="button" disabled={busy || !signedIn} onPress={() => void openSecureManagement()} style={[s.button, (busy || !signedIn) && s.disabled]}>
-        <Text style={s.buttonText}>{busy ? "Opening…" : active && !cancelled ? "Manage or cancel plan" : "Upgrade to Developer Pro"}</Text>
+        <Text style={s.buttonText}>{busy ? "Opening…" : active && !cancelled && !trialing ? "Manage or cancel plan" : active ? "View plan details" : "Upgrade to Developer Pro"}</Text>
       </TouchableOpacity>
-      <Text style={s.note}>Payments and cancellations are handled by the MAS secure server flow and PayChangu. This screen never writes subscription status directly.</Text>
+      <Text style={s.note}>New developers may be eligible for a one-time 90-day trial. Eligibility is confirmed by MAS on the secure subscription page. Payments and cancellations remain server-side through PayChangu; this screen never writes subscription status directly.</Text>
     </View>
 
     <View style={s.section}>
