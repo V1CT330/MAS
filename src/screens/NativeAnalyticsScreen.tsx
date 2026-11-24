@@ -7,8 +7,8 @@ type Stat = { day: string; installs: number; views: number };
 type Listing = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null };
 type Subscription = { plan: string | null; status: string | null; current_period_end: string | null } | null;
 
-function hasPaidPro(value: Subscription) {
-  if (!value || value.plan !== "pro" || (value.status !== "active" && value.status !== "cancelled")) return false;
+function hasProAccess(value: Subscription) {
+  if (!value || value.plan !== "pro" || (value.status !== "active" && value.status !== "cancelled" && value.status !== "trialing")) return false;
   const end = value.current_period_end ? Date.parse(value.current_period_end) : NaN;
   return Number.isFinite(end) && end > Date.now();
 }
@@ -40,7 +40,7 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
       setSubscription(sub);
       const products = (listingResult.data ?? []) as Listing[];
       setListings(products);
-      if (!hasPaidPro(sub)) { setStats([]); return; }
+      if (!hasProAccess(sub)) { setStats([]); return; }
       const { data, error: statsError } = await supabase.rpc("developer_stats", { _developer: id, _days: range });
       if (statsError) throw statsError;
       setStats((data ?? []).map((row: { day: string; installs: number; views: number }) => ({ day: String(row.day), installs: Number(row.installs ?? 0), views: Number(row.views ?? 0) })));
@@ -53,7 +53,7 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
 
   const totals = useMemo(() => stats.reduce((a, row) => ({ views: a.views + row.views, installs: a.installs + row.installs }), { views: 0, installs: 0 }), [stats]);
   const maxValue = Math.max(1, ...stats.map((row) => Math.max(row.views, row.installs)));
-  const pro = hasPaidPro(subscription);
+  const pro = hasProAccess(subscription);
   const averageRating = useMemo(() => {
     const count = listings.reduce((sum, item) => sum + Number(item.rating_count ?? 0), 0);
     const weighted = listings.reduce((sum, item) => sum + Number(item.rating_avg ?? 0) * Number(item.rating_count ?? 0), 0);
@@ -72,7 +72,7 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
     {!loading && !error && !pro ? <View style={styles.panel}>
       <Text style={styles.proTag}>DEVELOPER PRO</Text>
       <Text style={styles.panelTitle}>Advanced analytics is a Pro feature</Text>
-      <Text style={styles.subtitle}>Upgrade to view performance trends, daily installs and views. Access is based on your confirmed paid subscription.</Text>
+      <Text style={styles.subtitle}>Upgrade to view performance trends, daily installs and views. Access is based on your confirmed Pro entitlement, including an active trial or paid period.</Text>
       <TouchableOpacity onPress={() => void Linking.openURL("https://malawian-app-store.vercel.app/console/subscription")} style={styles.primary}><Text style={styles.primaryText}>View Developer Pro</Text></TouchableOpacity>
     </View> : null}
     {!loading && !error && pro ? <>
