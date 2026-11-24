@@ -8,11 +8,29 @@ import { supabase } from "../lib/supabase";
 type Props = { onSaved: (listing: { id: string; name: string; kind: ListingKind }) => void };
 type PickedImage = ImagePicker.ImagePickerAsset;
 
-async function uploadLocalAsset(userId: string, uri: string, fileName: string, folder: string, contentType?: string) {
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
+
+function pickedImageExtension(asset: PickedImage): string | null {
+  const namedExtension = asset.fileName?.split(".").pop()?.toLowerCase();
+  if (namedExtension && ALLOWED_IMAGE_EXTENSIONS.has(namedExtension)) return namedExtension;
+  const mimeType = asset.mimeType?.toLowerCase().split(";")[0].trim() ?? "";
+  return IMAGE_EXTENSION_BY_MIME[mimeType] ?? null;
+}
+
+async function uploadLocalAsset(userId: string, uri: string, fileName: string, folder: string, contentType?: string, maxBytes?: number) {
   const response = await fetch(uri);
   if (!response.ok) throw new Error("Could not read the selected file.");
   const body = await response.arrayBuffer();
   if (!body.byteLength) throw new Error("The selected file is empty.");
+  if (maxBytes && body.byteLength > maxBytes) throw new Error("Image must be 10 MB or smaller.");
   const extension = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
   const path = userId + "/" + folder + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + extension;
   const { error } = await supabase.storage.from("app-assets").upload(path, body, {
@@ -73,10 +91,12 @@ export default function NativePublishingScreen({ onSaved }: Props) {
         quality: 0.9,
       });
       if (result.canceled) return;
-      const allowed = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
       const selected = result.assets.filter((item) => {
-        const extension = item.fileName?.split(".").pop()?.toLowerCase() || "";
-        return item.uri && item.fileSize !== 0 && (item.fileSize ?? 0) <= 10 * 1024 * 1024 && allowed.includes(extension) && (item.mimeType ?? "").startsWith("image/");
+        const extension = pickedImageExtension(item);
+        const mimeType = item.mimeType?.toLowerCase() ?? "";
+        const size = item.fileSize;
+        return Boolean(item.uri && extension && mimeType.startsWith("image/") &&
+          (size == null || (size > 0 && size <= MAX_IMAGE_BYTES)));
       });
       if (selected.length !== result.assets.length) {
         setMessage("Use JPG, PNG, WebP, GIF or AVIF images up to 10 MB each.");
@@ -104,12 +124,12 @@ export default function NativePublishingScreen({ onSaved }: Props) {
     let listingId: string | null = null;
     try {
       const userId = authData.user.id;
-      const iconPath = icon ? await uploadLocalAsset(userId, icon.uri, icon.fileName || "icon.jpg", "icons", icon.mimeType || "image/jpeg") : null;
+      const iconPath = icon ? await uploadLocalAsset(userId, icon.uri, `icon.${pickedImageExtension(icon) ?? "jpg"}`, "icons", icon.mimeType || "image/jpeg", MAX_IMAGE_BYTES) : null;
       if (iconPath) uploaded.push(iconPath);
       const screenshotPaths: string[] = [];
       for (let i = 0; i < screenshots.length; i += 1) {
         const item = screenshots[i];
-        const assetPath = await uploadLocalAsset(userId, item.uri, item.fileName || ("screenshot-" + (i + 1) + ".jpg"), "screenshots", item.mimeType || "image/jpeg");
+        const assetPath = await uploadLocalAsset(userId, item.uri, `screenshot-${i + 1}.${pickedImageExtension(item) ?? "jpg"}`, "screenshots", item.mimeType || "image/jpeg", MAX_IMAGE_BYTES);
         screenshotPaths.push(assetPath);
         uploaded.push(assetPath);
       }
