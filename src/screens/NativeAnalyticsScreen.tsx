@@ -19,20 +19,14 @@ function hasProAccess(value: Subscription) {
 }
 
 function isoDate(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function localDateKey(value: Date) {
-  const year = String(value.getFullYear()).padStart(4, "0");
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return year + "-" + month + "-" + day;
+  return value.getFullYear() + "-" + String(value.getMonth() + 1).padStart(2, "0") + "-" + String(value.getDate()).padStart(2, "0");
 }
 
 function rangeFor(key: RangeKey, customStart: string, customEnd: string): Bounds {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   let start = new Date(end);
+  const isCustom = key === "custom";
   if (key === "7d") start = new Date(end.getTime() - 6 * DAY);
   else if (key === "30d") start = new Date(end.getTime() - 29 * DAY);
   else if (key === "90d") start = new Date(end.getTime() - 89 * DAY);
@@ -43,8 +37,9 @@ function rangeFor(key: RangeKey, customStart: string, customEnd: string): Bounds
     if (Number.isFinite(parsedEnd.getTime())) end.setTime(parsedEnd.getTime());
   }
   if (start > end) start.setTime(end.getTime() - 29 * DAY);
-  const duration = Math.min(365, Math.max(1, Math.floor((end.getTime() - start.getTime()) / DAY) + 1));
-  start.setTime(end.getTime() - (duration - 1) * DAY);
+  const rawDuration = Math.floor((end.getTime() - start.getTime()) / DAY) + 1;
+  const duration = Math.min(365, Math.max(1, rawDuration));
+  if (!isCustom || rawDuration > 365) start.setTime(end.getTime() - (duration - 1) * DAY);
   const previousEnd = new Date(start.getTime() - 1);
   const previousStart = new Date(previousEnd.getTime() - duration * DAY + 1);
   return { start, end, previousStart, previousEnd, duration };
@@ -55,7 +50,7 @@ function customDateError(start: string, end: string) {
   if (!datePattern.test(start) || !datePattern.test(end)) return "Enter both dates in YYYY-MM-DD format.";
   const parsedStart = new Date(start + "T00:00:00");
   const parsedEnd = new Date(end + "T00:00:00");
-  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || localDateKey(parsedStart) !== start || localDateKey(parsedEnd) !== end) {
+  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || isoDate(parsedStart) !== start || isoDate(parsedEnd) !== end) {
     return "One of the selected dates is invalid.";
   }
   if (start > end) return "The start date must not be after the end date.";
