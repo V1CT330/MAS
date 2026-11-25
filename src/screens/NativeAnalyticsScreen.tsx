@@ -22,6 +22,13 @@ function isoDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
+function localDateKey(value: Date) {
+  const year = String(value.getFullYear()).padStart(4, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
+}
+
 function rangeFor(key: RangeKey, customStart: string, customEnd: string): Bounds {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
@@ -48,7 +55,7 @@ function customDateError(start: string, end: string) {
   if (!datePattern.test(start) || !datePattern.test(end)) return "Enter both dates in YYYY-MM-DD format.";
   const parsedStart = new Date(start + "T00:00:00");
   const parsedEnd = new Date(end + "T00:00:00");
-  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || isoDate(parsedStart) !== start || isoDate(parsedEnd) !== end) {
+  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || localDateKey(parsedStart) !== start || localDateKey(parsedEnd) !== end) {
     return "One of the selected dates is invalid.";
   }
   if (start > end) return "The start date must not be after the end date.";
