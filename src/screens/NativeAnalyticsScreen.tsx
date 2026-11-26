@@ -67,6 +67,38 @@ function rangeFor(key: RangeKey, customStart: string, customEnd: string): Bounds
   return { start, end, previousStart, previousEnd, duration };
 }
 
+
+function customDateError(start: string, end: string) {
+  const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+  if (!datePattern.test(start) || !datePattern.test(end)) return "Enter both dates in YYYY-MM-DD format.";
+  const parsedStart = new Date(start + "T00:00:00");
+  const parsedEnd = new Date(end + "T00:00:00");
+  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || isoDate(parsedStart) !== start || isoDate(parsedEnd) !== end) {
+    return "One of the selected dates is invalid.";
+  }
+  if (start > end) return "The start date must not be after the end date.";
+  if (end > isoDate(new Date())) return "The end date cannot be in the future.";
+  const calendarDay = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  const days = Math.floor((calendarDay(parsedEnd) - calendarDay(parsedStart)) / DAY) + 1;
+  if (days > 365) return "Choose a reporting period of 365 days or less.";
+  return "";
+}
+
+async function fetchEvents(table: "install_events" | "view_events", listingIds: string[], startIso: string, endIso: string): Promise<EventRow[]> {
+  const pageSize = 1000;
+  const rows: EventRow[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const result = table === "install_events"
+      ? await supabase.from("install_events").select("created_at,device,country,listing_id").in("listing_id", listingIds).gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending: true }).range(offset, offset + pageSize - 1)
+      : await supabase.from("view_events").select("created_at,device,country,listing_id").in("listing_id", listingIds).gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending: true }).range(offset, offset + pageSize - 1);
+    if (result.error) throw result.error;
+    const page = (result.data ?? []) as EventRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
 function within(row: EventRow, start: Date, end: Date) {
   const time = Date.parse(row.created_at);
   return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
