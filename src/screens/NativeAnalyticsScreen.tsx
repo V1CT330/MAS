@@ -277,9 +277,9 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
           String(item.rating_count ?? 0),
         ]),
       ];
-      const csv = "\\uFEFF" + rows
+      const csv = "\uFEFF" + rows
         .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
-        .join("\\r\\n");
+        .join("\r\n");
       const filename = `mas-analytics-${isoDate(bounds.start)}-to-${isoDate(bounds.end)}-${Date.now()}.csv`;
       const file = new File(Paths.cache, filename);
       file.create();
