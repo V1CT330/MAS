@@ -77,6 +77,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Cache Gradle dependencies and build state
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -96,17 +99,22 @@ jobs:
         run: |
           set -euo pipefail
           NDK_VERSION="27.1.12297006"
-          rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+          NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+
+          # Reuse a valid runner-provided NDK. Never delete a working install.
+          if [[ -f "$NDK_PATH/source.properties" ]]; then
+            echo "NDK $NDK_VERSION is already installed."
+            exit 0
+          fi
+
           for attempt in 1 2 3; do
-            if sdkmanager --install "ndk;$NDK_VERSION"; then
-              if [[ -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties" ]]; then
-                echo "NDK $NDK_VERSION installed successfully."
-                exit 0
-              fi
+            if sdkmanager --install "ndk;$NDK_VERSION" && [[ -f "$NDK_PATH/source.properties" ]]; then
+              echo "NDK $NDK_VERSION installed successfully."
+              exit 0
             fi
-            echo "NDK installation attempt $attempt failed; clearing partial files before retry."
-            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
-            sleep 5
+            echo "NDK installation attempt $attempt failed; removing only an incomplete install before retry."
+            rm -rf "$NDK_PATH"
+            if [[ "$attempt" -lt 3 ]]; then sleep $((attempt * 5)); fi
           done
           echo "Could not install NDK $NDK_VERSION after three attempts."
           exit 1
