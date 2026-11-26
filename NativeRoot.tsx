@@ -58,7 +58,7 @@ export default function NativeRoot() {
 
   return <SafeAreaView style={[styles.safeArea, space === "developer" && styles.developerSafeArea]}>
     <StatusBar barStyle="dark-content" backgroundColor={space === "developer" ? "#FFFFFF" : "#F6F7FB"} />
-    {space !== "developer" ? <View style={styles.header}>
+    {space === "store" ? <View style={styles.header}>
       <View style={styles.headerFrame}>
         <View>
           <Text style={styles.brand}>Malawian App Store</Text>
@@ -69,7 +69,7 @@ export default function NativeRoot() {
     </View> : null}
     <View style={styles.spaceTabs}>
       <View style={styles.tabsFrame}>
-        {(["store", "developer", "social"] as Space[]).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: space === item }} onPress={() => setSpace(item)} style={[styles.spaceTab, space === item && styles.spaceTabActive]}><Text style={[styles.spaceText, space === item && styles.spaceTextActive]}>{item === "store" ? "App Store" : item === "developer" ? "Developer" : "Social"}</Text></TouchableOpacity>)}
+        {(["store", "developer", "social"] as Space[]).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: space === item }} onPress={() => setSpace(item)} style={[styles.spaceTab, space === item && styles.spaceTabActive]}><Text style={[styles.spaceText, space === item && styles.spaceTextActive]}>{item === "store" ? "App Store" : item === "developer" ? "Developer Mode" : "Social"}</Text></TouchableOpacity>)}
       </View>
     </View>
     <View style={styles.body}>
