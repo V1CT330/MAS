@@ -87,6 +87,8 @@ jobs:
 
       - name: Install locked JavaScript dependencies
         run: npm ci
+      - name: Verify Expo SDK dependency compatibility
+        run: npx expo install --check
 
       - name: Type-check the native app
         run: npm run typecheck
