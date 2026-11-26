@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -148,6 +150,13 @@ function makeTrend(installs: EventRow[], views: EventRow[], start: Date, end: Da
 
 const number = (value: number) => new Intl.NumberFormat("en").format(value);
 
+function kindLabel(kind: string) {
+  if (kind === "website") return "Website";
+  if (kind === "ai_agent") return "AI agent";
+  if (kind === "extension") return "Browser extension";
+  return "App";
+}
+
 export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }) {
   const [range, setRange] = useState<RangeKey>("30d");
   const initialEnd = isoDate(new Date());
@@ -163,6 +172,8 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const bounds = useMemo(() => rangeFor(range, appliedStart, appliedEnd), [range, appliedStart, appliedEnd]);
   const dateError = range === "custom" ? customDateError(customStart, customEnd) : "";
@@ -244,6 +255,46 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
   const published = listings.filter((item) => item.status === "published").length;
   const periodLabel = isoDate(bounds.start) + " to " + isoDate(bounds.end);
 
+  const exportCsv = async () => {
+    if (productRows.length === 0 || exporting) return;
+    setExportError("");
+    setExporting(true);
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        throw new Error("File sharing is not available on this device.");
+      }
+      const rows = [
+        ["Product", "Type", "Status", "Views in period", "Installs / visits in period", "Conversion rate", "Lifetime installs / visits", "Average rating", "Rating count"],
+        ...productRows.map(({ item, views, installs, conversion: rate }) => [
+          item.name,
+          kindLabel(item.kind),
+          item.status,
+          String(views),
+          String(installs),
+          `${rate.toFixed(2)}%`,
+          String(item.downloads ?? 0),
+          String(item.rating_avg ?? 0),
+          String(item.rating_count ?? 0),
+        ]),
+      ];
+      const csv = "\\uFEFF" + rows
+        .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+        .join("\\r\\n");
+      const filename = `mas-analytics-${isoDate(bounds.start)}-to-${isoDate(bounds.end)}-${Date.now()}.csv`;
+      const file = new File(Paths.cache, filename);
+      file.create();
+      await file.write(csv);
+      await Sharing.shareAsync(file.uri, {
+        dialogTitle: "Share MAS analytics report",
+        mimeType: "text/csv",
+      });
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "Could not export the analytics report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const applyCustomRange = () => {
     if (dateError) {
       setError(dateError);
@@ -256,11 +307,19 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
     <TouchableOpacity onPress={onBack} style={styles.back}><Text style={styles.backText}>‹  Developer dashboard</Text></TouchableOpacity>
-    <Text style={styles.kicker}>DEVELOPER MODE</Text>
-    <Text style={styles.heading}>Analytics</Text>
-    <Text style={styles.subtitle}>Product performance from your MAS developer account.</Text>
+    <View style={styles.headerRow}>
+      <View style={styles.headerCopy}>
+        <Text style={styles.kicker}>DEVELOPER MODE</Text>
+        <Text style={styles.heading}>Analytics</Text>
+        <Text style={styles.subtitle}>Product performance from your MAS developer account.</Text>
+      </View>
+      {!loading && !error && pro ? <TouchableOpacity onPress={() => void exportCsv()} disabled={exporting || productRows.length === 0} style={[styles.exportButton, (exporting || productRows.length === 0) && styles.disabled]}>
+        <Text style={styles.exportText}>{exporting ? "Preparing…" : "Export CSV"}</Text>
+      </TouchableOpacity> : null}
+    </View>
     {loading ? <ActivityIndicator color="#1A73E8" style={{ marginTop: 28 }} /> : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    {exportError ? <Text accessibilityRole="alert" style={styles.inlineError}>{exportError}</Text> : null}
     {!loading && !error && !pro ? <View style={styles.proSection}>
       <Text style={styles.proTag}>DEVELOPER PRO</Text>
       <Text style={styles.sectionTitle}>Advanced analytics is a Pro feature</Text>
@@ -356,7 +415,11 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 36 },
   back: { alignSelf: "flex-start", paddingVertical: 8, paddingRight: 12 },
   backText: { color: "#1A73E8", fontSize: 13, fontWeight: "600" },
-  kicker: { color: "#1A73E8", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginTop: 12 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginTop: 12 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  exportButton: { minHeight: 36, paddingHorizontal: 12, borderWidth: 1, borderColor: "#DADCE0", alignItems: "center", justifyContent: "center", marginTop: 2 },
+  exportText: { color: "#1A73E8", fontSize: 11, fontWeight: "700" },
+  kicker: { color: "#1A73E8", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   heading: { color: "#202124", fontSize: 25, fontWeight: "700", marginTop: 4 },
   subtitle: { color: "#5F6368", fontSize: 12, lineHeight: 18, marginTop: 5 },
   error: { color: "#B3261E", backgroundColor: "#FCE8E6", padding: 12, marginTop: 14, fontSize: 12 },
