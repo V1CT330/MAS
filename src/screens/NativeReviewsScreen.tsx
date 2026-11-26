@@ -102,7 +102,7 @@ export default function NativeReviewsScreen({ onBack, onSelectListing }: Props) 
           {reviews.map((review) => (
             <View key={review.id} style={styles.review}>
               <View style={styles.reviewTop}>
-                <Text style={styles.stars}>{"★".repeat(Math.max(0, Math.min(5, Math.round(Number(review.rating) || 0)))}{"☆".repeat(5 - Math.max(0, Math.min(5, Math.round(Number(review.rating) || 0))))}</Text>
+                <Text style={styles.stars}>{Array.from({ length: 5 }, (_, index) => index < Math.max(0, Math.min(5, Math.round(Number(review.rating) || 0))) ? "★" : "☆").join("")}</Text>
                 <Text style={styles.date}>{new Date(review.created_at).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.product}>{nameOf(review.listing_id)}</Text>
