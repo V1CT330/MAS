@@ -17,6 +17,19 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const ACCENT = "#1877F2";
 const WEB_ORIGIN = "https://malawian-app-store.vercel.app";
+
+async function resolveStoreImageUrl(value: string | null | undefined): Promise<string | null> {
+  const raw = value?.trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const objectPath = raw.replace(/^\/+/, "").replace(/^app-assets\//i, "");
+  const { data, error } = await supabase.storage.from("app-assets").createSignedUrl(objectPath, 24 * 60 * 60);
+  if (error || !data?.signedUrl) {
+    console.warn("MAS listing image could not be resolved.", { value: raw, error });
+    return null;
+  }
+  return data.signedUrl;
+}
 type StoreListing = Listing & { developer?: { developer_name?: string | null; display_name?: string | null } | null; iconDisplayUrl?: string | null };
 type SponsoredCreative = {
   id: string;
@@ -71,13 +84,7 @@ export default function StoreScreen() {
       }
       const profiles = new Map((profileResult.data ?? []).map((profile) => [profile.id, profile]));
       const rows = await Promise.all((listingResult.data ?? []).map(async (row) => {
-        const rawIcon = row.icon_url;
-        let iconDisplayUrl: string | null = null;
-        if (rawIcon?.startsWith("https://")) iconDisplayUrl = rawIcon;
-        else if (rawIcon) {
-          const { data } = await supabase.storage.from("app-assets").createSignedUrl(rawIcon, 3600);
-          iconDisplayUrl = data?.signedUrl ?? null;
-        }
+        const iconDisplayUrl = await resolveStoreImageUrl(row.icon_url);
         return { ...(row as unknown as Listing), developer: profiles.get(row.developer_id) ?? null, iconDisplayUrl };
       }));
       if (requestId !== loadGeneration.current) return;
@@ -112,12 +119,7 @@ export default function StoreScreen() {
           const rawImage = ad.creative_type === "app_listing"
             ? ad.listing_icon_url
             : ad.image_url || ad.listing_banner_url || ad.listing_icon_url;
-          let imageDisplayUrl: string | null = null;
-          if (rawImage && /^https?:\/\//i.test(rawImage)) imageDisplayUrl = rawImage;
-          else if (rawImage) {
-            const { data, error } = await supabase.storage.from("app-assets").createSignedUrl(rawImage, 3600);
-            if (!error) imageDisplayUrl = data?.signedUrl ?? null;
-          }
+          const imageDisplayUrl = await resolveStoreImageUrl(rawImage);
           return { ...ad, imageDisplayUrl };
         }));
         if (active) setSponsoredAds(resolved.filter((ad) => ad.creative_type === "app_listing" || ad.creative_type === "website_banner"));
