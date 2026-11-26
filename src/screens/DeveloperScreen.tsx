@@ -191,8 +191,8 @@ export default function DeveloperScreen({ onExit }: { onExit: () => void }) {
         <Text style={styles.shellEyebrow}>MALAWIAN APP STORE</Text>
         <Text style={styles.shellTitle}>Developer console</Text>
       </View>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Switch workspace" onPress={onExit} style={styles.switchSpaceButton}>
-        <Text style={styles.switchSpaceText}>Switch space</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Return to App Store" onPress={onExit} style={styles.switchSpaceButton}>
+        <Text style={styles.switchSpaceText}>App Store</Text>
       </TouchableOpacity>
     </View>
   );
