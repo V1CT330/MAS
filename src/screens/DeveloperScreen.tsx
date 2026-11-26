@@ -8,6 +8,7 @@ import NativeVerificationScreen from "./NativeVerificationScreen";
 import NativeSubscriptionScreen from "./NativeSubscriptionScreen";
 import NativeDeveloperSettingsScreen from "./NativeDeveloperSettingsScreen";
 import NativeQualityScreen from "./NativeQualityScreen";
+import NativeReviewsScreen from "./NativeReviewsScreen";
 import NotificationsScreen from "./NotificationsScreen";
 
 type Product = { id: string; name: string; kind: string; status: string; downloads: number | null; rating_avg: number | null; rating_count: number | null; updated_at: string; tagline: string | null; description: string | null; category: string; icon_url: string | null; screenshots: string[] | null; website_url: string | null };
@@ -32,6 +33,7 @@ const LINKS = [
   { title: "Developer Pro", path: "/console/subscription", description: "View plan status and use secure PayChangu checkout." },
   { title: "Verification", path: "/console/verification", description: "Continue the existing identity verification process." },
   { title: "Analytics", path: "/console/analytics", description: "Open the existing developer analytics workflow." },
+  { title: "Reviews", path: "/console/reviews", description: "Read product ratings and open listings to reply to customers." },
   { title: "Account settings", path: "/console/settings", description: "Manage your developer profile, security and store presence." },
   { title: "Store presence", path: "/console/store", description: "Manage the public developer page shown to MAS users." },
   { title: "Resources & support", path: "/console/resources", description: "Open MAS developer guides and support resources." },
@@ -56,7 +58,7 @@ export default function DeveloperScreen({ onExit }: { onExit: () => void }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications" | "quality">("dashboard");
+  const [activeWorkflow, setActiveWorkflow] = useState<"dashboard" | "publishing" | "listing" | "analytics" | "verification" | "subscription" | "settings" | "notifications" | "quality" | "reviews">("dashboard");
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const previousAppState = useRef(AppState.currentState);
   const loadGeneration = useRef(0);
@@ -201,6 +203,7 @@ export default function DeveloperScreen({ onExit }: { onExit: () => void }) {
   if (activeWorkflow === "publishing") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} /></View></View>;
   if (activeWorkflow === "analytics") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
   if (activeWorkflow === "quality") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onStartListing={() => setActiveWorkflow("publishing")} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} /></View></View>;
+  if (activeWorkflow === "reviews") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeReviewsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} /></View></View>;
   if (activeWorkflow === "verification") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
   if (activeWorkflow === "subscription") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
   if (activeWorkflow === "settings") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
@@ -334,7 +337,7 @@ export default function DeveloperScreen({ onExit }: { onExit: () => void }) {
 
       <View style={styles.panel}>
         <Text style={styles.kicker}>WORKSPACE</Text><Text style={styles.panelTitle}>Developer tools</Text>
-        {LINKS.map((item) => <TouchableOpacity key={item.path} accessibilityRole="button" onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : item.path === "/console/quality" ? setActiveWorkflow("quality") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.toolRow}>
+        {LINKS.map((item) => <TouchableOpacity key={item.path} accessibilityRole="button" onPress={() => item.path === "/upload" ? setActiveWorkflow("publishing") : item.path === "/console/analytics" ? setActiveWorkflow("analytics") : item.path === "/console/verification" ? setActiveWorkflow("verification") : item.path === "/console/subscription" ? setActiveWorkflow("subscription") : item.path === "/console/settings" ? setActiveWorkflow("settings") : item.path === "/console/notifications" ? setActiveWorkflow("notifications") : item.path === "/console/quality" ? setActiveWorkflow("quality") : item.path === "/console/reviews" ? setActiveWorkflow("reviews") : void Linking.openURL(`${WEB}${item.path}`)} style={styles.toolRow}>
           <View style={styles.toolCopy}><Text style={styles.linkTitle}>{item.title}</Text><Text style={styles.body}>{item.description}</Text></View><Text style={styles.chevron}>›</Text>
         </TouchableOpacity>)}
       </View>
