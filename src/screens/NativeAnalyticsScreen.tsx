@@ -25,54 +25,46 @@ function isoDate(value: Date) {
 function rangeFor(key: RangeKey, customStart: string, customEnd: string): Bounds {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
-  let start = new Date(end);
   const isCustom = key === "custom";
-  if (key === "7d") start = new Date(end.getTime() - 6 * DAY);
-  else if (key === "30d") start = new Date(end.getTime() - 29 * DAY);
-  else if (key === "90d") start = new Date(end.getTime() - 89 * DAY);
-  else {
-    const parsedStart = customStart ? new Date(customStart + "T00:00:00") : new Date(end.getTime() - 29 * DAY);
-    const parsedEnd = customEnd ? new Date(customEnd + "T23:59:59.999") : end;
-    if (Number.isFinite(parsedStart.getTime())) start = parsedStart;
-    if (Number.isFinite(parsedEnd.getTime())) end.setTime(parsedEnd.getTime());
+  let start = new Date(end);
+  start.setHours(0, 0, 0, 0);
+
+  if (!isCustom) {
+    const days = key === "7d" ? 7 : key === "90d" ? 90 : 30;
+    start.setDate(start.getDate() - (days - 1));
+  } else {
+    if (customStart) {
+      const selectedStart = new Date(customStart + "T00:00:00");
+      if (Number.isFinite(selectedStart.getTime())) start = selectedStart;
+    } else {
+      start.setDate(start.getDate() - 29);
+    }
+    if (customEnd) {
+      const selectedEnd = new Date(customEnd + "T23:59:59.999");
+      if (Number.isFinite(selectedEnd.getTime())) end.setTime(selectedEnd.getTime());
+    }
   }
-  if (start > end) start.setTime(end.getTime() - 29 * DAY);
-  const rawDuration = Math.floor((end.getTime() - start.getTime()) / DAY) + 1;
+
+  if (start > end) {
+    start = new Date(end);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 29);
+  }
+
+  const calendarDay = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  const rawDuration = Math.floor((calendarDay(end) - calendarDay(start)) / DAY) + 1;
   const duration = Math.min(365, Math.max(1, rawDuration));
-  if (!isCustom || rawDuration > 365) start.setTime(end.getTime() - (duration - 1) * DAY);
+  if (!isCustom || rawDuration > 365) {
+    start = new Date(end);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (duration - 1));
+  }
+
   const previousEnd = new Date(start.getTime() - 1);
-  const previousStart = new Date(previousEnd.getTime() - duration * DAY + 1);
+  const previousStart = new Date(start);
+  previousStart.setDate(previousStart.getDate() - duration);
+  previousStart.setHours(0, 0, 0, 0);
   return { start, end, previousStart, previousEnd, duration };
-}
-
-function customDateError(start: string, end: string) {
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  if (!datePattern.test(start) || !datePattern.test(end)) return "Enter both dates in YYYY-MM-DD format.";
-  const parsedStart = new Date(start + "T00:00:00");
-  const parsedEnd = new Date(end + "T00:00:00");
-  if (!Number.isFinite(parsedStart.getTime()) || !Number.isFinite(parsedEnd.getTime()) || isoDate(parsedStart) !== start || isoDate(parsedEnd) !== end) {
-    return "One of the selected dates is invalid.";
-  }
-  if (start > end) return "The start date must not be after the end date.";
-  if (end > isoDate(new Date())) return "The end date cannot be in the future.";
-  const days = Math.floor((parsedEnd.getTime() - parsedStart.getTime()) / DAY) + 1;
-  if (days > 365) return "Choose a reporting period of 365 days or less.";
-  return "";
-}
-
-async function fetchEvents(table: "install_events" | "view_events", listingIds: string[], startIso: string, endIso: string): Promise<EventRow[]> {
-  const pageSize = 1000;
-  const rows: EventRow[] = [];
-  for (let offset = 0; ; offset += pageSize) {
-    const result = table === "install_events"
-      ? await supabase.from("install_events").select("created_at,device,country,listing_id").in("listing_id", listingIds).gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending: true }).range(offset, offset + pageSize - 1)
-      : await supabase.from("view_events").select("created_at,device,country,listing_id").in("listing_id", listingIds).gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending: true }).range(offset, offset + pageSize - 1);
-    if (result.error) throw result.error;
-    const page = (result.data ?? []) as EventRow[];
-    rows.push(...page);
-    if (page.length < pageSize) break;
-  }
-  return rows;
 }
 
 function within(row: EventRow, start: Date, end: Date) {
@@ -91,19 +83,24 @@ function tally(rows: EventRow[], key: "device" | "country") {
 
 function makeTrend(installs: EventRow[], views: EventRow[], start: Date, end: Date, duration: number): TrendRow[] {
   const daily = duration <= 90;
-  const count = daily ? duration : Math.min(12, Math.ceil(duration / 30));
+  const count = daily
+    ? duration
+    : (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
   const formatter = new Intl.DateTimeFormat("en", daily ? { month: "short", day: "numeric" } : { month: "short", year: "2-digit" });
   const rows: TrendRow[] = [];
   for (let index = 0; index < count; index += 1) {
-    const from = new Date(start);
-    const to = new Date(start);
+    let from: Date;
+    let to: Date;
     if (daily) {
+      from = new Date(start);
       from.setDate(start.getDate() + index);
-      to.setTime(from.getTime() + DAY - 1);
-    } else {
-      from.setMonth(start.getMonth() + index);
-      to.setMonth(start.getMonth() + index + 1, 0);
+      from.setHours(0, 0, 0, 0);
+      to = new Date(from);
       to.setHours(23, 59, 59, 999);
+    } else {
+      const monthStart = new Date(start.getFullYear(), start.getMonth() + index, 1);
+      from = index === 0 ? new Date(start) : monthStart;
+      to = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59, 999);
     }
     if (from > end) break;
     const bucketEnd = to > end ? end : to;
