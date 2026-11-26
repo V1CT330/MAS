@@ -53,12 +53,12 @@ export default function NativeRoot() {
   }, []);
 
   const openAccount = () => { setSpace("store"); setStoreTab("account"); };
-  const current = space === "developer" ? <DeveloperScreen /> : space === "social" ? <SocialScreen /> : storeTab === "apps" ? <StoreScreen /> : storeTab === "library" ? <LibraryScreen /> : storeTab === "alerts" ? <NotificationsScreen /> : <AccountScreen authErrorMessage={authErrorMessage} />;
+  const current = space === "developer" ? <DeveloperScreen onExit={() => setSpace("store")} /> : space === "social" ? <SocialScreen /> : storeTab === "apps" ? <StoreScreen /> : storeTab === "library" ? <LibraryScreen /> : storeTab === "alerts" ? <NotificationsScreen /> : <AccountScreen authErrorMessage={authErrorMessage} />;
   const title = space === "developer" ? "Developer Mode" : space === "social" ? "Social" : ({ apps: "Discover", library: "My library", alerts: "Alerts", account: "Account" } satisfies Record<StoreTab, string>)[storeTab];
 
-  return <SafeAreaView style={styles.safeArea}>
-    <StatusBar barStyle="dark-content" backgroundColor="#F6F7FB" />
-    <View style={styles.header}>
+  return <SafeAreaView style={[styles.safeArea, space === "developer" && styles.developerSafeArea]}>
+    <StatusBar barStyle="dark-content" backgroundColor={space === "developer" ? "#FFFFFF" : "#F6F7FB"} />
+    {space !== "developer" ? <View style={styles.header}>
       <View style={styles.headerFrame}>
         <View>
           <Text style={styles.brand}>Malawian App Store</Text>
@@ -66,7 +66,7 @@ export default function NativeRoot() {
         </View>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open account" onPress={openAccount} style={styles.accountButton}><Text style={styles.accountGlyph}>{authUserId ? "●" : "○"}</Text></TouchableOpacity>
       </View>
-    </View>
+    </View> : null}
     <View style={styles.spaceTabs}>
       <View style={styles.tabsFrame}>
         {(["store", "developer", "social"] as Space[]).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: space === item }} onPress={() => setSpace(item)} style={[styles.spaceTab, space === item && styles.spaceTabActive]}><Text style={[styles.spaceText, space === item && styles.spaceTextActive]}>{item === "store" ? "App Store" : item === "developer" ? "Developer" : "Social"}</Text></TouchableOpacity>)}
@@ -81,6 +81,7 @@ export default function NativeRoot() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F6F7FB" },
+  developerSafeArea: { backgroundColor: "#FFFFFF" },
   header: { minHeight: 54, paddingHorizontal: 16, backgroundColor: "#FFF" },
   headerFrame: { width: "100%", maxWidth: 1200, minHeight: 54, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { color: "#64748B", fontSize: 10, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase" },
