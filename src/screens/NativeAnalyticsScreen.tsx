@@ -391,12 +391,19 @@ export default function NativeAnalyticsScreen({ onBack }: { onBack: () => void }
         <Text style={styles.sectionTitle}>Product performance</Text>
         <Text style={styles.subtitle}>{number(listings.length)} total products · {number(published)} published · {number(websiteVisits.length)} website visits in period</Text>
         {productRows.length ? productRows.map(({ item, views, installs, conversion: rate }) => <View key={item.id} style={styles.productRow}>
-          <View style={styles.productCopy}><Text numberOfLines={1} style={styles.productName}>{item.name}</Text><Text style={styles.productMeta}>{item.kind} · {item.category || "Uncategorised"} · {item.status}</Text></View>
-          <View style={styles.productStat}><Text style={styles.productValue}>{number(views)}</Text><Text style={styles.productMeta}>Views</Text></View>
-          <View style={styles.productStat}><Text style={styles.productValue}>{number(installs)}</Text><Text style={styles.productMeta}>Installs</Text></View>
-          <View style={styles.productStat}><Text style={styles.productValue}>{views ? rate.toFixed(1) + "%" : "—"}</Text><Text style={styles.productMeta}>Conversion</Text></View>
-          <View style={styles.productStat}><Text style={styles.productValue}>{number(Number(item.downloads ?? 0))}</Text><Text style={styles.productMeta}>Lifetime</Text></View>
-          <View style={styles.productStat}><Text style={styles.productValue}>{item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) : "—"}</Text><Text style={styles.productMeta}>Rating</Text></View>
+          <View style={styles.productHeader}>
+            <View style={styles.productCopy}>
+              <Text numberOfLines={1} style={styles.productName}>{item.name}</Text>
+              <Text style={styles.productMeta}>{kindLabel(item.kind)} · {item.category || "Uncategorised"} · {item.status}</Text>
+            </View>
+          </View>
+          <View style={styles.productMetrics}>
+            <View style={styles.productStat}><Text style={styles.productValue}>{number(views)}</Text><Text style={styles.productMeta}>Views</Text></View>
+            <View style={styles.productStat}><Text style={styles.productValue}>{number(installs)}</Text><Text style={styles.productMeta}>Installs</Text></View>
+            <View style={styles.productStat}><Text style={styles.productValue}>{views ? rate.toFixed(1) + "%" : "—"}</Text><Text style={styles.productMeta}>Conversion</Text></View>
+            <View style={styles.productStat}><Text style={styles.productValue}>{number(Number(item.downloads ?? 0))}</Text><Text style={styles.productMeta}>Lifetime</Text></View>
+            <View style={styles.productStat}><Text style={styles.productValue}>{item.rating_count ? Number(item.rating_avg ?? 0).toFixed(1) : "—"}</Text><Text style={styles.productMeta}>Rating</Text></View>
+          </View>
         </View>) : <Text style={styles.empty}>Publish products to see performance comparisons.</Text>}
       </View>
 
@@ -468,12 +475,14 @@ const styles = StyleSheet.create({
   breakdownRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#E8EAED" },
   breakdownName: { flex: 1, color: "#5F6368", fontSize: 11 },
   breakdownValue: { color: "#202124", fontSize: 11, fontWeight: "700" },
-  productRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#E8EAED" },
+  productRow: { paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#E8EAED" },
+  productHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   productCopy: { flex: 1, minWidth: 0 },
-  productName: { color: "#202124", fontSize: 12, fontWeight: "600" },
-  productMeta: { color: "#80868B", fontSize: 9, marginTop: 3, textTransform: "capitalize" },
-  productStat: { minWidth: 38, alignItems: "flex-end" },
-  productValue: { color: "#202124", fontSize: 11, fontWeight: "700" },
+  productName: { color: "#202124", fontSize: 13, fontWeight: "700" },
+  productMeta: { color: "#80868B", fontSize: 10, marginTop: 3, textTransform: "capitalize" },
+  productMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 },
+  productStat: { flexGrow: 1, flexBasis: "28%", minWidth: 70, alignItems: "flex-start" },
+  productValue: { color: "#202124", fontSize: 12, fontWeight: "700" },
   empty: { color: "#80868B", fontSize: 11, paddingVertical: 12 },
   footnote: { color: "#80868B", fontSize: 10, lineHeight: 16, marginTop: 9 },
   primary: { minHeight: 44, backgroundColor: "#1A73E8", alignItems: "center", justifyContent: "center", marginTop: 16, paddingHorizontal: 16 },
