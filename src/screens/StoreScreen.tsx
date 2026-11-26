@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  type ImageStyle,
   Modal,
   ScrollView,
   StyleSheet,
@@ -30,7 +31,43 @@ async function resolveStoreImageUrl(value: string | null | undefined): Promise<s
   }
   return data.signedUrl;
 }
-type StoreListing = Listing & { developer?: { developer_name?: string | null; display_name?: string | null } | null; iconDisplayUrl?: string | null };
+
+/** Resolve private screenshot objects in one request; public image URLs pass through unchanged. */
+async function resolveStoreImageUrls(values: Array<string | null | undefined>): Promise<Array<string | null>> {
+  const normalized = values.map((value) => value?.trim() ?? "");
+  const storagePaths = Array.from(new Set(normalized
+    .filter((value) => value && !/^https?:\/\//i.test(value))
+    .map((value) => value.replace(/^\/+/, "").replace(/^app-assets\//i, ""))));
+  const signedByPath = new Map<string, string>();
+  if (storagePaths.length) {
+    const { data, error } = await supabase.storage.from("app-assets").createSignedUrls(storagePaths, 24 * 60 * 60);
+    if (error) {
+      console.warn("MAS listing screenshots could not be resolved.", error);
+    } else {
+      for (const item of data ?? []) {
+        if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl);
+      }
+    }
+  }
+  return normalized.map((value) => {
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    const objectPath = value.replace(/^\/+/, "").replace(/^app-assets\//i, "");
+    return signedByPath.get(objectPath) ?? null;
+  });
+}
+
+type StoreListing = Listing & {
+  developer?: { developer_name?: string | null; display_name?: string | null } | null;
+  iconDisplayUrl?: string | null;
+  screenshotDisplayUrls?: Array<string | null>;
+};
+
+function PreviewImage({ uri, style, resizeMode = "cover" }: { uri: string; style: ImageStyle; resizeMode?: "cover" | "contain" }) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { setLoaded(false); }, [uri]);
+  return <Image source={{ uri }} resizeMode={resizeMode} onLoad={() => setLoaded(true)} style={[style, { opacity: loaded ? 1 : 0 }]} />;
+}
 type SponsoredCreative = {
   id: string;
   headline: string;
@@ -84,8 +121,11 @@ export default function StoreScreen() {
       }
       const profiles = new Map((profileResult.data ?? []).map((profile) => [profile.id, profile]));
       const rows = await Promise.all((listingResult.data ?? []).map(async (row) => {
-        const iconDisplayUrl = await resolveStoreImageUrl(row.icon_url);
-        return { ...(row as unknown as Listing), developer: profiles.get(row.developer_id) ?? null, iconDisplayUrl };
+        const [iconDisplayUrl, screenshotDisplayUrls] = await Promise.all([
+          resolveStoreImageUrl(row.icon_url),
+          resolveStoreImageUrls((row.screenshots ?? []) as string[]),
+        ]);
+        return { ...(row as unknown as Listing), developer: profiles.get(row.developer_id) ?? null, iconDisplayUrl, screenshotDisplayUrls };
       }));
       if (requestId !== loadGeneration.current) return;
       setListings(rows);
@@ -308,10 +348,21 @@ export default function StoreScreen() {
           <DiscoveryShelf title="Top rated" subtitle="Listings with the strongest ratings" items={topRated} onSelect={setSelected} />
         </> : null}
         {!loading && filtered.length > 0 ? <Text style={styles.listHeading}>{isBrowsing ? "All listings" : `${filtered.length} result${filtered.length === 1 ? "" : "s"}`}</Text> : null}
-        {filtered.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" onPress={() => setSelected(item)} style={styles.card}>
-          {item.iconDisplayUrl ? <Image source={{ uri: item.iconDisplayUrl }} style={styles.icon} /> : <View style={[styles.icon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
-          <View style={styles.cardText}><Text numberOfLines={1} style={styles.title}>{item.name}</Text><Text numberOfLines={2} style={styles.body}>{item.tagline || item.description || "Discover this MAS listing"}</Text><Text style={styles.meta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Browser extension" : "App"} · {item.category} · {Number(item.downloads ?? 0).toLocaleString()} {item.kind === "website" ? "visits" : "installs"}</Text></View>
-        </TouchableOpacity>)}
+        {filtered.map((item) => <View key={item.id} style={styles.card}>
+          <TouchableOpacity accessibilityRole="button" onPress={() => setSelected(item)} style={styles.cardHeader}>
+            {item.iconDisplayUrl ? <PreviewImage uri={item.iconDisplayUrl} style={styles.icon} /> : <View style={[styles.icon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
+            <View style={styles.cardText}>
+              <Text numberOfLines={1} style={styles.title}>{item.name}</Text>
+              <Text numberOfLines={2} style={styles.body}>{item.tagline || item.description || "Discover this MAS listing"}</Text>
+              <Text style={styles.meta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Browser extension" : "App"} · {item.category} · {Number(item.downloads ?? 0).toLocaleString()} {item.kind === "website" ? "visits" : "installs"}</Text>
+            </View>
+          </TouchableOpacity>
+          {!!item.screenshotDisplayUrls?.some(Boolean) ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewRow}>
+            {item.screenshotDisplayUrls.slice(0, 8).map((url, index) => url ? <TouchableOpacity key={`${item.id}-preview-${index}`} accessibilityRole="button" accessibilityLabel={`View ${item.name} screenshot ${index + 1}`} onPress={() => setSelected(item)} style={[styles.previewFrame, item.kind === "website" && styles.websitePreviewFrame]}>
+              <PreviewImage uri={url} style={[styles.previewImage, item.kind === "website" && styles.websitePreviewImage]} resizeMode="contain" />
+            </TouchableOpacity> : null)}
+          </ScrollView> : null}
+        </View>)}
         {notice && filtered.length ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
       </ScrollView>
       <Modal visible={Boolean(selected)} animationType="slide" onRequestClose={() => setSelected(null)}>
@@ -320,7 +371,7 @@ export default function StoreScreen() {
             <TouchableOpacity onPress={() => setSelected(null)} accessibilityLabel="Close product details" style={styles.close}><Text style={styles.closeText}>×</Text></TouchableOpacity>
             <View style={styles.detailHeader}>{selected.iconDisplayUrl ? <Image source={{ uri: selected.iconDisplayUrl }} style={styles.detailIcon} /> : <View style={[styles.detailIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{selected.name.slice(0, 1).toUpperCase()}</Text></View>}<View style={styles.cardText}><Text style={styles.heading}>{selected.name}</Text><Text style={styles.body}>{selected.developer?.developer_name || selected.developer?.display_name || "MAS developer"}</Text><Text style={styles.meta}>{selected.kind} · {selected.category} · ★ {Number(selected.rating_avg ?? 0).toFixed(1)} ({selected.rating_count ?? 0})</Text></View></View>
             {selected.description ? <View style={styles.detailSection}><Text style={styles.title}>About</Text><Text style={styles.body}>{selected.description}</Text></View> : null}
-            {selected.screenshots?.length ? <><Text style={styles.title}>Screenshots</Text><ScrollView horizontal>{selected.screenshots.map((url, index) => <Image key={`${selected.id}-${index}`} source={{ uri: url }} style={styles.screenshot} resizeMode="cover" />)}</ScrollView></> : null}
+            {selected.screenshotDisplayUrls?.some(Boolean) ? <><Text style={styles.sectionTitle}>Screenshots</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailPreviewRow}>{selected.screenshotDisplayUrls.map((url, index) => url ? <View key={`${selected.id}-${index}`} style={[styles.screenshotFrame, selected.kind === "website" && styles.websiteScreenshotFrame]}><PreviewImage uri={url} style={styles.screenshot} resizeMode="contain" /></View> : null)}</ScrollView></> : null}
             {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
             <TouchableOpacity disabled={busy} style={styles.primaryButton} onPress={() => void perform(() => runInstall(selected))}><Text style={styles.primaryText}>{busy ? "Please wait…" : selected.kind === "website" ? "Open website" : selected.kind === "ai_agent" ? "Download AI agent" : selected.kind === "extension" ? "Download extension" : "Download app"}</Text></TouchableOpacity>
             <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={() => void perform(() => toggleSaved(selected))}><Text style={styles.secondaryText}>Save / remove from library</Text></TouchableOpacity>
@@ -339,7 +390,7 @@ function DiscoveryShelf({ title, subtitle, items, onSelect }: { title: string; s
     <Text style={styles.shelfSubtitle}>{subtitle}</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelfRow}>
       {items.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" onPress={() => onSelect(item)} style={styles.shelfTile}>
-        {item.iconDisplayUrl ? <Image source={{ uri: item.iconDisplayUrl }} style={styles.shelfIcon} /> : <View style={[styles.shelfIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
+        {item.iconDisplayUrl ? <PreviewImage uri={item.iconDisplayUrl} style={styles.shelfIcon} /> : <View style={[styles.shelfIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{item.name.slice(0, 1).toUpperCase()}</Text></View>}
         <Text numberOfLines={1} style={styles.shelfName}>{item.name}</Text>
         <Text numberOfLines={1} style={styles.shelfMeta}>{item.kind === "website" ? "Website" : item.kind === "ai_agent" ? "AI agent" : item.kind === "extension" ? "Extension" : "App"}</Text>
       </TouchableOpacity>)}
@@ -348,5 +399,5 @@ function DiscoveryShelf({ title, subtitle, items, onSelect }: { title: string; s
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F6F7FB" }, sponsoredSection: { marginTop: 14, marginBottom: 6 }, sponsoredHeading: { color: "#52607A", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }, sponsoredAppRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E7EBF3" }, sponsoredAppIcon: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA" }, sponsoredIconFallback: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA", alignItems: "center", justifyContent: "center" }, sponsoredCopy: { flex: 1, minWidth: 0 }, sponsoredTitle: { color: "#111827", fontSize: 14, fontWeight: "700" }, sponsoredBody: { color: "#64748B", fontSize: 12, lineHeight: 17, marginTop: 3 }, sponsoredMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 5 }, sponsoredMeta: { color: "#64748B", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.35 }, sponsoredComingSoon: { color: ACCENT, fontSize: 10, fontWeight: "700" }, sponsoredWebsite: { borderBottomWidth: 1, borderBottomColor: "#E7EBF3", paddingBottom: 10, marginBottom: 10 }, sponsoredBanner: { width: "100%", height: 136, backgroundColor: "#EFF4FA" }, sponsoredWebsiteCopy: { paddingTop: 9 }, shelf: { marginTop: 18 }, shelfTitle: { color: "#111827", fontSize: 17, fontWeight: "800" }, shelfSubtitle: { color: "#64748B", fontSize: 11, marginTop: 3 }, shelfRow: { gap: 10, paddingVertical: 10 }, shelfTile: { width: 104, padding: 0, backgroundColor: "transparent" }, shelfIcon: { width: 104, height: 104, borderRadius: 22, backgroundColor: "#EFF4FA", alignSelf: "center" }, shelfName: { color: "#111827", fontSize: 13, fontWeight: "600", marginTop: 8 }, shelfMeta: { color: "#64748B", fontSize: 11, marginTop: 3 }, content: { padding: 16, paddingBottom: 32 }, heading: { color: "#111827", fontSize: 23, fontWeight: "800" }, subheading: { color: "#64748B", fontSize: 13, marginTop: 5, marginBottom: 14 }, listHeading: { color: "#111827", fontSize: 17, fontWeight: "700", marginTop: 16, marginBottom: 6 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#111827", fontSize: 15, fontWeight: "700" }, body: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "transparent", paddingHorizontal: 4, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 12 }, icon: { width: 64, height: 64, borderRadius: 18, backgroundColor: "#EFF4FA" }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#64748B", fontSize: 11, marginTop: 5, textTransform: "capitalize" }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#F6F7FB" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#FFF", borderRadius: 13, padding: 14, marginVertical: 10 }, screenshot: { width: 190, height: 300, borderRadius: 12, marginRight: 10, marginVertical: 10, backgroundColor: "#E7EBF3" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
+  root: { flex: 1, backgroundColor: "#FFFFFF" }, sponsoredSection: { marginTop: 14, marginBottom: 6 }, sponsoredHeading: { color: "#52607A", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }, sponsoredAppRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E7EBF3" }, sponsoredAppIcon: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA" }, sponsoredIconFallback: { width: 56, height: 56, borderRadius: 14, backgroundColor: "#EFF4FA", alignItems: "center", justifyContent: "center" }, sponsoredCopy: { flex: 1, minWidth: 0 }, sponsoredTitle: { color: "#111827", fontSize: 14, fontWeight: "700" }, sponsoredBody: { color: "#64748B", fontSize: 12, lineHeight: 17, marginTop: 3 }, sponsoredMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 5 }, sponsoredMeta: { color: "#64748B", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.35 }, sponsoredComingSoon: { color: ACCENT, fontSize: 10, fontWeight: "700" }, sponsoredWebsite: { borderBottomWidth: 1, borderBottomColor: "#E7EBF3", paddingBottom: 10, marginBottom: 10 }, sponsoredBanner: { width: "100%", height: 136, backgroundColor: "#EFF4FA" }, sponsoredWebsiteCopy: { paddingTop: 9 }, shelf: { marginTop: 18 }, shelfTitle: { color: "#111827", fontSize: 17, fontWeight: "800" }, shelfSubtitle: { color: "#64748B", fontSize: 11, marginTop: 3 }, shelfRow: { gap: 10, paddingVertical: 10 }, shelfTile: { width: 104, padding: 0, backgroundColor: "transparent" }, shelfIcon: { width: 104, height: 104, borderRadius: 22, backgroundColor: "#EFF4FA", alignSelf: "center" }, shelfName: { color: "#111827", fontSize: 13, fontWeight: "600", marginTop: 8 }, shelfMeta: { color: "#64748B", fontSize: 11, marginTop: 3 }, content: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 36 }, heading: { color: "#202124", fontSize: 22, fontWeight: "700" }, subheading: { color: "#5F6368", fontSize: 13, lineHeight: 19, marginTop: 5, marginBottom: 14 }, listHeading: { color: "#202124", fontSize: 18, fontWeight: "700", marginTop: 20, marginBottom: 8 }, search: { backgroundColor: "#FFF", borderColor: "#DCE2EA", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, minHeight: 46, color: "#111827", marginBottom: 10 }, row: { gap: 8, paddingVertical: 5, paddingRight: 8 }, chip: { borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FFF" }, chipActive: { backgroundColor: ACCENT, borderColor: ACCENT }, chipText: { color: "#52607A", fontSize: 12, fontWeight: "600" }, chipTextActive: { color: "#FFF" }, loading: { marginTop: 30 }, empty: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 22, marginTop: 12 }, title: { color: "#202124", fontSize: 16, fontWeight: "600" }, body: { color: "#5F6368", fontSize: 13, lineHeight: 19, marginTop: 4 }, card: { backgroundColor: "#FFFFFF", paddingTop: 12, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#F1F3F4" }, cardHeader: { paddingHorizontal: 2, flexDirection: "row", alignItems: "center", gap: 14, minHeight: 76 }, icon: { width: 64, height: 64, borderRadius: 16, backgroundColor: "#F1F3F4" }, previewRow: { gap: 10, paddingTop: 12, paddingBottom: 2, paddingLeft: 2, paddingRight: 8 }, previewFrame: { width: 116, height: 164, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E8EAED", backgroundColor: "#F8F9FA", padding: 3 }, previewImage: { width: "100%", height: "100%", borderRadius: 9, backgroundColor: "#F1F3F4" }, websitePreviewFrame: { width: 210, height: 112 }, websitePreviewImage: { borderRadius: 8 }, iconFallback: { alignItems: "center", justifyContent: "center" }, iconLetter: { color: ACCENT, fontSize: 22, fontWeight: "800" }, cardText: { flex: 1, minWidth: 0 }, meta: { color: "#5F6368", fontSize: 12, marginTop: 6, textTransform: "capitalize" }, notice: { color: "#9A3412", backgroundColor: "#FFF7ED", padding: 11, borderRadius: 9, marginTop: 10, fontSize: 12 }, modalRoot: { flex: 1, backgroundColor: "#FFFFFF" }, modalContent: { padding: 18, paddingTop: 36, paddingBottom: 40 }, close: { alignSelf: "flex-end", paddingHorizontal: 8 }, closeText: { fontSize: 30, color: "#64748B" }, detailHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }, detailIcon: { width: 76, height: 76, borderRadius: 18, backgroundColor: "#EFF4FA" }, detailSection: { backgroundColor: "#F8F9FA", borderRadius: 13, padding: 14, marginVertical: 10 }, sectionTitle: { color: "#202124", fontSize: 18, fontWeight: "700", marginTop: 12, marginBottom: 4 }, detailPreviewRow: { gap: 12, paddingVertical: 12, paddingRight: 8 }, screenshotFrame: { width: 210, height: 320, borderRadius: 14, borderWidth: 1, borderColor: "#E8EAED", padding: 4, backgroundColor: "#F8F9FA", overflow: "hidden" }, websiteScreenshotFrame: { width: 300, height: 190 }, screenshot: { width: "100%", height: "100%", borderRadius: 10, backgroundColor: "#F1F3F4" }, primaryButton: { backgroundColor: ACCENT, minHeight: 46, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 16 }, primaryText: { color: "#FFF", fontSize: 14, fontWeight: "700" }, secondaryButton: { minHeight: 42, justifyContent: "center", alignItems: "center", marginTop: 8 }, secondaryText: { color: ACCENT, fontSize: 13, fontWeight: "700" }, footnote: { color: "#64748B", fontSize: 11, lineHeight: 16, marginTop: 12 },
 });
