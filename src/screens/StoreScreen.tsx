@@ -4,6 +4,7 @@ import {
   Image,
   Linking,
   type ImageStyle,
+  type StyleProp,
   Modal,
   ScrollView,
   StyleSheet,
@@ -39,14 +40,16 @@ async function resolveStoreImageUrls(values: Array<string | null | undefined>): 
     .filter((value) => value && !/^https?:\/\//i.test(value))
     .map((value) => value.replace(/^\/+/, "").replace(/^app-assets\//i, ""))));
   const signedByPath = new Map<string, string>();
-  if (storagePaths.length) {
-    const { data, error } = await supabase.storage.from("app-assets").createSignedUrls(storagePaths, 24 * 60 * 60);
+  // Supabase Storage accepts batches; chunking avoids oversized requests on large catalogues.
+  for (let offset = 0; offset < storagePaths.length; offset += 100) {
+    const batch = storagePaths.slice(offset, offset + 100);
+    const { data, error } = await supabase.storage.from("app-assets").createSignedUrls(batch, 24 * 60 * 60);
     if (error) {
       console.warn("MAS listing screenshots could not be resolved.", error);
-    } else {
-      for (const item of data ?? []) {
-        if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl);
-      }
+      continue;
+    }
+    for (const item of data ?? []) {
+      if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl);
     }
   }
   return normalized.map((value) => {
@@ -63,7 +66,7 @@ type StoreListing = Listing & {
   screenshotDisplayUrls?: Array<string | null>;
 };
 
-function PreviewImage({ uri, style, resizeMode = "cover" }: { uri: string; style: ImageStyle; resizeMode?: "cover" | "contain" }) {
+function PreviewImage({ uri, style, resizeMode = "cover" }: { uri: string; style: StyleProp<ImageStyle>; resizeMode?: "cover" | "contain" }) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => { setLoaded(false); }, [uri]);
   return <Image source={{ uri }} resizeMode={resizeMode} onLoad={() => setLoaded(true)} style={[style, { opacity: loaded ? 1 : 0 }]} />;
@@ -369,7 +372,7 @@ export default function StoreScreen() {
         {selected ? <View style={styles.modalRoot}>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <TouchableOpacity onPress={() => setSelected(null)} accessibilityLabel="Close product details" style={styles.close}><Text style={styles.closeText}>×</Text></TouchableOpacity>
-            <View style={styles.detailHeader}>{selected.iconDisplayUrl ? <Image source={{ uri: selected.iconDisplayUrl }} style={styles.detailIcon} /> : <View style={[styles.detailIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{selected.name.slice(0, 1).toUpperCase()}</Text></View>}<View style={styles.cardText}><Text style={styles.heading}>{selected.name}</Text><Text style={styles.body}>{selected.developer?.developer_name || selected.developer?.display_name || "MAS developer"}</Text><Text style={styles.meta}>{selected.kind} · {selected.category} · ★ {Number(selected.rating_avg ?? 0).toFixed(1)} ({selected.rating_count ?? 0})</Text></View></View>
+            <View style={styles.detailHeader}>{selected.iconDisplayUrl ? <PreviewImage uri={selected.iconDisplayUrl} style={styles.detailIcon} /> : <View style={[styles.detailIcon, styles.iconFallback]}><Text style={styles.iconLetter}>{selected.name.slice(0, 1).toUpperCase()}</Text></View>}<View style={styles.cardText}><Text style={styles.heading}>{selected.name}</Text><Text style={styles.body}>{selected.developer?.developer_name || selected.developer?.display_name || "MAS developer"}</Text><Text style={styles.meta}>{selected.kind} · {selected.category} · ★ {Number(selected.rating_avg ?? 0).toFixed(1)} ({selected.rating_count ?? 0})</Text></View></View>
             {selected.description ? <View style={styles.detailSection}><Text style={styles.title}>About</Text><Text style={styles.body}>{selected.description}</Text></View> : null}
             {selected.screenshotDisplayUrls?.some(Boolean) ? <><Text style={styles.sectionTitle}>Screenshots</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailPreviewRow}>{selected.screenshotDisplayUrls.map((url, index) => url ? <View key={`${selected.id}-${index}`} style={[styles.screenshotFrame, selected.kind === "website" && styles.websiteScreenshotFrame]}><PreviewImage uri={url} style={styles.screenshot} resizeMode="contain" /></View> : null)}</ScrollView></> : null}
             {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
