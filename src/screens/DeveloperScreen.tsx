@@ -40,7 +40,7 @@ const LINKS = [
   { title: "Quality review", path: "/console/quality", description: "Review publishing quality guidance and listing requirements." },
 ];
 
-export default function DeveloperScreen() {
+export default function DeveloperScreen({ onExit }: { onExit: () => void }) {
   const { width: screenWidth } = useWindowDimensions();
   const dashboardWidth = Math.min(screenWidth, 1200) - 32;
   const metricColumns = screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
@@ -183,17 +183,29 @@ export default function DeveloperScreen() {
     });
   }, [products, search, statusFilter]);
 
-  if (loading && !userId) return <View style={styles.center}><ActivityIndicator color="#1877F2" /></View>;
-  if (!userId) return <View style={styles.root}><View style={styles.emptyState}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
+  const shellHeader = (
+    <View style={styles.shellHeader}>
+      <View style={styles.shellHeaderCopy}>
+        <Text style={styles.shellEyebrow}>MALAWIAN APP STORE</Text>
+        <Text style={styles.shellTitle}>Developer console</Text>
+      </View>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Switch workspace" onPress={onExit} style={styles.switchSpaceButton}>
+        <Text style={styles.switchSpaceText}>Switch space</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-  if (activeWorkflow === "publishing") return <NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} />;
-  if (activeWorkflow === "analytics") return <NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-  if (activeWorkflow === "quality") return <NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onStartListing={() => setActiveWorkflow("publishing")} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} />;
-  if (activeWorkflow === "verification") return <NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-  if (activeWorkflow === "subscription") return <NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-  if (activeWorkflow === "settings") return <NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
-  if (activeWorkflow === "notifications") return <View style={{flex:1}}><TouchableOpacity onPress={() => setActiveWorkflow("dashboard")} style={{padding:14}}><Text style={{color:"#1A73E8",fontWeight:"700"}}>‹ Developer dashboard</Text></TouchableOpacity><NotificationsScreen scope="developer" /></View>;
-  if (activeWorkflow === "listing" && activeListingId) return <NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} />;
+  if (loading && !userId) return <View style={styles.root}>{shellHeader}<View style={styles.loadingState}><ActivityIndicator color="#1877F2" /></View></View>;
+  if (!userId) return <View style={styles.root}>{shellHeader}<View style={styles.emptyState}><Text style={styles.heading}>Developer Mode</Text><Text style={styles.body}>{error || "Activate your developer workspace in MAS account settings. Developer terms and eligibility are confirmed by the existing WebApp."}</Text><Button title="Open MAS developer settings" onPress={() => void Linking.openURL(`${WEB}/settings`)} /></View></View>;
+
+  if (activeWorkflow === "publishing") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativePublishingScreen onSaved={(listing) => { setActiveListingId(listing.id); setActiveWorkflow("listing"); void load(); }} /></View></View>;
+  if (activeWorkflow === "analytics") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeAnalyticsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
+  if (activeWorkflow === "quality") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeQualityScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} onStartListing={() => setActiveWorkflow("publishing")} onSelectListing={(listingId) => { setActiveListingId(listingId); setActiveWorkflow("listing"); }} /></View></View>;
+  if (activeWorkflow === "verification") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeVerificationScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
+  if (activeWorkflow === "subscription") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeSubscriptionScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
+  if (activeWorkflow === "settings") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeDeveloperSettingsScreen onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
+  if (activeWorkflow === "notifications") return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><TouchableOpacity onPress={() => setActiveWorkflow("dashboard")} style={{padding:14}}><Text style={{color:"#1A73E8",fontWeight:"700"}}>‹ Developer dashboard</Text></TouchableOpacity><NotificationsScreen scope="developer" /></View></View>;
+  if (activeWorkflow === "listing" && activeListingId) return <View style={styles.childScreen}>{shellHeader}<View style={styles.childContent}><NativeListingDetailScreen listingId={activeListingId} onBack={() => { setActiveWorkflow("dashboard"); void load(); }} /></View></View>;
 
   const actionItems = [
     ...products.filter((product) => product.status === "rejected").map((product) => ({
@@ -209,6 +221,7 @@ export default function DeveloperScreen() {
   ];
 
   return <>
+    {shellHeader}
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.welcome}>
         <View style={styles.welcomeCopy}>
@@ -357,9 +370,18 @@ function Button({ title, onPress }: { title: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F5F8FD" },
+  root: { flex: 1, backgroundColor: "#FFFFFF" },
+  childScreen: { flex: 1, backgroundColor: "#FFFFFF" },
+  childContent: { flex: 1, minHeight: 0 },
+  shellHeader: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E8EEF7" },
+  shellHeaderCopy: { flex: 1, minWidth: 0 },
+  shellEyebrow: { color: "#64748B", fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  shellTitle: { color: "#172B4D", fontSize: 18, fontWeight: "800", marginTop: 2 },
+  switchSpaceButton: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 9, backgroundColor: "#EAF2FF" },
+  switchSpaceText: { color: "#1765CC", fontSize: 12, fontWeight: "700" },
   content: { padding: 16, paddingBottom: 36, gap: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loadingState: { flex: 1, alignItems: "center", justifyContent: "center" },
   welcome: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E5ECF5", padding: 18, gap: 14 },
   welcomeCopy: { gap: 3 },
   kicker: { color: "#5F78A0", fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
