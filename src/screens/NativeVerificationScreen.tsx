@@ -193,7 +193,6 @@ export default function NativeVerificationScreen({ onBack }: Props) {
       <Text style={s.heading}>Identity verification</Text>
       <Text style={s.copy}>Verify securely through Didit. MAS updates your status only after the provider result is received and validated.</Text>
       {!MANUAL_KYC_UPLOAD_ENABLED ? <Text style={s.note}>Manual document upload is temporarily unavailable while secure document storage is being provisioned. Use the Didit option below.</Text> : null}
-      {MANUAL_KYC_UPLOAD_ENABLED ? <Action title={busy ? "Submitting…" : "Submit for verification"} disabled={busy} onPress={() => void submitManual()} /> : null}
       <Action title={busy ? "Preparing Didit…" : "Verify with Didit"} disabled={busy} onPress={() => void startDidit()} />
       <Text style={s.copy}>Didit opens in a secure hosted page. Your MAS status changes only after the verified provider result is received.</Text>
     </View> : null}
