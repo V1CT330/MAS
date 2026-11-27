@@ -165,10 +165,14 @@ export default function NativeVerificationScreen({ onBack }: Props) {
     <Text style={s.eyebrow}>DEVELOPER ACCOUNT</Text>
     <Text style={s.title}>Verification</Text>
     <Text style={s.copy}>Verify your identity to build trust with users and meet MAS publishing requirements.</Text>
-    <View style={s.panel}>
-      <Text style={s.label}>Current status</Text>
-      <Text style={s.status}>{statusLabel}</Text>
-      {status === "approved" ? <Text style={s.copy}>Your developer identity is verified. You do not need to submit another application.</Text> : status === "pending" ? <Text style={s.copy}>Your verification is awaiting review. Do not submit duplicate documents.</Text> : status === "rejected" ? <Text style={s.copy}>Your previous submission needs attention. Contact MAS support if you need clarification before resubmitting.</Text> : <Text style={s.copy}>Use secure automatic verification through Didit. Manual document upload is temporarily unavailable.</Text>}
+    <View style={s.statusRow}>
+      <View style={s.statusCopy}>
+        <Text style={s.label}>Verification status</Text>
+        {status === "approved" ? <Text style={s.copy}>Your developer identity is verified. You do not need to submit another application.</Text> : status === "pending" ? <Text style={s.copy}>Your verification is awaiting review. Do not submit duplicate documents.</Text> : status === "rejected" ? <Text style={s.copy}>Your previous submission needs attention. Contact MAS support if you need clarification before resubmitting.</Text> : <Text style={s.copy}>Use secure automatic verification through Didit. Manual document upload is temporarily unavailable.</Text>}
+      </View>
+      <View style={[s.statusBadge, status === "approved" ? s.statusBadgeApproved : status === "pending" ? s.statusBadgePending : status === "rejected" ? s.statusBadgeRejected : s.statusBadgeNeutral]}>
+        <Text style={[s.statusBadgeText, status === "approved" ? s.statusBadgeApprovedText : status === "pending" ? s.statusBadgePendingText : status === "rejected" ? s.statusBadgeRejectedText : s.statusBadgeNeutralText]}>{statusLabel}</Text>
+      </View>
     </View>
     <View style={s.panel}>
       <Text style={s.heading}>WhatsApp contact</Text>
@@ -185,12 +189,20 @@ export default function NativeVerificationScreen({ onBack }: Props) {
       <TouchableOpacity onPress={() => void chooseDocument()} style={s.file}><Text style={s.fileText}>{document?.name || "Choose national ID or passport"}</Text></TouchableOpacity>
       <Action title={busy ? "Submitting…" : "Submit for verification"} disabled={busy || status === "pending"} onPress={() => void submitManual()} />
     </View> : null}
-    {!MANUAL_KYC_UPLOAD_ENABLED && status !== "approved" && status !== "pending" ? <Text style={s.note}>Manual document upload is temporarily unavailable while secure document storage is being provisioned. Use Didit instead.</Text> : null}
     {status !== "approved" && status !== "pending" ? <View style={s.panel}>
-      <Text style={s.heading}>Automatic verification</Text>
-      <Text style={s.copy}>Didit handles identity capture in its secure hosted flow. MAS changes your status only after the verified provider result is received.</Text>
+      <Text style={s.heading}>Identity verification</Text>
+      <Text style={s.copy}>Verify securely through Didit. MAS updates your status only after the provider result is received and validated.</Text>
+      {!MANUAL_KYC_UPLOAD_ENABLED ? <Text style={s.note}>Manual document upload is temporarily unavailable while secure document storage is being provisioned. Use the Didit option below.</Text> : null}
+      {MANUAL_KYC_UPLOAD_ENABLED ? <Action title={busy ? "Submitting…" : "Submit for verification"} disabled={busy} onPress={() => void submitManual()} /> : null}
       <Action title={busy ? "Preparing Didit…" : "Verify with Didit"} disabled={busy} onPress={() => void startDidit()} />
+      <Text style={s.copy}>Didit opens in a secure hosted page. Your MAS status changes only after the verified provider result is received.</Text>
     </View> : null}
+    <View style={s.whySection}>
+      <Text style={s.heading}>Why verification matters</Text>
+      <Text style={s.whyItem}>Users trust products from verified studios.</Text>
+      <Text style={s.whyItem}>Verified developers get priority Spotlight consideration.</Text>
+      <Text style={s.whyItem}>Verification is required for eligible local payment support.</Text>
+    </View>
     <TouchableOpacity disabled={busy} onPress={() => void refresh()} style={s.refresh}><Text style={s.refreshText}>Refresh verification status</Text></TouchableOpacity>
     {message ? <Text accessibilityRole="alert" style={s.message}>{message}</Text> : null}
     <Text style={s.note}>Verification is free and separate from Developer Pro. A paid subscription cannot purchase a verified badge.</Text>
@@ -210,10 +222,23 @@ const s = StyleSheet.create({
   eyebrow: { color: "#1A73E8", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   title: { color: "#111827", fontSize: 25, fontWeight: "700", marginTop: 4 },
   copy: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 6 },
+  statusRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingVertical: 14, marginTop: 8, borderBottomWidth: 1, borderBottomColor: "#E7EBF3" },
+  statusCopy: { flex: 1, minWidth: 0 },
+  statusBadge: { flexShrink: 0, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 6, marginTop: 1 },
+  statusBadgeText: { fontSize: 11, fontWeight: "700" },
+  statusBadgeApproved: { backgroundColor: "#E8F5EF" },
+  statusBadgeApprovedText: { color: "#217653" },
+  statusBadgePending: { backgroundColor: "#FFF4DF" },
+  statusBadgePendingText: { color: "#8A641E" },
+  statusBadgeRejected: { backgroundColor: "#FCEDEA" },
+  statusBadgeRejectedText: { color: "#A33E36" },
+  statusBadgeNeutral: { backgroundColor: "#EEF2F7" },
+  statusBadgeNeutralText: { color: "#64748B" },
   panel: { backgroundColor: "#FFF", borderRadius: 12, padding: 14, marginTop: 14, borderWidth: 1, borderColor: "#E7EBF3" },
   label: { color: "#64748B", fontSize: 11, fontWeight: "600" },
-  status: { color: "#111827", fontSize: 19, fontWeight: "700", marginTop: 4 },
   heading: { color: "#111827", fontSize: 15, fontWeight: "700" },
+  whySection: { marginTop: 20, paddingTop: 2, gap: 7 },
+  whyItem: { color: "#64748B", fontSize: 12, lineHeight: 18 },
   input: { minHeight: 44, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, paddingHorizontal: 11, marginTop: 10, color: "#111827", backgroundColor: "#FFF" },
   file: { minHeight: 44, borderWidth: 1, borderColor: "#DCE2EA", borderRadius: 9, paddingHorizontal: 11, justifyContent: "center", marginTop: 10 },
   fileText: { color: "#475569", fontSize: 12 },
