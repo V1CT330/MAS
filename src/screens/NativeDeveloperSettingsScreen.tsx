@@ -1,9 +1,22 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../lib/supabase";
 
 const WEB = "https://malawian-app-store.vercel.app";
+const PROFILE_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif", "heic", "heif"]);
+const PROFILE_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+  "image/heic": "heic",
+  "image/heif": "heif",
+};
+const MAX_COVER_IMAGE_BYTES = 8 * 1024 * 1024;
 type Props = { onBack: () => void };
+type ProfileImageTarget = "avatar" | "cover";
 type SocialLinks = {
   facebook_url: string;
   x_url: string;
@@ -23,6 +36,8 @@ type Profile = {
   website_url: string | null;
   github_url: string | null;
   portfolio_url: string | null;
+  avatar_url: string | null;
+  cover_image_url: string | null;
 } & { [K in keyof SocialLinks]: string | null };
 
 const EMPTY_SOCIALS: SocialLinks = {
@@ -58,6 +73,10 @@ export default function NativeDeveloperSettingsScreen({ onBack }: Props) {
   const [githubUrl, setGithubUrl] = useState("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [socials, setSocials] = useState<SocialLinks>(EMPTY_SOCIALS);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -74,7 +93,7 @@ export default function NativeDeveloperSettingsScreen({ onBack }: Props) {
       }
       setUserId(auth.user.id);
       const { data, error } = await supabase.from("profiles")
-        .select("display_name,developer_name,company_name,bio,skills,location,contact_email,website_url,github_url,portfolio_url,facebook_url,x_url,linkedin_url,instagram_url,youtube_url,whatsapp_url")
+        .select("display_name,developer_name,company_name,bio,skills,location,contact_email,website_url,github_url,portfolio_url,avatar_url,cover_image_url,facebook_url,x_url,linkedin_url,instagram_url,youtube_url,whatsapp_url")
         .eq("id", auth.user.id).maybeSingle();
       if (error) throw error;
       const row = data as Profile | null;
@@ -96,6 +115,18 @@ export default function NativeDeveloperSettingsScreen({ onBack }: Props) {
         youtube_url: row?.youtube_url ?? "",
         whatsapp_url: row?.whatsapp_url ?? "",
       });
+      if (row?.avatar_url) {
+        const { data: avatarData } = await supabase.storage.from("app-assets").createSignedUrl(row.avatar_url, 60 * 60);
+        setAvatarPreview(avatarData?.signedUrl ?? null);
+      } else {
+        setAvatarPreview(null);
+      }
+      if (row?.cover_image_url) {
+        const { data: coverData } = await supabase.storage.from("app-assets").createSignedUrl(row.cover_image_url, 60 * 60);
+        setCoverPreview(coverData?.signedUrl ?? null);
+      } else {
+        setCoverPreview(null);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load developer settings.");
     } finally {
@@ -150,6 +181,71 @@ export default function NativeDeveloperSettingsScreen({ onBack }: Props) {
       setMessage(error instanceof Error ? error.message : "Could not save social pages.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const chooseProfileImage = async (target: ProfileImageTarget) => {
+    if (!userId) return;
+    const setUploading = target === "avatar" ? setUploadingAvatar : setUploadingCover;
+    setUploading(true);
+    setMessage("");
+    let uploadedPath: string | null = null;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) throw new Error("Allow photo-library access to choose a profile image.");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: target === "cover" ? [16, 9] : [1, 1],
+        quality: 0.9,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const mimeType = (asset.mimeType ?? "").split(";")[0].trim().toLowerCase();
+      const namedExtension = asset.fileName?.split(".").pop()?.toLowerCase() ?? "";
+      const extension = PROFILE_IMAGE_EXTENSIONS.has(namedExtension)
+        ? namedExtension
+        : PROFILE_IMAGE_MIME_EXTENSIONS[mimeType];
+      if (!asset.uri || !mimeType.startsWith("image/") || !extension || !PROFILE_IMAGE_EXTENSIONS.has(extension)) {
+        throw new Error("Choose a supported JPG, PNG, WebP, GIF, AVIF or HEIC image.");
+      }
+
+      const response = await fetch(asset.uri);
+      if (!response.ok) throw new Error("Could not read the selected image.");
+      const body = await response.arrayBuffer();
+      if (!body.byteLength) throw new Error("The selected image is empty.");
+      if (target === "cover" && body.byteLength > MAX_COVER_IMAGE_BYTES) {
+        throw new Error("Cover images must be 8 MB or smaller.");
+      }
+
+      const folder = target === "cover" ? "profile-covers" : "avatars";
+      const path = userId + "/" + folder + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + extension;
+      const { error: uploadError } = await supabase.storage.from("app-assets").upload(path, body, {
+        upsert: false,
+        contentType: mimeType,
+      });
+      if (uploadError) throw uploadError;
+      uploadedPath = path;
+
+      const column = target === "cover" ? "cover_image_url" : "avatar_url";
+      const { error: profileError } = await supabase.from("profiles").update({ [column]: path }).eq("id", userId);
+      if (profileError) throw profileError;
+      uploadedPath = null;
+
+      const { data: signedData, error: signedError } = await supabase.storage.from("app-assets").createSignedUrl(path, 60 * 60);
+      if (target === "cover") setCoverPreview(signedData?.signedUrl ?? null);
+      else setAvatarPreview(signedData?.signedUrl ?? null);
+      setMessage(signedError
+        ? "Image saved. Refresh settings if its preview does not appear."
+        : target === "cover" ? "Cover picture updated." : "Profile photo updated.");
+    } catch (error) {
+      if (uploadedPath) {
+        const { error: cleanupError } = await supabase.storage.from("app-assets").remove([uploadedPath]);
+        if (cleanupError) console.warn("Could not remove an unlinked profile image.");
+      }
+      setMessage(error instanceof Error ? error.message : "Could not update the profile image.");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -213,8 +309,32 @@ export default function NativeDeveloperSettingsScreen({ onBack }: Props) {
     </View>
     <View style={s.actionSection}>
       <Text style={s.heading}>Public store presence</Text>
-      <Text style={s.copy}>Manage profile photos, cover picture and the public details shoppers see in the store.</Text>
-      <Action title="Manage store presence" onPress={() => void open("/console/store")} />
+      <Text style={s.copy}>Update the images shown on your public developer page. Cover pictures are limited to 8 MB.</Text>
+      <View style={s.coverFrame}>
+        {coverPreview
+          ? <Image source={{ uri: coverPreview }} style={s.coverImage} />
+          : <View style={s.coverPlaceholder}><Text style={s.placeholderText}>No cover picture selected</Text></View>}
+      </View>
+      <Action
+        title={uploadingCover ? "Uploading cover…" : coverPreview ? "Change cover picture" : "Add cover picture"}
+        disabled={busy || uploadingCover || uploadingAvatar}
+        onPress={() => void chooseProfileImage("cover")}
+      />
+      <View style={s.avatarRow}>
+        {avatarPreview
+          ? <Image source={{ uri: avatarPreview }} style={s.avatarImage} />
+          : <View style={s.avatarPlaceholder}><Text style={s.placeholderText}>Photo</Text></View>}
+        <View style={s.avatarInfo}>
+          <Text style={s.avatarName}>{developerName || displayName || "Your developer profile"}</Text>
+          <Text style={s.copy}>Public profile photo</Text>
+          <Action
+            title={uploadingAvatar ? "Uploading photo…" : avatarPreview ? "Change profile photo" : "Add profile photo"}
+            disabled={busy || uploadingAvatar || uploadingCover}
+            onPress={() => void chooseProfileImage("avatar")}
+          />
+        </View>
+      </View>
+      <Action title="View public developer page" secondary onPress={() => void open("/developers/" + userId)} />
     </View>
     {message ? <Text accessibilityRole="alert" style={s.message}>{message}</Text> : null}
     <TouchableOpacity onPress={() => void load()} style={s.refresh}><Text style={s.backText}>Refresh settings</Text></TouchableOpacity>
@@ -247,5 +367,14 @@ const s = StyleSheet.create({
   secondary: { backgroundColor: "#EFF4FA" },
   secondaryText: { color: "#1A73E8" },
   message: { color: "#334155", fontSize: 12, lineHeight: 18, marginTop: 12 },
+  coverFrame: { width: "100%", height: 136, overflow: "hidden", borderRadius: 8, backgroundColor: "#E8EDF5", marginTop: 12 },
+  coverImage: { width: "100%", height: "100%", resizeMode: "cover" },
+  coverPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+  placeholderText: { color: "#64748B", fontSize: 12 },
+  avatarRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 16 },
+  avatarImage: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#E8EDF5" },
+  avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#E8EDF5" },
+  avatarInfo: { flex: 1, minWidth: 0 },
+  avatarName: { color: "#111827", fontSize: 13, fontWeight: "700" },
   refresh: { paddingVertical: 15, alignItems: "center" },
 });
